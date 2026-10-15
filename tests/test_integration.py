@@ -18,7 +18,20 @@ from jev_fc.reporting import build_summary, read_jsonl, update_paper
 
 
 @pytest.fixture
-def offline_run(tmp_path, monkeypatch):
+def offline_run(tmp_path, monkeypatch, request):
+    api_style = getattr(request, "param", "chat_completions")
+    gateway = "direct" if api_style == "chat_completions" else "apim"
+    monkeypatch.setenv("API_GATEWAY", gateway)
+    monkeypatch.setenv("LLM_API_STYLE", api_style)
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "none")
+    monkeypatch.setenv("LLM_MAX_COMPLETION_TOKENS", "4096")
+    monkeypatch.delenv("LLM_TEMPERATURE", raising=False)
+    monkeypatch.setenv("APIM_BASE_URL", "https://enhans-aoai-prod-apim.azure-api.net")
+    monkeypatch.setenv("APIM_SUBSCRIPTION_KEY", "integration-subscription-before-rotation")
+    monkeypatch.setenv("LLM_API_KEY", "unused-provider-secret")
+    for key, value in {"LLM_INPUT_PRICE": "1", "LLM_CACHED_INPUT_PRICE": ".1", "LLM_OUTPUT_PRICE": "2",
+                       "LLM_CACHE_WRITE_5M_PRICE": "1.25", "LLM_CACHE_WRITE_1H_PRICE": "2", "JEV_INPUT_PRICE": ".042"}.items():
+        monkeypatch.setenv(key, value)
     prepared = Path(__file__).resolve().parents[1] / "data/bfcl"
     if not (prepared / "examples.jsonl").exists():
         pytest.skip("Run python -m jev_fc.benchmarks once; integration tests never download data")
@@ -35,7 +48,9 @@ def offline_run(tmp_path, monkeypatch):
         row["private_canary"] = "ORACLE_MUST_NOT_APPEAR_ON_WIRE"
     data_path = tmp_path / "tiny.jsonl"
     data_path.write_text("".join(json.dumps(row) + "\n" for row in selected))
-    observed = {"llm": [], "jev": [], "fail_next_jev": False}
+    observed = {"llm": [], "jev": [], "fail_next_jev": False, "fail_next_llm": False,
+                "api_style": api_style, "gateway": gateway,
+                "subscription_key": "integration-subscription-before-rotation", "auth_providers": set()}
 
     def check_wire(body):
         text = json.dumps(body)
@@ -45,32 +60,77 @@ def offline_run(tmp_path, monkeypatch):
         assert "category" not in body and "id" not in body
 
     def generator_http(request):
-        assert request.url.host == "mock-llm.invalid"
+        style = observed["api_style"]
+        if gateway == "apim":
+            provider, route = ("anthropic", "messages") if style == "anthropic_messages" else ("openai", "responses")
+            assert str(request.url) == f"https://enhans-aoai-prod-apim.azure-api.net/llm/{provider}/v1/{route}"
+            assert request.headers["api-key"] == observed["subscription_key"]
+            for header in ("authorization", "x-api-key", "anthropic-version"):
+                assert header not in request.headers
+            observed["auth_providers"].add(provider)
+        else:
+            assert str(request.url) == "https://mock-llm.invalid/v1/chat/completions"
+            assert request.headers["authorization"] == "Bearer offline-fixture-key"
+            assert "api-key" not in request.headers
         body = json.loads(request.content)
         check_wire(body)
         observed["llm"].append(deepcopy(body))
-        user_messages = [message for message in body["messages"] if message["role"] == "user"]
+        if observed["fail_next_llm"]:
+            observed["fail_next_llm"] = False
+            return httpx.Response(403, headers={"apim-request-id": "req-llm-403"},
+                                  json={"error": "PRIVATE_RESPONSE_BODY " + observed["subscription_key"]})
+        user_messages = [message for message in body["input" if style == "responses" else "messages"] if message["role"] == "user"]
         example_id = by_prompt[user_messages[0]["content"]]
         calls = deepcopy(oracle_calls[example_id])
         if len(user_messages) == 1:
             # The initial proposal has valid JSON but missing required arguments.
             for call in calls:
                 call["arguments"] = {}
+        if style == "responses":
+            assert body["store"] is False and body["parallel_tool_calls"] is False
+            assert all(tool["strict"] is False and "function" not in tool for tool in body["tools"])
+            output = [{"type": "function_call", "name": call["name"], "arguments": json.dumps(call["arguments"]),
+                       "call_id": f"call_{i}", "status": "completed"} for i, call in enumerate(calls)]
+            if not output:
+                output = [{"type": "message", "role": "assistant", "status": "completed",
+                           "content": [{"type": "output_text", "text": "No available function applies."}]}]
+            return httpx.Response(200, json={"model": "offline-model-resolved", "status": "completed", "output": output,
+                                            "usage": {"input_tokens": 100, "output_tokens": 10,
+                                                      "input_tokens_details": {"cached_tokens": 20}}})
+        if style == "anthropic_messages":
+            assert body["tool_choice"] == {"type": "auto", "disable_parallel_tool_use": True}
+            assert all("input_schema" in tool and "function" not in tool for tool in body["tools"])
+            assert "reasoning_effort" not in body and "reasoning" not in body
+            content = [{"type": "tool_use", "id": f"call_{i}", "name": call["name"], "input": call["arguments"]} for i, call in enumerate(calls)]
+            return httpx.Response(200, json={"type": "message", "role": "assistant", "model": "claude-offline-model-resolved",
+                                            "stop_reason": "tool_use" if content else "end_turn",
+                                            "content": content or [{"type": "text", "text": "No available function applies."}],
+                                            "usage": {"input_tokens": 100, "output_tokens": 10,
+                                                      "cache_read_input_tokens": 20, "cache_creation_input_tokens": 5,
+                                                      "cache_creation": {"ephemeral_5m_input_tokens": 5, "ephemeral_1h_input_tokens": 0}}})
         native = [{"id": f"call_{i}", "type": "function", "function": {"name": call["name"], "arguments": json.dumps(call["arguments"])}} for i, call in enumerate(calls)]
         return httpx.Response(200, json={
-            "model": "offline-model", "choices": [{"finish_reason": "tool_calls" if native else "stop", "message": {"role": "assistant", "content": None, "tool_calls": native}}],
+            "model": "offline-model", "choices": [{"finish_reason": "tool_calls" if native else "stop", "message": {"role": "assistant", "content": None if native else "No available function applies.", "tool_calls": native}}],
             "usage": {"prompt_tokens": 100, "completion_tokens": 10},
         })
 
     def verifier_http(request):
-        assert request.url.host == "mock-jev.invalid"
+        if gateway == "apim":
+            assert str(request.url) == "https://enhans-aoai-prod-apim.azure-api.net/llm/typesafe/v1/systemone"
+            assert request.headers["api-key"] == observed["subscription_key"]
+            for header in ("authorization", "x-api-key", "anthropic-version"):
+                assert header not in request.headers
+            observed["auth_providers"].add("typesafe")
+        else:
+            assert str(request.url) == "https://mock-jev.invalid/v1/systemone"
         body = json.loads(request.content)
         check_wire(body)
         assert set(body["state"]) == {"messages", "tools", "proposed_calls"}
         observed["jev"].append(deepcopy(body))
         if observed["fail_next_jev"]:
             observed["fail_next_jev"] = False
-            return httpx.Response(401, json={"error": "fixture failure"})
+            return httpx.Response(401, headers={"apim-request-id": "req-jev-401"},
+                                  json={"error": "PRIVATE_RESPONSE_BODY " + observed["subscription_key"]})
         valid_arguments = all(call["arguments"] for call in body["state"]["proposed_calls"])
         return httpx.Response(200, json={
             "model": "jev-1.13.0",
@@ -80,10 +140,21 @@ def offline_run(tmp_path, monkeypatch):
 
     llm_http = httpx.Client(transport=httpx.MockTransport(generator_http))
     jev_http = httpx.Client(transport=httpx.MockTransport(verifier_http))
-    generator = FunctionCallingLLM(api_key="offline-fixture-key", model="offline-model", base_url="https://mock-llm.invalid/v1", client=llm_http, max_retries=0)
-    verifier = JevVerifier(api_key="offline-fixture-key", base_url="https://mock-jev.invalid", client=jev_http, max_retries=0)
-    monkeypatch.setattr(cli, "FunctionCallingLLM", lambda: generator)
-    monkeypatch.setattr(cli, "JevVerifier", lambda **_: verifier)
+    def make_generator():
+        if gateway == "apim":
+            return FunctionCallingLLM(model="claude-offline-model" if observed["api_style"] == "anthropic_messages" else "offline-model",
+                                      client=llm_http, max_retries=0, timeout=35)
+        return FunctionCallingLLM(api_key="offline-fixture-key", model="offline-model", base_url="https://mock-llm.invalid/v1",
+                                  client=llm_http, max_retries=0, gateway="direct", api_style="chat_completions")
+
+    def make_verifier(**thresholds):
+        if gateway == "apim":
+            return JevVerifier(client=jev_http, max_retries=0, timeout=40, **thresholds)
+        return JevVerifier(api_key="offline-fixture-key", base_url="https://mock-jev.invalid", client=jev_http,
+                           max_retries=0, gateway="direct", **thresholds)
+
+    monkeypatch.setattr(cli, "FunctionCallingLLM", make_generator)
+    monkeypatch.setattr(cli, "JevVerifier", make_verifier)
     monkeypatch.setattr(cli, "_source_hash", lambda: "offline-source-fingerprint")
     args = Namespace(
         data=str(data_path), checker=str(prepared / "upstream/ast_checker.py"), output=str(tmp_path / "run"),
@@ -184,3 +255,134 @@ def test_cli_and_preparation_split_membership_agree():
     development, test = stratified_split(examples, seed=1729)
     assert {row["id"] for row in cli.stable_split(examples, "dev", 1729)} == {row["id"] for row in development}
     assert {row["id"] for row in cli.stable_split(examples, "test", 1729)} == {row["id"] for row in test}
+
+
+def assert_saved_files_have_no_credentials(directory):
+    forbidden = ("offline-fixture-key", "integration-subscription-before-rotation",
+                 "integration-subscription-after-rotation", "unused-provider-secret", "PRIVATE_RESPONSE_BODY")
+    for path in Path(directory).iterdir():
+        if path.is_file():
+            content = path.read_text()
+            for secret in forbidden:
+                assert secret not in content, f"Private fixture data leaked into {path.name}"
+
+
+@pytest.mark.parametrize("offline_run", ["responses", "anthropic_messages"], indirect=True)
+def test_apim_cli_pipeline_scoring_report_and_key_rotation_resume(offline_run, monkeypatch):
+    args, observed, _ = offline_run
+    cli.run(args)
+    directory = Path(args.output)
+    manifest = json.loads((directory / "manifest.json").read_text())
+    records = read_jsonl(directory / "records.jsonl")
+    summary = build_summary(directory)
+    anthropic = observed["api_style"] == "anthropic_messages"
+    provider, route = ("anthropic", "messages") if anthropic else ("openai", "responses")
+    assert manifest["llm_provider"] == provider
+    assert manifest["llm_api_style"] == observed["api_style"]
+    assert manifest["llm_gateway"] == manifest["jev_gateway"] == "apim"
+    assert manifest["llm_endpoint"] == f"https://enhans-aoai-prod-apim.azure-api.net/llm/{provider}/v1/{route}"
+    assert manifest["jev_endpoint"] == "https://enhans-aoai-prod-apim.azure-api.net/llm/typesafe/v1/systemone"
+    assert manifest["llm_auth_header"] == "api-key"
+    assert manifest["workers"] == args.workers == 1
+    assert manifest["llm_timeout_s"] == 35 and manifest["jev_timeout_s"] == 40
+    assert manifest["llm_max_retries"] == manifest["jev_max_retries"] == 0
+    assert observed["auth_providers"] == {provider, "typesafe"}
+    assert summary["status"] == "complete" and summary["completed_records"] == 6
+    assert len(read_jsonl(directory / "initial.jsonl")) == 3
+    assert len(observed["llm"]) == len(observed["jev"]) == 5
+    assert summary["methods"]["direct"]["accuracy"] == pytest.approx(1 / 3)
+    assert summary["methods"]["jev_joint"]["accuracy"] == 1
+
+    for example_id in ("simple_python_0", "multiple_0", "irrelevance_0"):
+        pair = {row["method"]: row for row in records if row["id"] == example_id}
+        direct, joint = pair["direct"], pair["jev_joint"]
+        assert direct["trace"][0]["proposal"] == joint["trace"][0]["proposal"]
+        assert joint["score"]["correct"] is True
+        assert joint["repairs"] == (0 if example_id == "irrelevance_0" else 1)
+        assert direct["score"]["correct"] is (example_id == "irrelevance_0")
+        assert joint["dispatch_mode"] == "simulated" and joint["execution_result"] is None
+        for step in joint["trace"]:
+            proposal = step["proposal"]
+            assert proposal["gateway"] == "apim" and proposal["provider"] == provider
+            assert proposal["api_style"] == observed["api_style"]
+            assert proposal["usage"]["prompt_tokens"] == (125 if anthropic else 100)
+            assert proposal["usage"]["completion_tokens"] == 10
+            assert proposal["usage"]["prompt_tokens_details"]["cached_tokens"] == 20
+            assert proposal["raw_usage"]["input_tokens"] == 100
+            assert proposal["model"] == ("claude-offline-model-resolved" if anthropic else "offline-model-resolved")
+            assert proposal["requested_model"] == manifest["llm_model"]
+            if anthropic:
+                assert proposal["usage"]["cache_creation_input_tokens"] == 5
+                assert proposal["raw_usage"]["cache_creation"]["ephemeral_5m_input_tokens"] == 5
+            assert step["verification"]["usage"]["input_tokens"] == 300
+        assert joint["accounting"]["complete"] is True
+        assert joint["accounting"]["estimated_usd"] > 0
+        if example_id == "irrelevance_0":
+            assert direct["calls"] == joint["calls"] == []
+
+    before = {name: (directory / name).read_bytes() for name in ("manifest.json", "initial.jsonl", "records.jsonl")}
+    before_counts = len(observed["llm"]), len(observed["jev"])
+    monkeypatch.setenv("APIM_SUBSCRIPTION_KEY", "integration-subscription-after-rotation")
+    observed["subscription_key"] = "integration-subscription-after-rotation"
+    args.resume = True
+    cli.run(args)
+    assert (len(observed["llm"]), len(observed["jev"])) == before_counts
+    assert all((directory / name).read_bytes() == data for name, data in before.items())
+    assert json.loads((directory / "manifest.json").read_text())["config_id"] == manifest["config_id"]
+    monkeypatch.setattr("sys.argv", ["jev-fc", "report", str(directory)])
+    assert cli.main() == 0 and (directory / "summary.csv").exists()
+    assert_saved_files_have_no_credentials(directory)
+
+
+@pytest.mark.parametrize("offline_run", ["responses", "anthropic_messages"], indirect=True)
+def test_apim_resume_rejects_changed_api_format_before_requests(offline_run, monkeypatch):
+    args, observed, _ = offline_run
+    cli.run(args)
+    before = len(observed["llm"]), len(observed["jev"])
+    observed["api_style"] = "anthropic_messages" if observed["api_style"] == "responses" else "responses"
+    monkeypatch.setenv("LLM_API_STYLE", observed["api_style"])
+    args.resume = True
+    with pytest.raises(ValueError, match="different code/data/config fingerprint"):
+        cli.run(args)
+    assert (len(observed["llm"]), len(observed["jev"])) == before
+    assert_saved_files_have_no_credentials(args.output)
+
+
+@pytest.mark.parametrize("offline_run", ["responses", "anthropic_messages"], indirect=True)
+@pytest.mark.parametrize("failing_provider", ["llm", "jev"])
+def test_apim_sanitized_http_errors_and_partial_resume_after_key_rotation(offline_run, monkeypatch, failing_provider):
+    args, observed, _ = offline_run
+    observed[f"fail_next_{failing_provider}"] = True
+    with pytest.raises(RuntimeError, match=f"HTTP {403 if failing_provider == 'llm' else 401}"):
+        cli.run(args)
+    directory = Path(args.output)
+    manifest_before = json.loads((directory / "manifest.json").read_text())
+    saved_records = read_jsonl(directory / "records.jsonl")
+    errors = read_jsonl(directory / "errors.jsonl")
+    assert len(errors) == 1
+    error = errors[0]
+    assert error["status_code"] == (403 if failing_provider == "llm" else 401)
+    assert error["request_id"] == ("req-llm-403" if failing_provider == "llm" else "req-jev-401")
+    assert error["attempts"] == 1
+    assert error["error_type"] == ("LLMAPIError" if failing_provider == "llm" else "JevAPIError")
+    assert error["method"] == ("initial" if failing_provider == "llm" else "jev_joint")
+    assert set(error) == {"id", "replicate", "method", "error_type", "at", "status_code", "request_id", "attempts"}
+    assert len(saved_records) == (0 if failing_provider == "llm" else 1)
+    assert build_summary(directory)["status"] == "partial"
+    assert_saved_files_have_no_credentials(directory)
+
+    observed["subscription_key"] = "integration-subscription-after-rotation"
+    monkeypatch.setenv("APIM_SUBSCRIPTION_KEY", observed["subscription_key"])
+    args.resume = True
+    cli.run(args)
+    rows = read_jsonl(directory / "records.jsonl")
+    assert len(rows) == 6 and len({(r["id"], r["replicate"], r["method"]) for r in rows}) == 6
+    assert all(row in rows for row in saved_records)
+    assert len(read_jsonl(directory / "initial.jsonl")) == 3
+    assert len(observed["llm"]) == (6 if failing_provider == "llm" else 5)
+    assert len(observed["jev"]) == (5 if failing_provider == "llm" else 6)
+    summary = build_summary(directory)
+    assert summary["status"] == "complete" and summary["api_error_events"] == 1
+    assert summary["manifest"]["config_id"] == manifest_before["config_id"]
+    assert summary["methods"]["jev_joint"]["accuracy"] == 1
+    assert_saved_files_have_no_credentials(directory)

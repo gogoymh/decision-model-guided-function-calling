@@ -11,6 +11,7 @@ import copy
 import json
 import math
 import os
+import re
 import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -20,6 +21,8 @@ import httpx
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 from jsonschema.validators import validator_for
+
+from .transport import resolve_api_config
 
 
 DEFAULT_MODEL = "jev-1.13.0"
@@ -83,6 +86,37 @@ class JevAPIError(RuntimeError):
 
     The exception intentionally omits HTTP request/response bodies and headers.
     """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        request_id: str | None = None,
+        attempts: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.request_id = request_id
+        self.attempts = attempts
+
+
+def _safe_request_id(response: httpx.Response, request_headers: dict[str, str]) -> str | None:
+    """Return a narrow diagnostic ID, never an echoed credential or header dump."""
+    credentials = {os.getenv(name) for name in (
+        "APIM_SUBSCRIPTION_KEY", "TYPESAFE_API_KEY", "LLM_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"
+    )}
+    for name, value in request_headers.items():
+        if name.lower() in {"api-key", "x-api-key", "authorization"}:
+            credentials.add(value)
+            if value.lower().startswith("bearer "):
+                credentials.add(value[7:])
+    for name in ("apim-request-id", "x-request-id", "request-id"):
+        value = response.headers.get(name)
+        if value and re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", value):
+            if not any(credential and credential in value for credential in credentials):
+                return value
+    return None
 
 
 def _function_definitions(example: dict[str, Any]) -> list[dict[str, Any]]:
@@ -249,6 +283,7 @@ class JevVerifier:
         function_threshold: float = 0.8,
         arguments_threshold: float = 0.8,
         base_url: str | None = None,
+        gateway: str | None = None,
         timeout: float = 60.0,
         max_retries: int = 3,
         client: httpx.Client | None = None,
@@ -259,13 +294,13 @@ class JevVerifier:
                 raise ValueError("Jev thresholds must be finite numbers between 0 and 1")
         if isinstance(max_retries, bool) or not isinstance(max_retries, int) or max_retries < 0:
             raise ValueError("max_retries must be a nonnegative integer")
-        self.api_key = api_key or os.getenv("TYPESAFE_API_KEY")
-        if not self.api_key:
-            raise ValueError("Set TYPESAFE_API_KEY before running Jev verification")
+        api_config = resolve_api_config("typesafe", api_key=api_key, base_url=base_url, gateway=gateway)
+        self.gateway = api_config.gateway
+        self.base_url = api_config.base_url
+        self._headers = api_config.headers
         self.model = model or os.getenv("TYPESAFE_MODEL") or DEFAULT_MODEL
         self.function_threshold = float(function_threshold)
         self.arguments_threshold = float(arguments_threshold)
-        self.base_url = (base_url or os.getenv("TYPESAFE_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
         self.timeout = timeout
         self.max_retries = max_retries
         self._client = client or httpx.Client(timeout=timeout)
@@ -283,12 +318,11 @@ class JevVerifier:
         self.close()
 
     def _post(self, payload: dict[str, Any]) -> tuple[dict[str, Any], int]:
-        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         for attempt in range(self.max_retries + 1):
             try:
                 response = self._client.post(
                     self.base_url + "/v1/systemone",
-                    headers=headers,
+                    headers=self._headers,
                     json=payload,
                     timeout=self.timeout,
                 )
@@ -296,12 +330,17 @@ class JevVerifier:
                 if attempt < self.max_retries:
                     self._sleep(_retry_delay(None, attempt))
                     continue
-                raise JevAPIError("Jev connection failed after bounded retries") from None
+                raise JevAPIError("Jev connection failed after bounded retries", attempts=attempt + 1) from None
             if response.status_code in RETRY_STATUSES and attempt < self.max_retries:
                 self._sleep(_retry_delay(response, attempt))
                 continue
             if not 200 <= response.status_code < 300:
-                raise JevAPIError(f"Jev HTTP {response.status_code}; no semantic verdict recorded") from None
+                raise JevAPIError(
+                    f"Jev HTTP {response.status_code}; no semantic verdict recorded",
+                    status_code=response.status_code,
+                    request_id=_safe_request_id(response, self._headers),
+                    attempts=attempt + 1,
+                ) from None
             try:
                 body = response.json()
             except ValueError:

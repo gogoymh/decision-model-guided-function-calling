@@ -61,6 +61,39 @@ def test_missing_usage_never_means_free_inference():
     assert not accounting["complete"]
 
 
+def test_responses_cache_hit_is_discounted_once():
+    row = record()
+    row["trace"][0]["proposal"]["usage"] = {
+        "input_tokens": 100, "output_tokens": 2, "input_tokens_details": {"cached_tokens": 20},
+    }
+    result = token_cost(row, PRICES)
+    assert result["llm_input"] == 100 and result["llm_cached_input"] == 20
+    assert result["estimated_usd"] == pytest.approx((80 * .75 + 20 * .075 + 2 * 4.5 + 5 * .042) / 1e6)
+
+
+def test_anthropic_reads_and_two_write_lifetimes_are_billed_once():
+    row = record()
+    row["trace"][0]["proposal"]["usage"] = {
+        "prompt_tokens": 135, "completion_tokens": 2, "prompt_tokens_details": {"cached_tokens": 20},
+        "cache_creation_input_tokens": 15,
+        "cache_creation": {"ephemeral_5m_input_tokens": 10, "ephemeral_1h_input_tokens": 5},
+    }
+    result = token_cost(row, {**PRICES, "llm_cache_write_5m": 1.25, "llm_cache_write_1h": 2})
+    assert result["complete"] and result["llm_input"] == 135
+    assert result["estimated_usd"] == pytest.approx((100 * .75 + 20 * .075 + 10 * 1.25 + 5 * 2 + 2 * 4.5 + 5 * .042) / 1e6)
+    missing_rate = token_cost(row, PRICES)
+    assert missing_rate["estimated_usd"] is None and not missing_rate["complete"]
+    del row["trace"][0]["proposal"]["usage"]["cache_creation"]
+    unknown_lifetime = token_cost(row, {**PRICES, "llm_cache_write_5m": 1.25, "llm_cache_write_1h": 2})
+    assert unknown_lifetime["estimated_usd"] is None
+    assert unknown_lifetime["llm_cache_write_unknown"] == 15
+
+
+def test_unknown_consumed_rate_is_not_zero_cost():
+    result = token_cost(record(), {**PRICES, "llm_input": None})
+    assert result["estimated_usd"] is None and not result["complete"]
+
+
 def write_run(directory, rows):
     manifest = {"ids": sorted({r["id"] for r in rows}), "replicates": 1, "methods": ["jev_joint"],
                 "expected_records": len({r["id"] for r in rows}), "config_id": "test", "synthetic": False,

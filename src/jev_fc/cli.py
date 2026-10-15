@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import random
 import sys
@@ -53,6 +54,52 @@ def _write_json(path, value):
     Path(path).write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n")
 
 
+def _prices(generator):
+    known = generator.provider == "openai" and generator.model == "gpt-5.4-mini-2026-03-17"
+    defaults = {"llm_input": .75 if known else None, "llm_cached_input": .075 if known else None,
+                "llm_output": 4.5 if known else None, "jev_input": .042,
+                "llm_cache_write_5m": None, "llm_cache_write_1h": None}
+    result = {}
+    for name, default in defaults.items():
+        variable = name.upper() + "_PRICE"
+        raw = os.getenv(variable, "").strip()
+        try:
+            value = float(raw) if raw else default
+        except ValueError:
+            raise ValueError(f"{variable} must be a nonnegative finite number or blank.") from None
+        if value is not None and (not math.isfinite(value) or value < 0):
+            raise ValueError(f"{variable} must be a nonnegative finite number or blank.")
+        result[name] = value
+    return result
+
+
+def check_config():
+    """Validate routing and options without sending a request or showing secrets."""
+    generator = FunctionCallingLLM(api_key="configuration-check-only")
+    verifier = None
+    try:
+        verifier = JevVerifier(api_key="configuration-check-only")
+        if generator.gateway == "apim":
+            llm_key = jev_key = bool(os.getenv("APIM_SUBSCRIPTION_KEY", "").strip())
+        else:
+            provider_key = "ANTHROPIC_API_KEY" if generator.provider == "anthropic" else "OPENAI_API_KEY"
+            llm_key = bool(os.getenv("LLM_API_KEY") or os.getenv(provider_key))
+            jev_key = bool(os.getenv("TYPESAFE_API_KEY"))
+        print(json.dumps({
+            "network_requests": 0, "gateway": generator.gateway,
+            "llm_provider": generator.provider, "llm_api_style": generator.api_style,
+            "llm_endpoint": generator.endpoint, "llm_model": generator.model,
+            "jev_endpoint": verifier.base_url + "/v1/systemone", "jev_model": verifier.model,
+            "llm_key_configured": llm_key, "jev_key_configured": jev_key,
+            "prices_usd_per_million": _prices(generator),
+        }, indent=2))
+        return 0 if llm_key and jev_key else 1
+    finally:
+        generator.close()
+        if verifier is not None:
+            verifier.close()
+
+
 def run(args):
     directory = Path(args.output)
     data_path = Path(args.data)
@@ -77,12 +124,7 @@ def run(args):
         raise ValueError("Use 0 <= max-repairs <= 3, replicates >= 1, workers >= 1")
     generator = FunctionCallingLLM()
     verifier = JevVerifier(function_threshold=args.threshold, arguments_threshold=args.threshold) if any(m.startswith("jev_") for m in methods) else None
-    prices = {
-        "llm_input": float(os.getenv("LLM_INPUT_PRICE", ".75")),
-        "llm_cached_input": float(os.getenv("LLM_CACHED_INPUT_PRICE", ".075")),
-        "llm_output": float(os.getenv("LLM_OUTPUT_PRICE", "4.5")),
-        "jev_input": float(os.getenv("JEV_INPUT_PRICE", ".042")),
-    }
+    prices = _prices(generator)
     settings = {
         "version": __version__, "source_sha256": _source_hash(),
         "dataset_sha256": hashlib.sha256(data_path.read_bytes()).hexdigest(),
@@ -92,10 +134,19 @@ def run(args):
         "max_repairs": args.max_repairs, "threshold": args.threshold,
         "exhaustion_policy": args.exhaustion_policy,
         "llm_model": generator.model, "llm_base_url": generator.base_url,
+        "llm_provider": generator.provider, "llm_api_style": generator.api_style,
+        "llm_gateway": generator.gateway, "llm_endpoint": generator.endpoint,
+        "llm_auth_header": generator.auth_header,
+        "llm_timeout_s": generator.timeout, "llm_max_retries": generator.max_retries,
         "reasoning_effort": generator.reasoning_effort, "temperature": generator.temperature,
         "max_completion_tokens": generator.max_completion_tokens,
         "jev_model": verifier.model if verifier is not None else None,
         "jev_base_url": verifier.base_url if verifier is not None else None,
+        "jev_gateway": verifier.gateway if verifier is not None else None,
+        "jev_endpoint": verifier.base_url + "/v1/systemone" if verifier is not None else None,
+        "jev_timeout_s": verifier.timeout if verifier is not None else None,
+        "jev_max_retries": verifier.max_retries if verifier is not None else None,
+        "workers": args.workers,
         "prices_usd_per_million": prices,
         "expected_records": len(selected) * args.replicates * len(methods),
         "synthetic": False,
@@ -156,9 +207,14 @@ def run(args):
                     print(f"[{count}/{settings['expected_records']}] {example['id']} {method}", flush=True)
         except Exception as exc:
             # No raw response, HTTP headers or API keys enter error logs.
-            append("errors.jsonl", {"id": example["id"], "replicate": replicate,
-                                   "method": current_method, "error_type": type(exc).__name__,
-                                   "at": datetime.now(timezone.utc).isoformat()})
+            event = {"id": example["id"], "replicate": replicate,
+                     "method": current_method, "error_type": type(exc).__name__,
+                     "at": datetime.now(timezone.utc).isoformat()}
+            for field in ("status_code", "request_id", "attempts"):
+                value = getattr(exc, field, None)
+                if value is not None:
+                    event[field] = value
+            append("errors.jsonl", event)
             stop.set()
             raise
 
@@ -215,9 +271,12 @@ def main():
     template = sub.add_parser("paper-template", help="Restore the unrun main-results table")
     template.add_argument("--paper", default="paper/main.tex")
     sub.add_parser("demo", help="Run an offline, synthetic bounded-repair demo (not benchmark results)")
+    sub.add_parser("check-config", help="Validate API settings without making any network requests")
     args = parser.parse_args()
     try:
-        if args.command == "prepare":
+        if args.command == "check-config":
+            return check_config()
+        elif args.command == "prepare":
             manifest = prepare_bfcl(args.output, args.revision, args.categories.split(","))
             print(json.dumps(manifest, indent=2))
         elif args.command == "run":

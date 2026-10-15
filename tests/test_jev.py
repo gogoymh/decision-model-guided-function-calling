@@ -8,6 +8,13 @@ import pytest
 from jev_fc.jev import JevAPIError, JevVerifier, validate_calls
 
 
+@pytest.fixture(autouse=True)
+def isolated_api_environment(monkeypatch):
+    for name in ("API_GATEWAY", "TYPESAFE_API_KEY", "TYPESAFE_BASE_URL", "TYPESAFE_MODEL",
+                 "APIM_SUBSCRIPTION_KEY", "APIM_BASE_URL"):
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture
 def example():
     return {
@@ -45,6 +52,7 @@ def test_wire_contract_excludes_reference_labels_and_checks_together(example):
         observed.append(json.loads(request.content))
         assert str(request.url) == "https://api.typesafe.ai/v1/systemone"
         assert request.headers["Authorization"] == "Bearer test-key"
+        assert "api-key" not in request.headers
         assert "DO_NOT_SEND" not in request.content.decode()
         assert set(observed[-1]["questions"]) == {"function_correct", "arguments_correct"}
         assert all(q["type"] == "noul" for q in observed[-1]["questions"].values())
@@ -52,6 +60,7 @@ def test_wire_contract_excludes_reference_labels_and_checks_together(example):
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         verifier = JevVerifier("test-key", client=client)
+        assert verifier.gateway == "direct"
         result = verifier.verify(example, [{"name": "weather", "arguments": {"city": "Seoul"}, "reference": "DO_NOT_SEND"}])
     assert len(observed) == 1
     assert result["accepted"] is True
@@ -182,3 +191,150 @@ def test_env_model_and_explicit_override(monkeypatch):
         assert verifier.model == "jev-1.14.0"
     with JevVerifier("test-key", model="jev-1.13.0") as verifier:
         assert verifier.model == "jev-1.13.0"
+
+
+def test_apim_uses_one_shared_subscription_key_and_exact_typesafe_path(example, monkeypatch):
+    monkeypatch.setenv("API_GATEWAY", "apim")
+    monkeypatch.setenv("APIM_SUBSCRIPTION_KEY", "fake-shared-gateway-key")
+    # No provider key is configured: this is the intended single-key setup.
+    seen = []
+
+    def handler(request):
+        assert str(request.url) == "https://enhans-aoai-prod-apim.azure-api.net/llm/typesafe/v1/systemone"
+        assert request.headers["api-key"] == "fake-shared-gateway-key"
+        assert request.headers["content-type"] == "application/json"
+        assert "authorization" not in request.headers
+        assert "x-api-key" not in request.headers
+        assert "DO_NOT_SEND" not in request.content.decode()
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json=wire_reply())
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        verifier = JevVerifier(client=client)
+        assert verifier.gateway == "apim"
+        result = verifier.verify(example, [{"name": "weather", "arguments": {"city": "Seoul"}}])
+    assert len(seen) == 1
+    assert set(seen[0]) == {"model", "state", "questions"}
+    assert set(seen[0]["questions"]) == {"function_correct", "arguments_correct"}
+    assert result["accepted"] is True
+    assert "fake-shared-gateway-key" not in json.dumps(result)
+    assert "headers" not in result
+
+
+def test_apim_gateway_keyword_overrides_direct_environment(example, monkeypatch):
+    monkeypatch.setenv("API_GATEWAY", "direct")
+    monkeypatch.setenv("APIM_BASE_URL", "https://gateway.example.test/")
+    monkeypatch.setenv("APIM_SUBSCRIPTION_KEY", "fake-shared-gateway-key")
+
+    def handler(request):
+        assert str(request.url) == "https://gateway.example.test/llm/typesafe/v1/systemone"
+        assert request.headers["api-key"] == "fake-shared-gateway-key"
+        assert "authorization" not in request.headers
+        return httpx.Response(200, json=wire_reply(.9, .7))
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = JevVerifier(gateway="apim", client=client).verify(example, [])
+    assert result["function_pass"] is True
+    assert result["arguments_pass"] is False
+    assert result["accepted"] is False
+
+
+def test_direct_env_key_and_custom_base_url_remain_supported(example, monkeypatch):
+    monkeypatch.setenv("TYPESAFE_API_KEY", "fake-direct-key")
+    monkeypatch.setenv("TYPESAFE_BASE_URL", "https://direct.example.test/")
+
+    def handler(request):
+        assert str(request.url) == "https://direct.example.test/v1/systemone"
+        assert request.headers["authorization"] == "Bearer fake-direct-key"
+        assert "api-key" not in request.headers
+        return httpx.Response(200, json=wire_reply())
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = JevVerifier(client=client).verify(example, [])
+    assert result["accepted"] is True
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_apim_errors_exclude_key_body_and_metadata(example, monkeypatch, status):
+    monkeypatch.setenv("API_GATEWAY", "apim")
+    monkeypatch.setenv("APIM_SUBSCRIPTION_KEY", "fake-shared-gateway-key")
+    requests = []
+
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(status, text="fake-shared-gateway-key private-response-body")
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(JevAPIError, match=f"HTTP {status}") as exc:
+            JevVerifier(client=client).verify(example, [])
+    assert len(requests) == 1
+    assert "fake-shared-gateway-key" not in str(exc.value)
+    assert "private-response-body" not in str(exc.value)
+    assert "api-key" not in str(exc.value)
+
+
+def test_apim_retries_preserve_gateway_auth_and_semantics(example, monkeypatch):
+    monkeypatch.setenv("API_GATEWAY", "apim")
+    monkeypatch.setenv("APIM_SUBSCRIPTION_KEY", "fake-shared-gateway-key")
+    requests, delays = [], []
+
+    def handler(request):
+        assert request.headers["api-key"] == "fake-shared-gateway-key"
+        assert "authorization" not in request.headers
+        requests.append(request)
+        if len(requests) == 1:
+            return httpx.Response(429, headers={"Retry-After": "0.1"})
+        return httpx.Response(200, json=wire_reply(.7, .95))
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = JevVerifier(client=client, sleep=delays.append).verify(example, [])
+    assert delays == [.1]
+    assert result["api_calls"] == 2
+    assert result["accepted"] is False
+    assert result["function_probability"] == .7
+    assert result["arguments_probability"] == .95
+
+
+@pytest.mark.parametrize("header", ["apim-request-id", "x-request-id", "request-id"])
+def test_http_error_exposes_only_allowlisted_diagnostics(example, header):
+    def handler(_):
+        return httpx.Response(403, headers={header: "req_01234567-abcd:2"}, text="private-response-body")
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(JevAPIError) as caught:
+            JevVerifier("test-key", client=client).verify(example, [])
+    assert caught.value.status_code == 403
+    assert caught.value.request_id == "req_01234567-abcd:2"
+    assert caught.value.attempts == 1
+    assert "private-response-body" not in str(caught.value)
+    assert "req_01234567-abcd:2" not in str(caught.value)
+
+
+@pytest.mark.parametrize("request_id", ["test-key", "prefix-test-key", "unsafe id", "x" * 129, "<html>error</html>"])
+def test_unsafe_or_credential_request_ids_are_not_logged(example, request_id):
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(401, headers={"apim-request-id": request_id}))) as client:
+        with pytest.raises(JevAPIError) as caught:
+            JevVerifier("test-key", client=client).verify(example, [])
+    assert caught.value.request_id is None
+    assert caught.value.status_code == 401
+
+
+def test_request_id_matching_another_provider_credential_is_discarded(example, monkeypatch):
+    monkeypatch.setenv("LLM_API_KEY", "fake-other-provider-key")
+    headers = {"apim-request-id": "fake-other-provider-key"}
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(403, headers=headers))) as client:
+        with pytest.raises(JevAPIError) as caught:
+            JevVerifier("test-key", client=client).verify(example, [])
+    assert caught.value.request_id is None
+
+
+def test_retry_exhaustion_diagnostics_record_actual_attempts(example):
+    def handler(_):
+        return httpx.Response(529, headers={"apim-request-id": "req_overloaded"})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(JevAPIError) as caught:
+            JevVerifier("test-key", client=client, max_retries=2, sleep=lambda _: None).verify(example, [])
+    assert caught.value.attempts == 3
+    assert caught.value.status_code == 529
+    assert caught.value.request_id == "req_overloaded"

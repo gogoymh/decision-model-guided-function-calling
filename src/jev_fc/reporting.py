@@ -15,7 +15,30 @@ from statistics import mean
 from .pipeline import METHODS
 
 LABELS = {"direct": "Direct", "schema_only": "Schema repair", "self_refine": "Self-refine",
-          "jev_function": "Jev: function", "jev_arguments": "Jev: arguments", "jev_joint": "Jev: joint"}
+          "jev_function": "JBFC-F", "jev_arguments": "JBFC-A", "jev_joint": "JBFC"}
+
+PAPER_SETTINGS = {
+    "replicates": 3, "max_repairs": 3, "threshold": .8,
+    "exhaustion_policy": "execute_last", "split_seed": 1729,
+    "llm_model": "gpt-5.4-mini-2026-03-17", "jev_model": "jev-1.13.0",
+    "reasoning_effort": "none", "temperature": None, "max_completion_tokens": 4096,
+    "llm_provider": "openai", "llm_api_style": "responses", "llm_gateway": "apim",
+    "jev_gateway": "apim",
+}
+
+
+def paper_protocol_matches(manifest):
+    """Whether a run uses the paper's declared model/interface protocol.
+
+    Dataset identity and completeness are additionally checked by update_paper.
+    """
+    prices = manifest.get("prices_usd_per_million", {})
+    return (manifest.get("split") == "test" and manifest.get("limit") is None
+            and set(manifest.get("methods", [])) == set(METHODS)
+            and all(manifest.get(k) == v for k, v in PAPER_SETTINGS.items())
+            and all(prices.get(k) == v for k, v in {
+                "llm_input": .75, "llm_cached_input": .075, "llm_output": 4.5, "jev_input": .042,
+            }.items()))
 
 
 def read_jsonl(path: str | Path) -> list[dict]:
@@ -41,7 +64,9 @@ def avg(values):
 
 
 def token_cost(record, prices):
-    result = dict(llm_input=0, llm_cached_input=0, llm_output=0, jev_input=0, estimated_usd=0.)
+    result = dict(llm_input=0, llm_cached_input=0, llm_cache_write_5m=0,
+                  llm_cache_write_1h=0, llm_cache_write_unknown=0,
+                  llm_output=0, jev_input=0, estimated_usd=0.)
     complete = True
     for step in record["trace"]:
         usage = step["proposal"].get("usage") or {}
@@ -51,18 +76,38 @@ def token_cost(record, prices):
             complete = False
         result["llm_input"] += input_tokens or 0
         result["llm_output"] += output_tokens or 0
-        result["llm_cached_input"] += (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0
+        details = usage.get("prompt_tokens_details") or usage.get("input_tokens_details") or {}
+        result["llm_cached_input"] += details.get("cached_tokens") or 0
+        # Anthropic cache writes are additional input, billed by cache lifetime.
+        # The adapter includes them in normalized prompt_tokens exactly once.
+        created = usage.get("cache_creation_input_tokens") or 0
+        lifetime = usage.get("cache_creation") or {}
+        five_minute = lifetime.get("ephemeral_5m_input_tokens") or 0
+        one_hour = lifetime.get("ephemeral_1h_input_tokens") or 0
+        result["llm_cache_write_5m"] += five_minute
+        result["llm_cache_write_1h"] += one_hour
+        result["llm_cache_write_unknown"] += max(0, created - five_minute - one_hour)
+        if five_minute + one_hour > created:
+            complete = False
         verification = step["verification"]
         jev_input = (verification.get("usage") or {}).get("input_tokens")
         if verification.get("api_calls", 0) > 0 and jev_input is None:
             complete = False
         result["jev_input"] += jev_input or 0
-    result["estimated_usd"] = (
-        (result["llm_input"] - result["llm_cached_input"]) * prices["llm_input"]
-        + result["llm_cached_input"] * prices["llm_cached_input"]
-        + result["llm_output"] * prices["llm_output"]
-        + result["jev_input"] * prices["jev_input"]
-    ) / 1_000_000
+    uncached = (result["llm_input"] - result["llm_cached_input"] - result["llm_cache_write_5m"]
+                - result["llm_cache_write_1h"] - result["llm_cache_write_unknown"])
+    if uncached < 0 or result["llm_cache_write_unknown"]:
+        complete = False
+    for name, count in (("llm_input", max(0, uncached)), ("llm_cached_input", result["llm_cached_input"]),
+                        ("llm_cache_write_5m", result["llm_cache_write_5m"]),
+                        ("llm_cache_write_1h", result["llm_cache_write_1h"]),
+                        ("llm_output", result["llm_output"]), ("jev_input", result["jev_input"])):
+        rate = prices.get(name)
+        if count and (isinstance(rate, bool) or not isinstance(rate, (int, float))
+                      or not math.isfinite(rate) or rate < 0):
+            complete = False
+        elif count:
+            result["estimated_usd"] += count * rate / 1_000_000
     result["complete"] = complete
     if not complete:
         result["estimated_usd"] = None
@@ -247,11 +292,14 @@ def latex_table(summary=None):
              r"\begin{tabular}{lrrrr}", r"\toprule", r"Method & Acc. (\%) & Repairs & Sec. & USD/1k \\", r"\midrule"]
     for method in METHODS:
         values = (summary or {}).get("methods", {}).get(method, {})
-        lines.append(LABELS[method] + " & " + " & ".join([
+        label = LABELS[method]
+        if label in {"JBFC", "JBFC-F", "JBFC-A"}:
+            label = r"\textbf{" + label + "}"
+        lines.append(label + " & " + " & ".join([
             fmt(values.get("accuracy"), 100, 1), fmt(values.get("mean_repairs")),
             fmt(values.get("mean_latency_s")), fmt(values.get("mean_cost_usd"), 1000, 3)]) + r" \\")
     lines.extend([r"\bottomrule", r"\end{tabular}",
-                  r"\caption{Primary comparison on the held-out BFCL subset. Accuracy excludes the call-presence-only live relevance category. -- denotes an experiment not yet run; no empirical values are imputed.}",
+                  r"\caption{Primary comparison on the held-out BFCL subset. Accuracy excludes the call-presence-only live relevance category. -- denotes an unavailable or unrun result; no empirical values are imputed.}",
                   r"\label{tab:main}", r"\end{table}"])
     return "\n".join(lines)
 
@@ -262,7 +310,7 @@ def latex_category_table(summary=None):
                   ("live_multiple", "Live multiple", 1053, 948), ("live_irrelevance", "Live irrelevance", 884, 796),
                   ("live_relevance", r"Live relevance$^\dagger$", 16, 15)]
     lines = [r"\begin{table}[t]", r"\centering\small", r"\setlength{\tabcolsep}{3.1pt}",
-             r"\begin{tabular}{lrrrr}", r"\toprule", r"Category & All & Test & Direct & Joint\\", r"\midrule"]
+             r"\begin{tabular}{lrrrr}", r"\toprule", r"Category & All & Test & Direct & \textbf{JBFC}\\", r"\midrule"]
     for category, label, full, test in categories:
         cells = []
         for method in ("direct", "jev_joint"):
@@ -285,7 +333,7 @@ def latex_budget_table(budgets=None):
             ("Regression (\\%)", "initial_right_final_wrong", 100), ("Cap exhaustion (\\%)", "exhaustion_rate", 100),
             ("Mean proposals", "mean_llm_proposals", 1), ("p95 latency (s)", "p95_latency_s", 1)]
     lines = [r"\begin{table}[t]", r"\centering\small", r"\setlength{\tabcolsep}{3pt}",
-             r"\begin{tabular}{lrrrr}", r"\toprule", r"Joint-check diagnostic & $r{=}0$ & $1$ & $2$ & $3$\\", r"\midrule"]
+             r"\begin{tabular}{lrrrr}", r"\toprule", r"\textbf{JBFC} diagnostic & $r{=}0$ & $1$ & $2$ & $3$\\", r"\midrule"]
     for label, metric, scale in rows:
         values = [(budgets or {}).get(budget, {}).get("methods", {}).get("jev_joint", {}).get(metric) for budget in range(4)]
         lines.append(label + " & " + " & ".join("--" if x is None else f"{x*scale:.1f}" for x in values) + r"\\")
@@ -310,12 +358,7 @@ def update_paper(paper_path: str | Path, summary: dict | None = None):
             raise ValueError("The manuscript requires all 2,748 canonical test IDs; a custom subset cannot populate it.")
         if manifest["dataset_sha256"] != hashlib.sha256(canonical_path.read_bytes()).hexdigest():
             raise ValueError("Manuscript data digest differs from the canonical prepared BFCL dataset.")
-        required = {"replicates": 3, "max_repairs": 3, "threshold": .8,
-                    "exhaustion_policy": "execute_last", "split_seed": 1729,
-                    "llm_model": "gpt-5.4-mini-2026-03-17", "jev_model": "jev-1.13.0",
-                    "reasoning_effort": "none", "temperature": None,
-                    "max_completion_tokens": 4096}
-        if set(manifest["methods"]) != set(METHODS) or any(manifest.get(k) != v for k, v in required.items()):
+        if not paper_protocol_matches(manifest):
             raise ValueError("Run differs from the manuscript's declared protocol. Update its protocol before using custom-model/config results.")
     path = Path(paper_path)
     source = path.read_text()

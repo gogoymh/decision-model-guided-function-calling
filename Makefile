@@ -1,4 +1,4 @@
-.PHONY: setup prepare test demo smoke experiment report paper verify
+.PHONY: setup prepare check-config test demo smoke experiment report paper verify
 
 setup:
 	uv sync --extra dev
@@ -6,6 +6,9 @@ setup:
 
 prepare:
 	uv run jev-fc prepare
+
+check-config:
+	uv run jev-fc check-config
 
 test:
 	uv run pytest -q

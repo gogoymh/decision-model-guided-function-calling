@@ -5,6 +5,9 @@ This is an offline initial-candidate analysis. It makes no API calls and cannot
 estimate how changing a threshold would change later repair prompts or outputs.
 The preregistered, untuned main default remains 0.8 unless a dev recommendation
 is deliberately frozen and passed to a new experiment with --threshold.
+The saved recommendation is specific to the recorded generator, verifier and
+API interface. Changing them requires development-set revalidation; transport
+metadata is retained for reproducibility, not evidence of threshold transfer.
 """
 
 from __future__ import annotations
@@ -21,6 +24,14 @@ from typing import Any
 
 
 DEFAULT_GRID = (0.5, 0.6, 0.7, 0.8, 0.9, 0.95)
+# Copy an explicit set of nonsecret configuration fields, never the full
+# manifest or environment. Missing legacy metadata remains unknown (None).
+PROVENANCE_CONFIG_KEYS = (
+    "llm_provider", "llm_api_style", "llm_gateway", "llm_endpoint",
+    "jev_gateway", "jev_endpoint", "reasoning_effort", "temperature",
+    "max_completion_tokens", "workers", "llm_timeout_s", "llm_max_retries",
+    "jev_timeout_s", "jev_max_retries",
+)
 
 
 def _load_records(path: Path) -> list[dict[str, Any]]:
@@ -191,6 +202,7 @@ def calibrate(run_dir: str | Path, grid: tuple[float, ...] | list[float] = DEFAU
         },
         "metrics": evaluations,
         "provenance": {
+            **{key: manifest.get(key) for key in PROVENANCE_CONFIG_KEYS},
             "run_dir": str(directory.resolve()), "config_id": manifest["config_id"],
             "manifest_sha256": hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
             "records_sha256": hashlib.sha256(records_path.read_bytes()).hexdigest(),

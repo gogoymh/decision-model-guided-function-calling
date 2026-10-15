@@ -144,3 +144,30 @@ def test_invalid_grid_rejected(tmp_path, bad_grid):
     write_run(tmp_path, [(.95, .95, True, True), (.2, .2, False, True)])
     with pytest.raises(ValueError, match="grid"):
         calibration.calibrate(tmp_path, bad_grid)
+
+
+def test_provenance_copies_interface_and_runtime_settings_without_credentials(tmp_path):
+    settings = {
+        "llm_provider": "anthropic", "llm_api_style": "messages", "llm_gateway": "apim",
+        "llm_endpoint": "https://gateway.invalid/llm/anthropic/v1/messages",
+        "jev_gateway": "apim", "jev_endpoint": "https://gateway.invalid/llm/typesafe/v1/systemone",
+        "reasoning_effort": None, "temperature": .2, "max_completion_tokens": 2048,
+        "workers": 2, "llm_timeout_s": 90, "llm_max_retries": 2,
+        "jev_timeout_s": 45, "jev_max_retries": 1,
+    }
+    write_run(tmp_path, [(.95, .95, True, True), (.2, .2, False, True)],
+              **settings, api_key="OFFLINE-CREDENTIAL-CANARY", headers={"api-key": "OFFLINE-CREDENTIAL-CANARY"})
+    before = (tmp_path / "manifest.json").read_bytes()
+    result = calibration.calibrate(tmp_path)
+    assert {key: result["provenance"][key] for key in settings} == settings
+    assert "OFFLINE-CREDENTIAL-CANARY" not in json.dumps(result)
+    assert "api_key" not in result["provenance"] and "headers" not in result["provenance"]
+    assert (tmp_path / "manifest.json").read_bytes() == before
+
+
+def test_legacy_manifest_does_not_invent_missing_interface_metadata(tmp_path):
+    write_run(tmp_path, [(.95, .95, True, True), (.2, .2, False, True)])
+    provenance = calibration.calibrate(tmp_path)["provenance"]
+    assert all(provenance[key] is None for key in calibration.PROVENANCE_CONFIG_KEYS)
+    assert provenance["requested_llm_model"] == "generator-v1"
+    assert provenance["requested_jev_model"] == "jev-1.13.0"
