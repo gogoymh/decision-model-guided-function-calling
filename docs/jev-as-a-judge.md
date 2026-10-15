@@ -132,9 +132,9 @@ Jev changes no verdict across 96 repeated requests but changes four of 48 paraph
 - **Prospective scope remains finite.** The genuinely new-workload experiment covers two correctness workloads and 570 held-out pairs; equality of aggregate accuracy should not be generalized to arbitrary tasks.
 - **Reproduction has an explicit boundary.** Appendix Q supplies public sampled inputs and rubrics, retained judgments, accounting/provenance, offline analyses, and prospective/live test records. It excludes private conversation data, raw API response logs, account metadata, and credentials. Some historical calibration, repeated-request, interface, and rubric-ablation findings are retained summary tables rather than completely regenerated pipelines. Offline analysis does not require paid API calls, and the study trains no new model.
 
-## Relationship to Jev-Backed Function Calling
+## Relationship to Jev-Backed Function Calling (**JBFC**)
 
-| Dimension | Li et al.'s JEV-as-a-Judge | This repository's proposed experiment |
+| Dimension | Li et al.'s JEV-as-a-Judge | **JBFC** |
 |---|---|---|
 | Object evaluated | Finished candidate outputs, preference pairs, factuality, final answers | An unexecuted LLM-proposed function name and arguments |
 | Jev interface | Primarily one Choice per request | Two Noul questions in one shared request |
@@ -151,7 +151,7 @@ Its 0.9 confidence threshold does **not** validate our untuned 0.8 correctness t
 
 ## Suggested concise manuscript treatment
 
-**Related work:** “Li et al. study JEV-as-a-Judge, retaining confident Jev verdicts and escalating uncertain cases to an independent reasoning judge. Their version-5 evaluation finds workload-dependent accuracy–cost benefits, while confidence routing weakens under misleading answer styles and fails on reference-free prose. They evaluate finished outputs, leaving tool selection and error propagation inside agents untested. We instead evaluate two batched Noul checks on an unexecuted function call and use failed judgments to repair the proposal with the same generator.”
+**Related work:** “Li et al. study JEV-as-a-Judge, retaining confident Jev verdicts and escalating uncertain cases to an independent reasoning judge. Their version-5 evaluation finds workload-dependent accuracy–cost benefits, while confidence routing weakens under misleading answer styles and fails on reference-free prose. They evaluate finished outputs, leaving tool selection and error propagation inside agents untested. **JBFC** instead evaluates two batched Noul checks on an unexecuted function call and uses failed judgments to repair the proposal with the same generator.”
 
 **Method or limitations:** “Because Choice and Noul probabilities can differ even for aligned questions, we treat thresholds as interface- and workload-specific rather than transferring the confidence thresholds of JEV-as-a-Judge.”
 

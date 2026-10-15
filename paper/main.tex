@@ -31,7 +31,7 @@
 \begin{document}
 \maketitle
 \begin{abstract}
-Function-calling language models must select an appropriate function and instantiate its arguments before software acts on a user's request. Syntactically valid calls can still fail either requirement. We present Jev-Backed Function Calling, an inference-time protocol that inserts TypeSafe's Jev decision model between call generation and dispatch. Jev evaluates function selection and argument correctness as two typed judgments in one request. A candidate passes only when both judgments meet their thresholds; otherwise, structured feedback conditions a revised proposal from the same generator. The protocol permits at most three repairs after the initial proposal and specifies behavior when this budget is exhausted. We provide a reproducible evaluation package for 3,051 examples from seven single-turn categories of the Berkeley Function Calling Leaderboard, with disjoint development and test splits, official Python call checking, comparison methods, and quality--cost diagnostics. This manuscript completes the method and experimental protocol; empirical results remain pending. The study is designed to determine whether external dual verification improves final call correctness beyond bounded self-revision and whether any gains justify its overhead.
+Function-calling language models must select an appropriate function and instantiate its arguments before software acts on a user's request. Syntactically valid calls can still fail either requirement. We present Jev-Backed Function Calling(\textbf{JBFC}), an inference-time protocol that inserts TypeSafe's System One (Decision) model Jev between call generation and dispatch. Jev evaluates function selection and argument correctness as two typed judgments in one request. A candidate passes only when both judgments meet their thresholds; otherwise, structured feedback conditions a revised proposal from the same generator. \textbf{JBFC} permits at most three repairs after the initial proposal and specifies behavior when this budget is exhausted. We provide a reproducible evaluation package for 3,051 examples from seven single-turn categories of the Berkeley Function Calling Leaderboard, with disjoint development and test splits, official Python call checking, comparison methods, and quality--cost diagnostics. This manuscript completes the method and experimental protocol; empirical results remain pending. The study is designed to determine whether \textbf{JBFC} improves final call correctness beyond bounded self-revision and whether any gains justify its overhead.
 \end{abstract}
 
 \section{Introduction}
@@ -39,25 +39,25 @@ A function-calling system receives a user request and function catalog, asks a l
 
 Improvements in tool-use training and evaluation have made this interface increasingly practical~\cite{patil2024gorilla,qin2024toolllm,patil2025bfcl}. However, schema conformance establishes structural validity, not agreement with user intent. The gap motivates an explicit check before dispatch. Such a check should assess the selected operation against all available alternatives and assess the proposed values against the request and the selected signature. A failure in either component is sufficient to make the call unsuitable.
 
-We investigate a particular implementation of this idea using Jev, TypeSafe's System One model~\cite{typesafe2026models}. Jev accepts a shared state and typed questions and returns structured decisions rather than free-form generated explanations. We use two yes/no probability questions: whether the function selection is appropriate and whether the arguments are correct. Their conjunction controls early acceptance. Failed checks produce compact, deterministic feedback for the generator, which proposes a replacement. Each replacement is checked afresh; neither a previously correct function nor previously accepted arguments are presumed to remain correct after revision.
+\textbf{JBFC} implements this check using Jev, TypeSafe's System One model~\cite{typesafe2026models}. Jev accepts a shared state and typed questions and returns structured decisions rather than free-form generated explanations. We use two yes/no probability questions: whether the function selection is appropriate and whether the arguments are correct. Their conjunction controls early acceptance. Failed checks produce compact, deterministic feedback for the generator, which proposes a replacement. Each replacement is checked afresh; neither a previously correct function nor previously accepted arguments are presumed to remain correct after revision.
 
-Verification and feedback-conditioned correction have substantial precedent. ToolVerifier checks both tool selection and parameter generation~\cite{mekala2024toolverifier}, and ToolCritic provides diagnostic feedback for revising tool-use responses~\cite{hamad2025toolcritic}. TypeSafe also documents direct function routing and an extraction-verification cascade~\cite{typesafe2026functioncalling,typesafe2026sdecascade}. Our contribution is therefore the concrete Jev-backed protocol and an auditable evaluation of its tradeoffs, not a claim that tool verification or iterative repair is new.
+Verification and feedback-conditioned correction have substantial precedent. ToolVerifier checks both tool selection and parameter generation~\cite{mekala2024toolverifier}, and ToolCritic provides diagnostic feedback for revising tool-use responses~\cite{hamad2025toolcritic}. TypeSafe also documents direct function routing and an extraction-verification cascade~\cite{typesafe2026functioncalling,typesafe2026sdecascade}. Our contribution is \textbf{JBFC} and an auditable evaluation of its tradeoffs, not a claim that tool verification or iterative repair is new.
 
-The implementation requires both checks to pass on the same candidate, limits repair to three rounds, and distinguishes correctness from acceptance and dispatch. We compare direct calling, schema repair, self-revision, and single-check ablations on a frozen BFCL subset, measuring corrected and damaged predictions alongside latency and cost.
+\textbf{JBFC} requires both checks to pass on the same candidate, limits repair to three rounds, and distinguishes correctness from acceptance and dispatch. We compare direct calling, schema repair, self-revision, and single-check ablations on a frozen BFCL subset, measuring corrected and damaged predictions alongside latency and cost.
 
 \section{Related Work}
 \paragraph{Tool use and benchmarks.}
 Gorilla studies API-call generation~\cite{patil2024gorilla}, and ToolLLM introduces tool-use training and evaluation~\cite{qin2024toolllm}. BFCL evaluates function calling across broader settings~\cite{patil2025bfcl}; we select its single-turn Python categories to isolate pre-dispatch decisions. API-Bank provides runnable dialogues~\cite{li2023apibank}, while StableToolBench addresses changing external APIs through caching and simulation~\cite{guo2024stabletoolbench}. These motivate future evaluation beyond our BFCL subset.
 
 \paragraph{Feedback and verification.}
-Self-Refine~\cite{madaan2023selfrefine}, Reflexion~\cite{shinn2023reflexion}, and CRITIC~\cite{gou2024critic} use self-generated, linguistic, and tool-derived feedback, respectively. Intrinsic self-correction can also degrade correct answers~\cite{huang2024selfcorrect}, motivating our correction/regression measurements. ToolVerifier separates tool selection and parameter verification using contrastive questions~\cite{mekala2024toolverifier}; ToolCritic diagnoses tool-use errors and feeds them back to the generator~\cite{hamad2025toolcritic}. Our frozen external API evaluates complete proposals under a bounded repair policy.
+Self-Refine~\cite{madaan2023selfrefine}, Reflexion~\cite{shinn2023reflexion}, and CRITIC~\cite{gou2024critic} use self-generated, linguistic, and tool-derived feedback, respectively. Intrinsic self-correction can also degrade correct answers~\cite{huang2024selfcorrect}, motivating our correction/regression measurements. ToolVerifier separates tool selection and parameter verification using contrastive questions~\cite{mekala2024toolverifier}; ToolCritic diagnoses tool-use errors and feeds them back to the generator~\cite{hamad2025toolcritic}. \textbf{JBFC} uses a frozen external API to evaluate complete proposals under a bounded repair policy.
 
 \paragraph{Jev as a judge.}
-Li et al.'s \emph{JEV-as-a-Judge}~\cite{li2026jevjudge} evaluates finished outputs with typed verdict probabilities and escalates uncertain verdicts to an independent stronger judge. Its frozen cascade reduces evaluation cost while preserving strong-judge accuracy on selected workloads, but difficult derivations, misleading style, and reference-free prose expose limits. The study explicitly leaves in-agent tool and action selection untested. We instead check proposed function calls and return failed checks to the same generator for revision. TypeSafe's direct closed-set function routing and extraction-verification cascade provide further precedents~\cite{typesafe2026functioncalling,typesafe2026sdecascade}. Our study measures this specific integration rather than claiming verification or routing as new.
+Li et al.'s \emph{JEV-as-a-Judge}~\cite{li2026jevjudge} evaluates finished outputs with typed verdict probabilities and escalates uncertain verdicts to an independent stronger judge. Its frozen cascade reduces evaluation cost while preserving strong-judge accuracy on selected workloads, but difficult derivations, misleading style, and reference-free prose expose limits. The study explicitly leaves in-agent tool and action selection untested. \textbf{JBFC} instead checks proposed function calls and returns failed checks to the same generator for revision. TypeSafe's direct closed-set function routing and extraction-verification cascade provide further precedents~\cite{typesafe2026functioncalling,typesafe2026sdecascade}. Our study measures \textbf{JBFC} rather than claiming verification or routing as new.
 
 \section{Method}
 \subsection{Proposal and Verification}
-Let $x$ denote the user request, $\mathcal{F}$ the complete supplied function catalog, and $G$ a configured function-calling language model. An initial proposal is
+In \textbf{JBFC}, let $x$ denote the user request, $\mathcal{F}$ the complete supplied function catalog, and $G$ a configured function-calling language model. An initial proposal is
 \begin{equation}
  c_0=G(x,\mathcal{F}), \qquad c_t=(f_t,a_t),
 \end{equation}
@@ -73,7 +73,7 @@ For every well-formed, parseable candidate, including one that fails schema vali
 The function question checks whether the proposed operation satisfies the request, including whether abstention is appropriate. The argument question checks whether required values are present, supported by the request, assigned to the correct fields, and consistent with the selected signature. Empty calls require a no-call judgment; they are not accepted merely because there are no arguments to inspect. The questions are distinct judgments sharing a context, not statistically independent measurements.
 
 \subsection{Conjunction and Bounded Repair}
-With thresholds $\tau_f$ and $\tau_a$, candidate acceptance is
+With thresholds $\tau_f$ and $\tau_a$, candidate acceptance in \textbf{JBFC} is
 \begin{equation}
  A_t=S(c_t)\,\mathbf{1}[p_f^{(t)}\geq\tau_f]\,
        \mathbf{1}[p_a^{(t)}\geq\tau_a].
@@ -102,14 +102,14 @@ until a candidate passes or the budget is exhausted. Here $H_t$ contains all pro
 \draw[->] (jev.south west) -- (3.8,-0.85) -- (2.45,-0.85) -- (gen.south);
 \node[align=center,font=\scriptsize] at (2.35,-1.28) {Failed checks;\\repairs remain};
 \end{tikzpicture}
-\caption{Both checks evaluate the same proposal. The budget permits at most three feedback-conditioned repairs. Dispatch after exhaustion is governed explicitly, independently of acceptance.}
+\caption{\textbf{JBFC} applies both checks to the same proposal. The budget permits at most three feedback-conditioned repairs. Dispatch after exhaustion is governed explicitly, independently of acceptance.}
 \label{fig:loop}
 \end{figure}
 
 \subsection{Dispatch and Reproducible Traces}
-The primary \texttt{execute\_last} policy submits the final proposal to benchmark scoring after budget exhaustion even when Jev rejects it or schema validation fails; malformed proposals score as incorrect. This implements bounded correction followed by completion and prevents acceptance from being mistaken for successful repair. An optional \texttt{abstain} policy withholds rejected candidates. It is reported separately because withholding calls changes coverage rather than necessarily correcting them. No benchmark-generated call is dispatched to a live external service: the current study checks call correctness in a controlled evaluator. Thus ``execute'' denotes the dispatch boundary in the proposed system; empirical claims remain limited to the implemented evaluation.
+\textbf{JBFC}'s primary \texttt{execute\_last} policy submits the final proposal to benchmark scoring after budget exhaustion even when Jev rejects it or schema validation fails; malformed proposals score as incorrect. This implements bounded correction followed by completion and prevents acceptance from being mistaken for successful repair. An optional \texttt{abstain} policy withholds rejected candidates. It is reported separately because withholding calls changes coverage rather than necessarily correcting them. No benchmark-generated call is dispatched to a live external service: the current study checks call correctness in a controlled evaluator. Thus ``execute'' denotes the dispatch boundary in the proposed system; empirical claims remain limited to the implemented evaluation.
 
-Each trace saves proposals, structural validation, Jev outputs, feedback, acceptance, stopping reason, returned model versions, token usage, and timings. Reference labels are attached only by offline scoring and cannot flow back into generation or verification. API credentials are read from environment variables and excluded from saved traces. Reusing an initial proposal across comparison methods preserves a paired starting point; each method is nevertheless charged that proposal's nominal usage and latency for logical per-request accounting.
+Each \textbf{JBFC} trace saves proposals, structural validation, Jev outputs, feedback, acceptance, stopping reason, returned model versions, token usage, and timings. Reference labels are attached only by offline scoring and cannot flow back into generation or verification. API credentials are read from environment variables and excluded from saved traces. The manifest records provider interfaces, routes, concurrency, and transport settings without credentials. Reusing an initial proposal across comparison methods preserves a paired starting point; each method is nevertheless charged that proposal's nominal usage and latency for logical per-request accounting.
 
 \section{Experiments}
 \subsection{Dataset and Evaluation Scope}
@@ -121,7 +121,7 @@ We prepare 3,051 BFCL examples from seven categories at repository revision \tex
 \setlength{\tabcolsep}{3.1pt}
 \begin{tabular}{lrrrr}
 \toprule
-Category & All & Test & Direct & Joint\\
+Category & All & Test & Direct & \textbf{JBFC}\\
 \midrule
 Simple Python & 400 & 360 & -- & --\\
 Multiple & 200 & 180 & -- & --\\
@@ -144,11 +144,11 @@ The original Python AST checker determines acceptable function calls and argumen
 BFCL's ``multiple'' categories provide several candidate functions, not parallel-call execution. The package excludes parallel calls, multi-turn state, web search, memory, and live service execution. The word ``live'' names a dataset category, not a network request performed by this experiment. Official AST equivalence tests a predicted call against annotated alternatives; it does not demonstrate real-world execution success, authorization, or successful completion of a larger user task.
 
 \subsection{Models and Comparison Methods}
-The default generator is \texttt{gpt-5.4-mini-2026-03-17} with reasoning effort \texttt{none}; the external checker is the stable, version-pinned \texttt{jev-1.13.0}. Both are configurable. We plan three run replicates with the same split and fixed prompts; provider sampling and infrastructure need not be deterministic even when configuration is fixed. The shared initial proposal is sampled once per example and replicate, then reused across methods. Development examples are used for any threshold or prompt selection, followed by a frozen test configuration. Unchanged default thresholds must be labeled untuned.
+The default generator is \texttt{gpt-5.4-mini-2026-03-17} with reasoning effort \texttt{none}; the external checker is the stable, version-pinned \texttt{jev-1.13.0}. Both are configurable. The prepared profile uses OpenAI Responses and Jev System One through an APIM gateway, preserving the supplied function schemas. We plan three run replicates with the same split and fixed prompts; provider sampling and infrastructure need not be deterministic even when configuration is fixed. The shared initial proposal is sampled once per example and replicate, then reused across methods. Development examples are used for any threshold or prompt selection, followed by a frozen test configuration. Unchanged default thresholds must be labeled untuned.
 
-We compare six methods. \emph{Direct} uses the initial proposal. \emph{Schema-only} repairs deterministic validation failures. \emph{Self-refine} asks the generator to reconsider its own proposal under a fixed revision instruction. This is a generic self-revision control inspired by Self-Refine, not a reproduction of its full task-specific prompting~\cite{madaan2023selfrefine}. \emph{Jev-function} and \emph{Jev-arguments} compute both Jev outputs in the same request but use only the named check for gating and feedback. \emph{Jev-joint} uses both. Retaining the same Jev request shape makes the single-check ablations primarily about the gate and feedback, rather than an unrelated change in batching.
+We compare six methods. \emph{Direct} uses the initial proposal. \emph{Schema-only} repairs deterministic validation failures. \emph{Self-refine} asks the generator to reconsider its own proposal under a fixed revision instruction. This is a generic self-revision control inspired by Self-Refine, not a reproduction of its full task-specific prompting~\cite{madaan2023selfrefine}. \textbf{JBFC-F} (function-only) and \textbf{JBFC-A} (argument-only) compute both Jev outputs in the same request but use only the named check for gating and feedback. \textbf{JBFC} uses both checks. Retaining the same Jev request shape makes the single-check ablations primarily about the gate and feedback, rather than an unrelated change in batching.
 
-All Jev variants retain the deterministic schema floor; a single-check ablation receives only its selected semantic result plus structural errors. All repair methods use the same maximum of three repairs in the principal comparison. This matches the proposal ceiling, not realized tokens, latency, cost, or stopping time. We derive joint-check budgets $r\in\{0,1,2,3\}$ by truncating the same logged three-repair trajectory. The cap is not included in either model's prompt, and no function executes during repair, so these prefixes evaluate alternative stopping policies on identical candidates without additional API calls. Abstention is likewise replayed from the same traces. Usage and latency are accumulated only through the selected stopping point. A zero-repair verifier can change acceptance but cannot improve the initial candidate under the primary completion policy.
+\textbf{JBFC} and its ablations retain the deterministic schema floor; a single-check ablation receives only its selected semantic result plus structural errors. All repair methods use the same maximum of three repairs in the principal comparison. This matches the proposal ceiling, not realized tokens, latency, cost, or stopping time. We derive \textbf{JBFC} repair budgets $r\in\{0,1,2,3\}$ by truncating the same logged three-repair trajectory. The cap is not included in either model's prompt, and no function executes during repair, so these prefixes evaluate alternative stopping policies on identical candidates without additional API calls. Abstention is likewise replayed from the same traces. Usage and latency are accumulated only through the selected stopping point. A zero-repair verifier can change acceptance but cannot improve the initial candidate under the primary completion policy.
 
 % BEGIN AUTO RESULTS
 \begin{table}[t]
@@ -161,12 +161,12 @@ Method & Acc. (\%) & Repairs & Sec. & USD/1k \\
 Direct & -- & -- & -- & -- \\
 Schema repair & -- & -- & -- & -- \\
 Self-refine & -- & -- & -- & -- \\
-Jev: function & -- & -- & -- & -- \\
-Jev: arguments & -- & -- & -- & -- \\
-Jev: joint & -- & -- & -- & -- \\
+\textbf{JBFC-F} & -- & -- & -- & -- \\
+\textbf{JBFC-A} & -- & -- & -- & -- \\
+\textbf{JBFC} & -- & -- & -- & -- \\
 \bottomrule
 \end{tabular}
-\caption{Primary comparison on the held-out BFCL subset. Accuracy excludes the call-presence-only live relevance category. -- denotes an experiment not yet run; no empirical values are imputed.}
+\caption{Primary comparison on the held-out BFCL subset. Accuracy excludes the call-presence-only live relevance category. -- denotes an unavailable or unrun result; no empirical values are imputed.}
 \label{tab:main}
 \end{table}
 % END AUTO RESULTS
@@ -182,7 +182,7 @@ Correction and regression track initially wrong candidates becoming correct and 
 \setlength{\tabcolsep}{3pt}
 \begin{tabular}{lrrrr}
 \toprule
-Joint-check diagnostic & $r{=}0$ & $1$ & $2$ & $3$\\
+\textbf{JBFC} diagnostic & $r{=}0$ & $1$ & $2$ & $3$\\
 \midrule
 Final correctness (\%) & -- & -- & -- & --\\
 Acceptance coverage (\%) & -- & -- & -- & --\\
@@ -201,9 +201,9 @@ p95 latency (s) & -- & -- & -- & --\\
 \end{table}
 % END AUTO DIAGNOSTICS
 
-Efficiency reporting includes logical end-to-end latency, p95 latency, generator and Jev request counts, token usage, and estimated cost per 1,000 requests. Shared initial generations are charged to each method's logical usage; observed wall time is saved separately. These usage-based estimates do not reconstruct provider bills or unreported usage from failed requests. Missing provider usage makes cost accounting incomplete rather than implying zero cost. The starting price configuration, dated October 15, 2026, is \$0.75/\$0.075/\$4.50 per million uncached input/cached input/output generator tokens and \$0.042 per million Jev input tokens, with no Jev output charge. Prices are configurable accounting inputs rather than permanent model properties.
+Efficiency reporting includes logical end-to-end latency, p95 latency, generator and Jev request counts, token usage, and estimated cost per 1,000 requests. Shared initial generations are charged to each method's logical usage; observed wall time is saved separately. Latency includes APIM overhead. These usage-based estimates do not reconstruct provider bills or unreported usage from failed requests. Missing provider usage makes cost accounting incomplete rather than implying zero cost. The starting price configuration, dated October 15, 2026, is \$0.75/\$0.075/\$4.50 per million uncached input/cached input/output generator tokens and \$0.042 per million Jev input tokens, with no Jev output charge. These configurable reference prices exclude any gateway surcharge.
 
-For the primary direct-versus-joint difference, we use a paired bootstrap with 2,000 resamples and seed 1729. We first average paired differences across replicates for each example and then resample example IDs, avoiding treatment of replicates as independent test items. Reported intervals are 95\% percentile intervals; per-replicate scores accompany them. Tables~\ref{tab:main}--\ref{tab:diagnostics} are reporting templates. Their empty cells must not be interpreted as zero accuracy or evidence that the method works. Incomplete or limited smoke runs cannot populate the main table.
+For the primary Direct-versus-\textbf{JBFC} difference, we use a paired bootstrap with 2,000 resamples and seed 1729. We first average paired differences across replicates for each example and then resample example IDs, avoiding treatment of replicates as independent test items. Reported intervals are 95\% percentile intervals; per-replicate scores accompany them. Tables~\ref{tab:main}--\ref{tab:diagnostics} are reporting templates. Their empty cells must not be interpreted as zero accuracy or evidence that the method works. Incomplete or limited smoke runs cannot populate the main table.
 
 \subsection{Threats to Validity and Planned Interpretation}
 A verifier can share the generator's misunderstandings or accept a plausible but unsupported value. Asking two questions does not remove correlated error, and repair can optimize a candidate toward the verifier's preferences rather than the reference task. Repeated testing also changes the candidate distribution, so a threshold's development behavior may not persist over repair rounds. We therefore examine corrections, regressions, false acceptance, and budget-dependent coverage jointly, rather than treating a rising acceptance rate as improvement.
@@ -211,7 +211,7 @@ A verifier can share the generator's misunderstandings or accept a plausible but
 The study is limited to a single generator/verifier pair by default, English-heavy benchmark requests, static schemas, and publicly available examples that may have appeared in model training. Function-name normalization and benchmark annotation conventions can also influence scores. Four documented upstream annotation inconsistencies remain unchanged in the primary denominator. Replication with other generators, independent tool domains, executable tasks, and updated Jev versions is necessary before broad generalization. API outages, incomplete runs, and version changes are operational limitations to disclose, not observations to silently remove. Any paper-level conclusion must follow the measured outcomes, including a null or negative result.
 
 \section{Conclusion}
-Jev-Backed Function Calling checks function selection and arguments before dispatch and feeds failed checks back to the generator for at most three repairs. The evaluation separates structural repair, self-revision, single-check validation, and joint verification, measuring correctness independently of acceptance and cost. The implementation and reporting protocol are ready; empirical effectiveness remains open until the planned runs establish whether corrections outweigh regressions and overhead.
+\textbf{JBFC} checks function selection and arguments before dispatch and feeds failed checks back to the generator for at most three repairs. The evaluation compares \textbf{JBFC} with structural repair, self-revision, and single-check ablations, measuring correctness independently of acceptance and cost. The implementation and reporting protocol are ready; empirical effectiveness remains open until the planned runs establish whether corrections outweigh regressions and overhead.
 
 \section*{Acknowledgements}
 This work was created as part of the No-More-Slops group activities at Pseudo Lab.

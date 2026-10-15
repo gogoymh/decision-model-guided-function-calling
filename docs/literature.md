@@ -74,14 +74,14 @@ The bibliography deliberately prioritizes close verification work over adding ev
 | Direct generator | One proposal, no semantic verifier or repair. |
 | Schema-only repair | Repairs deterministic structural/type violations; separates semantics from format improvements. |
 | Self-feedback repair | Same generator critiques and repairs its candidate with the same proposal cap; measures gains from extra generation and feedback without Jev. Clearly document the actual critic prompt and whether critique consumes an additional call. |
-| Jev selection only | Uses only selection feedback for the gate and repair. |
-| Jev arguments only | Uses only argument feedback for the gate and repair. |
-| Jev joint | Requires both criteria and feeds back both judgments. |
-| Jev joint at caps 0, 1, 2, 3 | Identifies marginal repair benefit, regression, overhead, and early stopping. A zero-repair verifier arm is useful for studying acceptance alone. |
+| **JBFC-F** (function-only) | Uses only selection feedback for the gate and repair. |
+| **JBFC-A** (argument-only) | Uses only argument feedback for the gate and repair. |
+| **JBFC** | Requires both criteria and feeds back both judgments. |
+| **JBFC** at caps 0, 1, 2, 3 | Identifies marginal repair benefit, regression, overhead, and early stopping. A zero-repair verifier arm is useful for studying acceptance alone. |
 
 The same proposal cap is a **cap-matched** comparison, not necessarily a token-, time-, or dollar-matched one. Measure observed generator/verifier calls, tokens, cost, and latency. For a stronger budget control, compare quality at matched observed spend or latency, or report a quality-cost curve. A fixed number of repeated samples followed by oracle-best selection is not a fair deployable baseline. Use identical initial proposals across methods when feasible, paired by example and generator seed, and make the reuse/cache policy explicit.
 
-The implemented budget ablation uses **trajectory-prefix replay** rather than new model runs. Execute the joint-check method with a maximum of three repairs, then derive caps 0, 1, and 2 by stopping the same trace at the corresponding proposal (or its earlier first acceptance). This is valid here because the cap is not disclosed to either model, no tool executes during the repair trajectory, and all earlier feedback is unchanged by the later stopping decision. Reuse the same trace for the optional abstention dispatch policy. Compute candidate scores and logical usage/latency from the selected prefix. Raw usage and observed wall time are saved; logical estimated cost is not an actual provider bill and cannot include unreported usage from failed requests. Do not extrapolate missing proposals after a provider error, and do not describe these policy replays as independent replicate runs.
+The implemented budget ablation uses **trajectory-prefix replay** rather than new model runs. Execute **JBFC** with a maximum of three repairs, then derive caps 0, 1, and 2 by stopping the same trace at the corresponding proposal (or its earlier first acceptance). This is valid here because the cap is not disclosed to either model, no tool executes during the repair trajectory, and all earlier feedback is unchanged by the later stopping decision. Reuse the same trace for the optional abstention dispatch policy. Compute candidate scores and logical usage/latency from the selected prefix. Raw usage and observed wall time are saved; logical estimated cost is not an actual provider bill and cannot include unreported usage from failed requests. Do not extrapolate missing proposals after a provider error, and do not describe these policy replays as independent replicate runs.
 
 ### Metrics and denominators
 
