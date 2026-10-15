@@ -1,0 +1,314 @@
+\documentclass[10pt,twocolumn,letterpaper]{article}
+\usepackage[letterpaper,margin=0.75in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{mathptmx}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage[hyphens]{url}
+\usepackage[hidelinks]{hyperref}
+\setlength{\columnsep}{0.25in}
+\setlength{\parindent}{1em}
+\setlength{\parskip}{0pt}
+\setlength{\textfloatsep}{9pt plus 2pt minus 2pt}
+\setlength{\floatsep}{8pt plus 2pt minus 2pt}
+\setlength{\intextsep}{8pt plus 2pt minus 2pt}
+\setlength{\abovecaptionskip}{4pt}
+\setlength{\belowcaptionskip}{0pt}
+\renewcommand{\topfraction}{0.92}
+\renewcommand{\bottomfraction}{0.9}
+\renewcommand{\textfraction}{0.08}
+\renewcommand{\floatpagefraction}{0.8}
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\pagestyle{plain}
+\title{\vspace{-1.3em}\textbf{Jev-Backed Function Calling:\\Dual Verification with Bounded Repair}\vspace{-0.4em}}
+\author{Anonymous Author(s)}
+\date{}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+Function-calling language models must select an appropriate function and instantiate its arguments before software acts on a user's request. Syntactically valid calls can still fail either requirement. We present Jev-Backed Function Calling, an inference-time protocol that inserts TypeSafe's Jev decision model between call generation and dispatch. Jev evaluates function selection and argument correctness as two typed judgments in one request. A candidate passes only when both judgments meet their thresholds; otherwise, structured feedback conditions a revised proposal from the same generator. The protocol permits at most three repairs after the initial proposal and specifies behavior when this budget is exhausted. We provide a reproducible evaluation package for 3,051 examples from seven single-turn categories of the Berkeley Function Calling Leaderboard, with disjoint development and test splits, official Python call checking, comparison methods, and quality--cost diagnostics. This manuscript completes the method and experimental protocol; empirical results remain pending. The study is designed to determine whether external dual verification improves final call correctness beyond bounded self-revision and whether any gains justify its overhead.
+\end{abstract}
+
+\section{Introduction}
+A function-calling system receives a user request and function catalog, asks a language model to propose a call, and dispatches it. The generator must choose an operation and assign its arguments. A travel request might select the wrong booking function or swap departure and destination; either error can satisfy a JSON schema.
+
+Improvements in tool-use training and evaluation have made this interface increasingly practical~\cite{patil2024gorilla,qin2024toolllm,patil2025bfcl}. However, schema conformance establishes structural validity, not agreement with user intent. The gap motivates an explicit check before dispatch. Such a check should assess the selected operation against all available alternatives and assess the proposed values against the request and the selected signature. A failure in either component is sufficient to make the call unsuitable.
+
+We investigate a particular implementation of this idea using Jev, TypeSafe's System One model~\cite{typesafe2026models}. Jev accepts a shared state and typed questions and returns structured decisions rather than free-form generated explanations. We use two yes/no probability questions: whether the function selection is appropriate and whether the arguments are correct. Their conjunction controls early acceptance. Failed checks produce compact, deterministic feedback for the generator, which proposes a replacement. Each replacement is checked afresh; neither a previously correct function nor previously accepted arguments are presumed to remain correct after revision.
+
+Verification and feedback-conditioned correction have substantial precedent. ToolVerifier checks both tool selection and parameter generation~\cite{mekala2024toolverifier}, and ToolCritic provides diagnostic feedback for revising tool-use responses~\cite{hamad2025toolcritic}. TypeSafe also documents direct function routing and an extraction-verification cascade~\cite{typesafe2026functioncalling,typesafe2026sdecascade}. Our contribution is therefore the concrete Jev-backed protocol and an auditable evaluation of its tradeoffs, not a claim that tool verification or iterative repair is new.
+
+The implementation requires both checks to pass on the same candidate, limits repair to three rounds, and distinguishes correctness from acceptance and dispatch. We compare direct calling, schema repair, self-revision, and single-check ablations on a frozen BFCL subset, measuring corrected and damaged predictions alongside latency and cost.
+
+\section{Related Work}
+\paragraph{Tool use and benchmarks.}
+Gorilla studies API-call generation~\cite{patil2024gorilla}, and ToolLLM introduces tool-use training and evaluation~\cite{qin2024toolllm}. BFCL evaluates function calling across broader settings~\cite{patil2025bfcl}; we select its single-turn Python categories to isolate pre-dispatch decisions. API-Bank provides runnable dialogues~\cite{li2023apibank}, while StableToolBench addresses changing external APIs through caching and simulation~\cite{guo2024stabletoolbench}. These motivate future evaluation beyond our BFCL subset.
+
+\paragraph{Feedback and verification.}
+Self-Refine~\cite{madaan2023selfrefine}, Reflexion~\cite{shinn2023reflexion}, and CRITIC~\cite{gou2024critic} use self-generated, linguistic, and tool-derived feedback, respectively. Intrinsic self-correction can also degrade correct answers~\cite{huang2024selfcorrect}, motivating our correction/regression measurements. ToolVerifier separates tool selection and parameter verification using contrastive questions~\cite{mekala2024toolverifier}; ToolCritic diagnoses tool-use errors and feeds them back to the generator~\cite{hamad2025toolcritic}. Our frozen external API evaluates complete proposals under a bounded repair policy.
+
+\paragraph{Jev as a judge.}
+Li et al.'s \emph{JEV-as-a-Judge}~\cite{li2026jevjudge} evaluates finished outputs with typed verdict probabilities and escalates uncertain verdicts to an independent stronger judge. Its frozen cascade reduces evaluation cost while preserving strong-judge accuracy on selected workloads, but difficult derivations, misleading style, and reference-free prose expose limits. The study explicitly leaves in-agent tool and action selection untested. We instead check proposed function calls and return failed checks to the same generator for revision. TypeSafe's direct closed-set function routing and extraction-verification cascade provide further precedents~\cite{typesafe2026functioncalling,typesafe2026sdecascade}. Our study measures this specific integration rather than claiming verification or routing as new.
+
+\section{Method}
+\subsection{Proposal and Verification}
+Let $x$ denote the user request, $\mathcal{F}$ the complete supplied function catalog, and $G$ a configured function-calling language model. An initial proposal is
+\begin{equation}
+ c_0=G(x,\mathcal{F}), \qquad c_t=(f_t,a_t),
+\end{equation}
+where $f_t$ identifies a function and $a_t$ its argument object. The representation also permits an empty call for requests that should not invoke a function. The prepared benchmark excludes parallel and multi-turn execution, so the principal task is selecting at most one call from the catalog. An extra call is a prediction error rather than an opportunity to execute arbitrary code.
+
+Deterministic validation checks parsing, function existence, required fields, and declared types. Let $S(c_t)$ indicate whether these checks pass. This inexpensive check is kept separate from Jev so that the schema-only comparison can measure how much correction is attributable to structure alone. Normalization maps benchmark types and function names to the provider's accepted interface while retaining original schemas and names for scoring. The same normalized catalog is supplied to every method.
+
+For every well-formed, parseable candidate, including one that fails schema validation, we construct a state containing $x$, $\mathcal{F}$, and $c_t$. It contains no reference answer or correctness label. One Jev request evaluates two \texttt{Noul} questions, each oriented so a larger value means a stronger positive judgment:
+\begin{align}
+ p_f^{(t)}&=J_f(x,\mathcal{F},c_t),\\
+ p_a^{(t)}&=J_a(x,\mathcal{F},c_t).
+\end{align}
+The function question checks whether the proposed operation satisfies the request, including whether abstention is appropriate. The argument question checks whether required values are present, supported by the request, assigned to the correct fields, and consistent with the selected signature. Empty calls require a no-call judgment; they are not accepted merely because there are no arguments to inspect. The questions are distinct judgments sharing a context, not statistically independent measurements.
+
+\subsection{Conjunction and Bounded Repair}
+With thresholds $\tau_f$ and $\tau_a$, candidate acceptance is
+\begin{equation}
+ A_t=S(c_t)\,\mathbf{1}[p_f^{(t)}\geq\tau_f]\,
+       \mathbf{1}[p_a^{(t)}\geq\tau_a].
+\label{eq:gate}
+\end{equation}
+The default is $\tau_f=\tau_a=0.8$, an untuned starting value rather than an empirically justified optimum. Optional calibration uses development data only. Unlike routing by maximum verdict probability~\cite{li2026jevjudge}, a confident negative judgment rejects a call; thresholds must be validated for our Noul interface. Both tests must pass on the same candidate. If either fails, the generator receives the previous proposal and feedback containing the failed criterion, the two probabilities, the thresholds, and a request to reconsider the call using the original catalog and user request. This feedback reports Jev's judgments; it does not invent a natural-language explanation that Jev did not return.
+
+For repair budget $r\in\{0,1,2,3\}$,
+\begin{equation}
+ c_{t+1}=G(x,\mathcal{F},H_t),
+ \quad 0\leq t<r,
+\end{equation}
+until a candidate passes or the budget is exhausted. Here $H_t$ contains all proposals and feedback through round $t$, not only the most recent pair. The largest budget therefore permits four generator proposals, not three. Every revised candidate is validated and judged anew. A structural failure overrides acceptance even if both Jev judgments pass. Provider failures are recorded separately and halt the affected request after bounded transport retries; they are not converted into fabricated probability values or negative model judgments.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[>=Stealth, font=\footnotesize,
+ box/.style={draw,rounded corners=2pt,align=center,minimum height=0.72cm,inner sep=4pt}]
+\node[box] (input) at (0,0) {Request\\and catalog};
+\node[box] (gen) at (2.45,0) {Function-calling\\LLM};
+\node[box] (jev) at (5.05,0) {Jev: function\\and arguments};
+\node[box] (out) at (5.05,-1.6) {Dispatch policy\\and scoring};
+\draw[->] (input) -- (gen);
+\draw[->] (gen) -- (jev);
+\draw[->] (jev) -- node[right,align=left,font=\scriptsize] {pass or\\cap reached} (out);
+\draw[->] (jev.south west) -- (3.8,-0.85) -- (2.45,-0.85) -- (gen.south);
+\node[align=center,font=\scriptsize] at (2.35,-1.28) {Failed checks;\\repairs remain};
+\end{tikzpicture}
+\caption{Both checks evaluate the same proposal. The budget permits at most three feedback-conditioned repairs. Dispatch after exhaustion is governed explicitly, independently of acceptance.}
+\label{fig:loop}
+\end{figure}
+
+\subsection{Dispatch and Reproducible Traces}
+The primary \texttt{execute\_last} policy submits the final proposal to benchmark scoring after budget exhaustion even when Jev rejects it or schema validation fails; malformed proposals score as incorrect. This implements bounded correction followed by completion and prevents acceptance from being mistaken for successful repair. An optional \texttt{abstain} policy withholds rejected candidates. It is reported separately because withholding calls changes coverage rather than necessarily correcting them. No benchmark-generated call is dispatched to a live external service: the current study checks call correctness in a controlled evaluator. Thus ``execute'' denotes the dispatch boundary in the proposed system; empirical claims remain limited to the implemented evaluation.
+
+Each trace saves proposals, structural validation, Jev outputs, feedback, acceptance, stopping reason, returned model versions, token usage, and timings. Reference labels are attached only by offline scoring and cannot flow back into generation or verification. API credentials are read from environment variables and excluded from saved traces. Reusing an initial proposal across comparison methods preserves a paired starting point; each method is nevertheless charged that proposal's nominal usage and latency for logical per-request accounting.
+
+\section{Experiments}
+\subsection{Dataset and Evaluation Scope}
+We prepare 3,051 BFCL examples from seven categories at repository revision \texttt{6ea57973c7a6}\footnote{Full revision: \nolinkurl{6ea57973c7a6097fd7c5915698c54c17c5b1b6c8}. The released manifest records source URLs, hashes, normalization, and example IDs.}. Table~\ref{tab:categories} records the downloaded category sizes and the planned held-out evaluation. Within each category, examples are ranked by the SHA-256 hash of \texttt{seed:id}. The first $\max(1,\lfloor0.1N_k\rfloor)$ form development data. Seed 1729 yields 303 development and 2,748 test examples. Model results are not yet available.
+
+% BEGIN AUTO CATEGORIES
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3.1pt}
+\begin{tabular}{lrrrr}
+\toprule
+Category & All & Test & Direct & Joint\\
+\midrule
+Simple Python & 400 & 360 & -- & --\\
+Multiple & 200 & 180 & -- & --\\
+Irrelevance & 240 & 216 & -- & --\\
+Live simple & 258 & 233 & -- & --\\
+Live multiple & 1053 & 948 & -- & --\\
+Live irrelevance & 884 & 796 & -- & --\\
+Live relevance$^\dagger$ & 16 & 15 & -- & --\\
+\midrule
+Total & 3051 & 2748 & -- & --\\
+\bottomrule
+\end{tabular}
+\caption{Prepared BFCL data and test accuracy (\%). Counts are data statistics. $^\dagger$Live relevance measures call presence only; total accuracy excludes these 15 cases. -- denotes an unrun experiment.}
+\label{tab:categories}
+\end{table}
+% END AUTO CATEGORIES
+
+The original Python AST checker determines acceptable function calls and argument values for answer-bearing categories. Irrelevance categories assess the required absence of a call. Live relevance supplies call-presence supervision only: it cannot establish that a particular function or its arguments are correct and is excluded from the primary aggregate and corresponding verifier calibration. The main aggregate therefore contains 2,733 test examples per replicate. We report per-category accuracy alongside the micro-average because the larger live categories otherwise dominate it.
+
+BFCL's ``multiple'' categories provide several candidate functions, not parallel-call execution. The package excludes parallel calls, multi-turn state, web search, memory, and live service execution. The word ``live'' names a dataset category, not a network request performed by this experiment. Official AST equivalence tests a predicted call against annotated alternatives; it does not demonstrate real-world execution success, authorization, or successful completion of a larger user task.
+
+\subsection{Models and Comparison Methods}
+The default generator is \texttt{gpt-5.4-mini-2026-03-17} with reasoning effort \texttt{none}; the external checker is the stable, version-pinned \texttt{jev-1.13.0}. Both are configurable. We plan three run replicates with the same split and fixed prompts; provider sampling and infrastructure need not be deterministic even when configuration is fixed. The shared initial proposal is sampled once per example and replicate, then reused across methods. Development examples are used for any threshold or prompt selection, followed by a frozen test configuration. Unchanged default thresholds must be labeled untuned.
+
+We compare six methods. \emph{Direct} uses the initial proposal. \emph{Schema-only} repairs deterministic validation failures. \emph{Self-refine} asks the generator to reconsider its own proposal under a fixed revision instruction. This is a generic self-revision control inspired by Self-Refine, not a reproduction of its full task-specific prompting~\cite{madaan2023selfrefine}. \emph{Jev-function} and \emph{Jev-arguments} compute both Jev outputs in the same request but use only the named check for gating and feedback. \emph{Jev-joint} uses both. Retaining the same Jev request shape makes the single-check ablations primarily about the gate and feedback, rather than an unrelated change in batching.
+
+All Jev variants retain the deterministic schema floor; a single-check ablation receives only its selected semantic result plus structural errors. All repair methods use the same maximum of three repairs in the principal comparison. This matches the proposal ceiling, not realized tokens, latency, cost, or stopping time. We derive joint-check budgets $r\in\{0,1,2,3\}$ by truncating the same logged three-repair trajectory. The cap is not included in either model's prompt, and no function executes during repair, so these prefixes evaluate alternative stopping policies on identical candidates without additional API calls. Abstention is likewise replayed from the same traces. Usage and latency are accumulated only through the selected stopping point. A zero-repair verifier can change acceptance but cannot improve the initial candidate under the primary completion policy.
+
+% BEGIN AUTO RESULTS
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3.2pt}
+\begin{tabular}{lrrrr}
+\toprule
+Method & Acc. (\%) & Repairs & Sec. & USD/1k \\
+\midrule
+Direct & -- & -- & -- & -- \\
+Schema repair & -- & -- & -- & -- \\
+Self-refine & -- & -- & -- & -- \\
+Jev: function & -- & -- & -- & -- \\
+Jev: arguments & -- & -- & -- & -- \\
+Jev: joint & -- & -- & -- & -- \\
+\bottomrule
+\end{tabular}
+\caption{Primary comparison on the held-out BFCL subset. Accuracy excludes the call-presence-only live relevance category. -- denotes an experiment not yet run; no empirical values are imputed.}
+\label{tab:main}
+\end{table}
+% END AUTO RESULTS
+
+\subsection{Metrics, Costs, and Statistical Analysis}
+Final candidate correctness is the primary measure, evaluated independently of the verifier's acceptance. Selection correctness and argument correctness conditional on correct selection localize errors, with their denominators reported. Correctness-conditioned verifier diagnostics exclude live relevance. Let $C_i$ be candidate correctness and $A_i$ the gate decision on a scored candidate. Coverage is $P(A_i=1)$ and accepted precision is $P(C_i=1\mid A_i=1)$. We distinguish false acceptance $P(A_i=1\mid C_i=0)$ from selective risk $P(C_i=0\mid A_i=1)$; the latter complements accepted precision. False rejection is $P(A_i=0\mid C_i=1)$. Undefined conditional metrics are reported as unavailable rather than zero.
+
+Correction and regression track initially wrong candidates becoming correct and initially correct candidates becoming wrong. They are reported with explicit denominators, together with mean repairs, cap exhaustion, parse/schema failures, and API error events. Acceptance and dispatch rates are distinct under \texttt{execute\_last}. For abstention runs, accuracy on accepted candidates must be accompanied by coverage and correct dispatches per test request. Brier scores for each probability are optional diagnostics on candidates with appropriate labels; results on all visited candidates are distinguished from results on the fixed initial-candidate pool to expose selection effects.
+
+% BEGIN AUTO DIAGNOSTICS
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrr}
+\toprule
+Joint-check diagnostic & $r{=}0$ & $1$ & $2$ & $3$\\
+\midrule
+Final correctness (\%) & -- & -- & -- & --\\
+Acceptance coverage (\%) & -- & -- & -- & --\\
+Accepted precision (\%) & -- & -- & -- & --\\
+False acceptance (\%) & -- & -- & -- & --\\
+False rejection (\%) & -- & -- & -- & --\\
+Correction (\%) & -- & -- & -- & --\\
+Regression (\%) & -- & -- & -- & --\\
+Cap exhaustion (\%) & -- & -- & -- & --\\
+Mean proposals & -- & -- & -- & --\\
+p95 latency (s) & -- & -- & -- & --\\
+\bottomrule
+\end{tabular}
+\caption{Budget and verifier diagnostics; -- denotes an unrun experiment. False acceptance conditions on incorrect candidates. Correction and regression are fractions of all scored requests.}
+\label{tab:diagnostics}
+\end{table}
+% END AUTO DIAGNOSTICS
+
+Efficiency reporting includes logical end-to-end latency, p95 latency, generator and Jev request counts, token usage, and estimated cost per 1,000 requests. Shared initial generations are charged to each method's logical usage; observed wall time is saved separately. These usage-based estimates do not reconstruct provider bills or unreported usage from failed requests. Missing provider usage makes cost accounting incomplete rather than implying zero cost. The starting price configuration, dated October 15, 2026, is \$0.75/\$0.075/\$4.50 per million uncached input/cached input/output generator tokens and \$0.042 per million Jev input tokens, with no Jev output charge. Prices are configurable accounting inputs rather than permanent model properties.
+
+For the primary direct-versus-joint difference, we use a paired bootstrap with 2,000 resamples and seed 1729. We first average paired differences across replicates for each example and then resample example IDs, avoiding treatment of replicates as independent test items. Reported intervals are 95\% percentile intervals; per-replicate scores accompany them. Tables~\ref{tab:main}--\ref{tab:diagnostics} are reporting templates. Their empty cells must not be interpreted as zero accuracy or evidence that the method works. Incomplete or limited smoke runs cannot populate the main table.
+
+\subsection{Threats to Validity and Planned Interpretation}
+A verifier can share the generator's misunderstandings or accept a plausible but unsupported value. Asking two questions does not remove correlated error, and repair can optimize a candidate toward the verifier's preferences rather than the reference task. Repeated testing also changes the candidate distribution, so a threshold's development behavior may not persist over repair rounds. We therefore examine corrections, regressions, false acceptance, and budget-dependent coverage jointly, rather than treating a rising acceptance rate as improvement.
+
+The study is limited to a single generator/verifier pair by default, English-heavy benchmark requests, static schemas, and publicly available examples that may have appeared in model training. Function-name normalization and benchmark annotation conventions can also influence scores. Four documented upstream annotation inconsistencies remain unchanged in the primary denominator. Replication with other generators, independent tool domains, executable tasks, and updated Jev versions is necessary before broad generalization. API outages, incomplete runs, and version changes are operational limitations to disclose, not observations to silently remove. Any paper-level conclusion must follow the measured outcomes, including a null or negative result.
+
+\section{Conclusion}
+Jev-Backed Function Calling checks function selection and arguments before dispatch and feeds failed checks back to the generator for at most three repairs. The evaluation separates structural repair, self-revision, single-check validation, and joint verification, measuring correctness independently of acceptance and cost. The implementation and reporting protocol are ready; empirical effectiveness remains open until the planned runs establish whether corrections outweigh regressions and overhead.
+
+\section*{Acknowledgements}
+We acknowledge the maintainers of BFCL and the cited open research resources, and TypeSafe for publicly documenting the Jev interface.
+
+\clearpage
+\begin{thebibliography}{15}
+\small
+
+\bibitem{patil2025bfcl}
+Shishir G. Patil, Huanzhi Mao, Fanjia Yan, Charlie Cheng-Jie Ji, Vishnu Suresh, Ion Stoica, and Joseph E. Gonzalez.
+\newblock The Berkeley Function Calling Leaderboard (BFCL): From Tool Use to Agentic Evaluation of Large Language Models.
+\newblock In \emph{International Conference on Machine Learning}, PMLR 267, pp.\ 48371--48392, 2025.
+\newblock \url{https://proceedings.mlr.press/v267/patil25a.html}.
+
+\bibitem{patil2024gorilla}
+Shishir G. Patil, Tianjun Zhang, Xin Wang, and Joseph E. Gonzalez.
+\newblock Gorilla: Large Language Model Connected with Massive APIs.
+\newblock In \emph{Advances in Neural Information Processing Systems}, 37:126544--126565, 2024.
+\newblock \url{https://arxiv.org/abs/2305.15334}.
+
+\bibitem{qin2024toolllm}
+Yujia Qin, Shihao Liang, Yining Ye, Kunlun Zhu, Lan Yan, Yaxi Lu, Yankai Lin, Xin Cong, Xiangru Tang, Bill Qian, Sihan Zhao, Lauren Hong, Runchu Tian, Ruobing Xie, Jie Zhou, Mark Gerstein, Dahai Li, Zhiyuan Liu, and Maosong Sun.
+\newblock ToolLLM: Facilitating Large Language Models to Master 16000+ Real-world APIs.
+\newblock In \emph{International Conference on Learning Representations}, 2024.
+\newblock \url{https://arxiv.org/abs/2307.16789}.
+
+\bibitem{li2023apibank}
+Minghao Li, Yingxiu Zhao, Bowen Yu, Feifan Song, Hangyu Li, Haiyang Yu, Zhoujun Li, Fei Huang, and Yongbin Li.
+\newblock API-Bank: A Comprehensive Benchmark for Tool-Augmented LLMs.
+\newblock In \emph{Empirical Methods in Natural Language Processing}, pp.\ 3102--3116, 2023.
+\newblock \url{https://aclanthology.org/2023.emnlp-main.187/}.
+
+\bibitem{guo2024stabletoolbench}
+Zhicheng Guo, Sijie Cheng, Hao Wang, Shihao Liang, Yujia Qin, Peng Li, Zhiyuan Liu, Maosong Sun, and Yang Liu.
+\newblock StableToolBench: Towards Stable Large-Scale Benchmarking on Tool Learning of Large Language Models.
+\newblock In \emph{Findings of ACL}, pp.\ 11143--11156, 2024.
+\newblock \url{https://aclanthology.org/2024.findings-acl.664/}.
+
+\bibitem{madaan2023selfrefine}
+Aman Madaan, Niket Tandon, Prakhar Gupta, Skyler Hallinan, Luyu Gao, Sarah Wiegreffe, Uri Alon, Nouha Dziri, Shrimai Prabhumoye, Yiming Yang, Shashank Gupta, Bodhisattwa Prasad Majumder, Katherine Hermann, Sean Welleck, Amir Yazdanbakhsh, and Peter Clark.
+\newblock Self-Refine: Iterative Refinement with Self-Feedback.
+\newblock In \emph{Advances in Neural Information Processing Systems}, 36:46534--46594, 2023.
+\newblock \url{https://arxiv.org/abs/2303.17651}.
+
+\bibitem{shinn2023reflexion}
+Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik Narasimhan, and Shunyu Yao.
+\newblock Reflexion: Language Agents with Verbal Reinforcement Learning.
+\newblock In \emph{Advances in Neural Information Processing Systems}, 36:8634--8652, 2023.
+\newblock \url{https://arxiv.org/abs/2303.11366}.
+
+\bibitem{gou2024critic}
+Zhibin Gou, Zhihong Shao, Yeyun Gong, Yelong Shen, Yujiu Yang, Nan Duan, and Weizhu Chen.
+\newblock CRITIC: Large Language Models Can Self-Correct with Tool-Interactive Critiquing.
+\newblock In \emph{International Conference on Learning Representations}, 2024.
+\newblock \url{https://arxiv.org/abs/2305.11738}.
+
+\bibitem{mekala2024toolverifier}
+Dheeraj Mekala, Jason Weston, Jack Lanchantin, Roberta Raileanu, Maria Lomeli, Jingbo Shang, and Jane Dwivedi-Yu.
+\newblock ToolVerifier: Generalization to New Tools via Self-Verification.
+\newblock \emph{arXiv:2402.14158}, 2024.
+\newblock \url{https://arxiv.org/abs/2402.14158}.
+
+\bibitem{hamad2025toolcritic}
+Hassan Hamad, Yingru Xu, Liang Zhao, Wenbo Yan, and Narendra Gyanchandani.
+\newblock ToolCritic: Detecting and Correcting Tool-Use Errors in Dialogue Systems.
+\newblock \emph{arXiv:2510.17052}, 2025.
+\newblock \url{https://arxiv.org/abs/2510.17052}.
+
+\bibitem{huang2024selfcorrect}
+Jie Huang, Xinyun Chen, Swaroop Mishra, Huaixiu Steven Zheng, Adams Wei Yu, Xinying Song, and Denny Zhou.
+\newblock Large Language Models Cannot Self-Correct Reasoning Yet.
+\newblock In \emph{International Conference on Learning Representations}, 2024.
+\newblock \url{https://arxiv.org/abs/2310.01798}.
+
+\bibitem{typesafe2026models}
+TypeSafe.
+\newblock Models: Jev and the System One API.
+\newblock Technical documentation, 2026. Accessed October 15, 2026.
+\newblock \url{https://docs.typesafe.ai/models}.
+
+\bibitem{typesafe2026functioncalling}
+TypeSafe.
+\newblock Function Calling.
+\newblock TypeSafe cookbook, 2026. Accessed October 15, 2026.
+\newblock \url{https://docs.typesafe.ai/cookbooks/function_calling}.
+
+\bibitem{typesafe2026sdecascade}
+TypeSafe.
+\newblock SDE Cascade.
+\newblock TypeSafe cookbook, 2026. Accessed October 15, 2026.
+\newblock \url{https://docs.typesafe.ai/cookbooks/sde_cascade}.
+
+\bibitem{li2026jevjudge}
+Yubo Li, Yidi Miao, Ramayya Krishnan, and Rema Padman.
+\newblock JEV-as-a-Judge: Accept When Confident, Escalate When Unsure.
+\newblock \emph{arXiv:2609.26550}, version 5, October 9, 2026.
+\newblock \url{https://arxiv.org/abs/2609.26550v5}.
+
+\end{thebibliography}
+\end{document}
