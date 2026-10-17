@@ -27,7 +27,7 @@
 \setcounter{bottomnumber}{2}
 \pagestyle{plain}
 \raggedbottom
-\title{\vspace{-1.3em}\textbf{Jev-Backed Function Calling:\\Verify, Accumulate, Refine}\vspace{-0.4em}}
+\title{\vspace{-1.3em}\textbf{Jev-Backed Function Calling:\\Iterative Repair with Cumulative Decision Feedback}\vspace{-0.4em}}
 \author{Minhyeong Yu\\[-1pt]{\small Enhans}\\[-1pt]{\small\href{mailto:minhyeong@enhans.ai}{\texttt{minhyeong@enhans.ai}}}}
 \date{\vspace{-2.5em}}
 
@@ -146,8 +146,6 @@ The acceptance rule is
 \end{equation}
 Noul returns the probability of yes, with no separate confidence field~\cite{typesafe2026noul,typesafe2026confidence}. We start with $\tau_f=\tau_a=0.8$, untuned defaults chosen for this experiment.
 
-Algorithm~\ref{alg:jbfc} summarizes the loop: $r+1$ proposals at most, with fresh checks each time. Reference answers stay out of model requests. API errors stop without dispatch after transport retries, separate from repairs.
-
 \begin{algorithm}[t]
 \caption{\textbf{JBFC}: verification and prompt repair}
 \label{alg:jbfc}
@@ -181,6 +179,8 @@ For a rejected proposal, $d_t$ contains probabilities, pass/fail flags, threshol
  H_{t+1}=H_t\mathbin{\Vert}[(c_t,d_t)].
 \end{equation}
 \texttt{Prefix} places JSON records, oldest first, before unchanged original messages. Empty history adds no prefix. Records include round numbers and mark proposals as not executed. The LLM can change both function and arguments. Schemas remain available; system instructions stay separate. In Algorithm~\ref{alg:jbfc}, $s=S(c)$ and $e$ lists local errors. Readable proposals receive \textit{Jev} checks even if their schema fails; unreadable ones receive local feedback. \textit{Jev} never receives history. Unasked $p_a$ stays null. Null required probabilities cannot pass the gate; invalid API responses stop the run.
+
+Algorithm~\ref{alg:jbfc} summarizes the loop: $r+1$ proposals at most, with fresh checks each time. Reference answers stay out of model requests. API errors stop without dispatch after transport retries, separate from repairs.
 
 \subsection{Return and Record the Result}
 The final dispatch returns the proposal under \texttt{execute\_last}, even if rejected. The optional \texttt{abstain} policy withholds rejected calls, which are still scored offline. Only this boundary can run an application callback. Benchmark dispatch is simulated; no function executes during repair or scoring.

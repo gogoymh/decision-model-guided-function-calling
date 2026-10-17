@@ -72,3 +72,4 @@
 - 승인된 Abstract와 Introduction, Figure 1 및 결과표 세 개는 보존했습니다. 의사코드 공간을 확보하기 위해 Method와 중복된 실행 범위 설명을 간결하게 정리했습니다.
 - 내장 LaTeX 컴파일, 실제 PDF 내보내기, 본문 4쪽·참고문헌 5쪽 시작 검사와 시각 검수를 통과했습니다. 넘치는 텍스트가 없으며, 참고문헌 16개의 본문 인용·내장 목록·BibTeX 키가 일치합니다. 실행 코드는 변경하지 않았습니다.
 - 저자를 Minhyeong Yu, 소속을 Enhans, 이메일을 minhyeong@enhans.ai로 세 줄에 표시했습니다. 제목의 콜론 뒤 부제는 `Verify, Accumulate, Refine`으로 바꾸고, 본문 문구를 유지한 채 제목 아래 여백을 조정해 본문 4쪽을 유지했습니다.
+- 후속 수정에서 부제를 `Iterative Repair with Cumulative Decision Feedback`으로 바꾸고, Algorithm 1의 반복 요약 문단을 3.2 마지막으로 옮겼습니다. Abstract, Introduction 및 자동 생성 표는 그대로입니다. 내장 컴파일과 PDF 내보내기, 본문 4쪽·참고문헌 5쪽 시작 검사, 변경 페이지의 시각 검수와 공백 검사를 다시 통과했습니다.
