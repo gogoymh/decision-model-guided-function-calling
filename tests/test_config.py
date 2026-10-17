@@ -5,6 +5,8 @@ import httpx
 import pytest
 
 from jev_fc.cli import _prices, check_config
+from jev_fc import cli
+from jev_fc.pipeline import METHODS
 
 
 @pytest.fixture(autouse=True)
@@ -52,3 +54,21 @@ def test_invalid_price_fails_before_requests(monkeypatch, value):
     monkeypatch.setenv("LLM_INPUT_PRICE", value)
     with pytest.raises(ValueError, match="LLM_INPUT_PRICE"):
         _prices(SimpleNamespace(provider="openai", model="gpt-5.4-mini-2026-03-17"))
+
+
+def test_cli_default_budget_is_explicitly_exploratory_and_selection_option_is_parsed(monkeypatch):
+    observed = []
+    monkeypatch.setattr(cli, "load_dotenv", lambda: None)
+    monkeypatch.setattr(cli, "run", lambda args: observed.append(args))
+    monkeypatch.setattr("sys.argv", ["jev-fc", "run"])
+    assert cli.main() == 0
+    assert observed[-1].max_repairs == 0
+    assert observed[-1].repair_budget_selection is None
+    assert observed[-1].output == "results/exploratory"
+    assert observed[-1].methods.split(",") == list(METHODS)
+    assert len(METHODS) == 6
+    monkeypatch.setattr("sys.argv", ["jev-fc", "run", "--max-repairs", "5",
+                                    "--repair-budget-selection", "selection.json"])
+    assert cli.main() == 0
+    assert observed[-1].max_repairs == 5
+    assert observed[-1].repair_budget_selection == "selection.json"

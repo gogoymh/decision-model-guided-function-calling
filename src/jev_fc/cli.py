@@ -24,6 +24,7 @@ from .llm import FunctionCallingLLM
 from .pipeline import METHODS, run_example
 from .reporting import build_summary, read_jsonl, token_cost, update_paper
 from .scoring import load_official_checker, score_example
+from .tuning import load_repair_budget_selection
 
 
 def stable_split(examples, split="test", seed=1729):
@@ -120,8 +121,12 @@ def run(args):
     methods = args.methods.split(",")
     if len(set(methods)) != len(methods) or not set(methods).issubset(METHODS):
         raise ValueError(f"Methods must be unique entries from {METHODS}")
-    if not 0 <= args.max_repairs <= 3 or args.replicates < 1 or args.workers < 1:
-        raise ValueError("Use 0 <= max-repairs <= 3, replicates >= 1, workers >= 1")
+    if (isinstance(args.max_repairs, bool) or not isinstance(args.max_repairs, int)
+            or args.max_repairs < 0 or args.replicates < 1 or args.workers < 1):
+        raise ValueError("Use a nonnegative integer for max-repairs, replicates >= 1, workers >= 1")
+    selection_path = getattr(args, "repair_budget_selection", None)
+    if selection_path and (args.split != "test" or args.limit is not None):
+        raise ValueError("A repair-budget selection requires a complete test split without --limit.")
     generator = FunctionCallingLLM()
     verifier = JevVerifier(function_threshold=args.threshold, arguments_threshold=args.threshold) if any(m.startswith("jev_") for m in methods) else None
     prices = _prices(generator)
@@ -131,6 +136,7 @@ def run(args):
         "dataset_revisions": sorted({e.get("dataset_revision", "unknown") for e in selected}),
         "ids": [e["id"] for e in selected], "split": args.split, "split_seed": args.split_seed,
         "limit": args.limit, "methods": methods, "replicates": args.replicates,
+        "shared_initial_methods": list(methods),
         "max_repairs": args.max_repairs, "threshold": args.threshold,
         "exhaustion_policy": args.exhaustion_policy,
         "llm_model": generator.model, "llm_base_url": generator.base_url,
@@ -151,6 +157,18 @@ def run(args):
         "expected_records": len(selected) * args.replicates * len(methods),
         "synthetic": False,
     }
+    if selection_path:
+        try:
+            # Recompute the selection from its saved development run and compare
+            # data/model/API/runtime settings before any request or run write.
+            # The helper also verifies all canonical test IDs and the data digest.
+            selection = load_repair_budget_selection(selection_path, test_config=settings)
+            settings["repair_budget_selection"] = selection
+        except BaseException:
+            generator.close()
+            if verifier is not None:
+                verifier.close()
+            raise
     config_id = _fingerprint(settings)
     manifest_path = directory / "manifest.json"
     if manifest_path.exists():
@@ -161,7 +179,7 @@ def run(args):
             raise ValueError("Output directory already has a run. Pass --resume or select a new directory.")
     else:
         directory.mkdir(parents=True, exist_ok=True)
-        if (directory / "records.jsonl").exists() or (directory / "initial.jsonl").exists():
+        if any(directory.glob("*.jsonl")):
             raise ValueError("Found orphan run files without a manifest; choose a new output directory.")
         _write_json(manifest_path, {**settings, "config_id": config_id, "created_at": datetime.now(timezone.utc).isoformat()})
     rows = read_jsonl(directory / "records.jsonl")
@@ -186,13 +204,15 @@ def run(args):
         try:
             key = (example["id"], replicate)
             initial = initials.get(key)
-            if initial is None:
-                initial = generator.generate({k: example[k] for k in ("id", "category", "messages", "tools")})
-                append("initial.jsonl", {"id": example["id"], "replicate": replicate, "proposal": initial})
             for method in methods:
                 current_method = method
                 if (example["id"], replicate, method) in completed or stop.is_set():
                     continue
+                if initial is None:
+                    current_method = "initial"
+                    initial = generator.generate({k: example[k] for k in ("id", "category", "messages", "tools")})
+                    append("initial.jsonl", {"id": example["id"], "replicate": replicate, "proposal": initial})
+                    current_method = method
                 record = run_example(example, generator, verifier, method, args.max_repairs,
                                      args.exhaustion_policy, initial_proposal=initial)
                 # Scoring is strictly after all proposal/verification operations.
@@ -253,12 +273,15 @@ def main():
     experiment = sub.add_parser("run", help="Run a paired live experiment; requires keys")
     experiment.add_argument("--data", default="data/bfcl/examples.jsonl")
     experiment.add_argument("--checker", default="data/bfcl/upstream/ast_checker.py")
-    experiment.add_argument("--output", default="results/main")
+    experiment.add_argument("--output", default="results/exploratory")
     experiment.add_argument("--methods", default=",".join(METHODS))
     experiment.add_argument("--split", choices=("dev", "test", "all"), default="test")
     experiment.add_argument("--split-seed", type=int, default=1729)
     experiment.add_argument("--categories")
-    experiment.add_argument("--max-repairs", type=int, default=3)
+    experiment.add_argument("--max-repairs", type=int, default=0,
+                            help="Nonnegative repair cap; default 0 is exploratory, not selected from development data")
+    experiment.add_argument("--repair-budget-selection",
+                            help="Validated development-selection JSON; requires matching full test data and --max-repairs")
     experiment.add_argument("--threshold", type=float, default=.8)
     experiment.add_argument("--exhaustion-policy", choices=("execute_last", "abstain"), default="execute_last")
     experiment.add_argument("--replicates", type=int, default=3)

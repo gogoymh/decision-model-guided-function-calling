@@ -1,143 +1,94 @@
-# Benchmark protocol and provenance
+# 벤치마크 범위와 채점 기준
 
-The experiment uses a pinned subset of the Berkeley Function Calling Leaderboard
-(BFCL v4), a widely used public function-calling benchmark. The target is a
-single-turn proposal before execution, so the default suite includes Python
-single-call tasks with one or several candidate tools and call/no-call decisions.
-It excludes Java/JavaScript, parallel calls, multi-turn environments, web search,
-and memory tasks. Report it as the **BFCL v4 single-turn Python subset**, not as
-the full BFCL leaderboard aggregate.
+이 실험은 대표적인 공개 함수 호출 벤치마크인 **BFCL v4의 단일 턴 Python 하위 집합**을 사용합니다. 함수가 하나인 문제, 여러 후보 중 함수 하나를 고르는 문제, 호출하지 않아야 하는 문제를 포함합니다. Java·JavaScript, 병렬 호출, 여러 턴의 환경, 웹 검색, 메모리 과제는 제외합니다. 따라서 결과를 BFCL 전체 리더보드 점수로 부르면 안 됩니다.
 
-## Version and preparation
+**JBFC**는 LLM이 제안한 함수와 인자를 Jev의 두 Noul 질문으로 검사합니다. 실패하면 이전 후보와 실제 판정을 시간순으로 누적하여 원래 사용자 요청 앞에 넣고, 같은 LLM이 다시 제안합니다. 함수 하나 또는 no-call이 정답인 범위에서 이 과정의 정확도와 비용을 평가합니다.
 
-Official source: <https://github.com/ShishirPatil/gorilla/tree/6ea57973c7a6097fd7c5915698c54c17c5b1b6c8/berkeley-function-call-leaderboard>
+## 고정 버전과 준비
 
-Pinned revision: `6ea57973c7a6097fd7c5915698c54c17c5b1b6c8`.
-Data source directory: `berkeley-function-call-leaderboard/bfcl_eval/data/`.
-The `.json` source files contain one JSON object per line. The original prompts
-and answer files, exact checker source, and upstream Apache-2.0 license are
-downloaded together. Every downloaded file is checked against a SHA-256 digest
-embedded in the preparation code. Cached files are rechecked, so subsequent runs
-can be completely offline. Unknown revisions require an explicit code/pin review.
-Normalized data are also rehashed on loading when their adjacent preparation
-manifest is present, preventing silent use of accidentally edited labels.
+- [공식 원본 저장소](https://github.com/ShishirPatil/gorilla/tree/6ea57973c7a6097fd7c5915698c54c17c5b1b6c8/berkeley-function-call-leaderboard)
+- 고정 커밋: `6ea57973c7a6097fd7c5915698c54c17c5b1b6c8`
+- 원본 데이터 경로: `berkeley-function-call-leaderboard/bfcl_eval/data/`
+
+원본 `.json` 파일은 한 줄에 JSON 객체 하나를 담습니다. 질문, 정답, 공식 채점기, Apache-2.0 라이선스를 함께 내려받고 준비 코드에 고정한 SHA-256 해시로 검사합니다. 캐시도 다시 확인하므로 최초 준비 후에는 네트워크 없이 재사용할 수 있습니다. 다른 원본 버전은 코드와 해시를 검토하여 명시적으로 바꿔야 합니다. 정규화 데이터도 인접한 준비 매니페스트가 있으면 불러올 때 해시를 검사합니다.
 
 ```bash
-python -m jev_fc.benchmarks --output-dir data/bfcl --seed 1729
+uv run python -m jev_fc.benchmarks --output-dir data/bfcl --seed 1729
 ```
 
-This produces `examples.jsonl`, `dev.jsonl`, `test.jsonl`, `manifest.json`, the
-original files under `raw/`, and the checker/license under `upstream/`. The
-manifest records counts, split procedure, source URLs, revision, and hashes.
-The counts below were measured from the pinned source, rather than copied from
-upstream prose that may describe an older version.
+`examples.jsonl`, `dev.jsonl`, `test.jsonl`, `manifest.json`이 만들어집니다. 원본은 `raw/`, 채점기와 라이선스는 `upstream/`에 저장합니다. 매니페스트에는 사례 수, 분할 규칙, 원본 URL, 버전과 해시가 들어갑니다. 아래 수치는 고정 원본에서 직접 센 데이터 수이며 모델 성능은 아닙니다.
 
-| Category | Complete | Development | Test | Outcome checked |
+| 카테고리 | 전체 | 개발 | 테스트 | 평가 내용 |
 |---|---:|---:|---:|---|
-| `simple_python` | 400 | 40 | 360 | One function and its arguments |
-| `multiple` | 200 | 20 | 180 | Select one function among candidates; arguments |
-| `irrelevance` | 240 | 24 | 216 | Produce no call |
-| `live_simple` | 258 | 25 | 233 | User-contributed single-function tasks |
-| `live_multiple` | 1,053 | 105 | 948 | User-contributed candidate selection and arguments |
-| `live_irrelevance` | 884 | 88 | 796 | User-contributed no-call tasks |
-| `live_relevance` | 16 | 1 | 15 | Produce a call; argument correctness is **unlabelled** |
-| **Total** | **3,051** | **303** | **2,748** | |
+| `simple_python` | 400 | 40 | 360 | 함수 하나의 이름과 인자 |
+| `multiple` | 200 | 20 | 180 | 여러 후보 중 함수 하나의 선택과 인자 |
+| `irrelevance` | 240 | 24 | 216 | 호출하지 않는 것이 정답 |
+| `live_simple` | 258 | 25 | 233 | 사용자가 제공한 단일 함수 문제 |
+| `live_multiple` | 1,053 | 105 | 948 | 사용자가 제공한 함수 선택·인자 문제 |
+| `live_irrelevance` | 884 | 88 | 796 | 사용자가 제공한 no-call 문제 |
+| `live_relevance` | 16 | 1 | 15 | 호출 여부만 평가. 함수·인자 정답은 없음 |
+| **합계** | **3,051** | **303** | **2,748** | |
 
-Within each category, examples are ranked by
-`sha256(f"{seed}:{id}")`; 10% (rounded down, with a minimum of one) enter development and
-the rest enter test. Changing input order does not change membership. All three
-files retain the original IDs. The development split is the only split for
-choosing verifier thresholds, prompts, or models; freeze these choices before
-the test run. This is our experimental split of public benchmark data, not a
-claim that BFCL provides a hidden held-out test set. Existing training or
-pretraining contamination cannot be ruled out.
+각 카테고리 안에서 `sha256(f"{seed}:{id}")` 순으로 정렬하고 앞 10%를 내림하여 개발용으로 고릅니다. 최소 한 개는 개발용으로 두고 나머지를 테스트용으로 사용합니다. seed는 1729입니다. 입력 순서가 달라도 분할은 같으며 원본 ID를 유지합니다.
 
-Four source annotation inconsistencies are recorded in the manifest and retained
-unchanged in the primary denominator: `live_simple_106-63-0` and
-`live_simple_112-68-0` give empty alternative sets for required array arguments;
-`live_multiple_862-181-3` includes a gold `journey_start_time` parameter absent
-from its schema; `live_multiple_964-207-0` similarly includes an absent `question`
-parameter. The pinned checker cannot accept a call satisfying both those schemas
-and gold alternatives. A separately labelled sensitivity analysis may exclude
-these four preidentified IDs; do not repair labels or select exclusions after
-observing model performance. A deterministic gold-candidate compatibility check
-passes the other 1,907 AST examples; that is software validation, not a model score.
+수정 한도·임계값·프롬프트·모델은 개발 데이터에서 정한 뒤 테스트 전에 고정합니다. 이 분할은 공개 BFCL 데이터로 만든 자체 실험 분할입니다. 숨겨진 공식 테스트 집합이 아니며, 모델 학습에 데이터가 포함되었을 가능성도 배제할 수 없습니다.
 
-`multiple` means one required call selected from several provided functions in
-this data/checker; it does not mean a multi-step execution trace. Both simple
-and multiple use the original possible-answer lists. No answer file exists for
-the relevance/irrelevance categories: the label there is call presence/absence.
+## 원본에서 확인한 예외
 
-## Normalization and label isolation
+정답과 스키마의 모순 4개를 준비 매니페스트에 기록했습니다. 주 평가에서는 정답과 분모를 바꾸지 않습니다.
 
-Each example contains `id`, `category`, `messages`, `tools`, `ground_truth`,
-`bfcl_functions`, `name_map`, and `dataset_revision`. Functions exposed to models
-use the standard OpenAI `{"type":"function","function":...}` schema. Python
-`dict`, `float`, and `tuple` become JSON Schema `object`, `number`, and `array`.
-`any` becomes `string`, matching the official BFCL OpenAPI mapping. Function
-names are made API-compatible; an explicit alias map restores the original
-names before scoring. Prose, enums, requiredness, and defaults are retained.
-The original function schemas and answers are kept unchanged for evaluation.
-The BFCL-only `optional` annotation is removed from exposed schemas; the
-containing `required` list already controls requiredness.
+- `live_simple_106-63-0`, `live_simple_112-68-0`: 필수 배열 인자의 허용 정답 목록이 비어 있습니다.
+- `live_multiple_862-181-3`: 정답에 `journey_start_time`이 있지만 함수 스키마에는 없습니다.
+- `live_multiple_964-207-0`: 정답에 `question`이 있지만 함수 스키마에는 없습니다.
 
-**Serialize only `messages` and `tools` in model and verifier prompts.**
-`public_example` strips answers, raw functions, and alias metadata, but retains
-ID/category for routing and logging. Category names themselves reveal labels
-(e.g. `irrelevance`) and therefore must not be part of the prompt. Offline score
-errors may contain acceptable gold values and must never become repair feedback.
-Repair feedback must come only from schema validation and Jev's judgement of
-the user request, available schemas, and current proposal.
+고정 채점기는 이 사례에서 스키마와 정답 조건을 동시에 만족하는 호출을 받아들일 수 없습니다. 별도로 명시한 민감도 분석에서는 이 네 ID를 제외할 수 있지만, 모델 결과를 본 뒤 제외할 사례를 고르거나 정답을 고쳐서는 안 됩니다. 나머지 AST 사례 1,907개는 정답 후보와 채점기의 호환성 검사를 통과했습니다. 이것은 소프트웨어 검증 결과이며 모델 점수가 아닙니다.
 
-## Official AST checker, without model execution
+위 모순과 별개로, `live_irrelevance`에는 함수 목록이 빈 사례 4개가 있습니다. 이 사례도 원본 데이터에 포함하며 no-call 정답으로 채점합니다. 빈 목록이라는 이유로 임의의 Jev 확률을 만들어 기록하지 않습니다.
 
-`jev_fc.scoring.score_example` calls the pinned official
-`eval_checker/ast_eval/ast_checker.py` for the four labelled AST categories. Its
-SHA-256 digest is
-`2aae7a68461a8f76c0be3894c8901b66b56967a1989d3ab066051e3fb97f1538`.
+이 데이터의 `multiple`은 여러 함수 중 **호출 하나**를 고른다는 뜻입니다. 여러 단계의 실행 기록을 뜻하지 않습니다. simple·multiple 계열은 원본 허용 정답 목록을 사용하며, relevance·irrelevance 계열은 별도 인자 정답 파일 없이 호출 유무만 평가합니다.
 
-The loader removes only the checker's import statements for BFCL modules. All
-function bodies and constants are unchanged. It supplies an equivalent language
-enum and a minimal model setting (`underscore_to_dot=False`) after aliases have
-been restored. Java/JavaScript converter dependencies are unreachable because
-only Python is supported. This avoids installing the upstream package's many
-unrelated model/GPU dependencies. A different or edited checker hash is rejected.
-The code is Apache-2.0, and its original file and license are retained on disk.
+## 정규화와 정답 분리
 
-The adapter consumes parsed JSON calls directly; it does not execute generated
-Python or benchmark functions. Thus these results measure BFCL AST correctness,
-not real API execution success or side-effect safety. BFCL accepts certain
-equivalent string forms and numeric representations; exact byte equality would
-be a different metric and is deliberately not substituted here.
+각 사례에는 `id`, `category`, `messages`, `tools`, `ground_truth`, `bfcl_functions`, `name_map`, `dataset_revision`이 있습니다. 모델에 공개하는 함수는 OpenAI의 `{"type":"function","function":...}` 형식으로 정규화합니다.
 
-Reported fields are:
+- Python `dict`, `float`, `tuple`은 JSON Schema의 `object`, `number`, `array`로 바꿉니다.
+- `any`는 공식 BFCL OpenAPI 변환과 같이 `string`으로 바꿉니다.
+- 함수 이름을 API가 받을 수 있는 별칭으로 바꾸고, 채점 전에 원래 이름으로 복원합니다.
+- 설명, 열거형 값, 필수 여부, 기본값은 유지합니다. 원본 함수와 정답도 채점용으로 보존합니다.
+- BFCL 전용 `optional` 표기는 제거합니다. 필수 여부는 해당 객체의 `required` 목록이 결정합니다.
 
-- `correct`: official AST validity on labelled tasks, or the appropriate
-  call-presence decision on presence-only tasks.
-- `function_correct`: exact multiset of selected function identities on labelled
-  tasks; no-call correctness on irrelevance. `null` on `live_relevance`, whose
-  particular function identity is not labelled.
-- `arguments_correct`: official AST validity **conditional on correct function
-  identities**. It is `null` for wrong functions or presence-only tasks. A
-  conditional argument metric must use only non-null rows as its denominator.
-- `presence_correct`: available only on presence tasks. A presence pass must
-  not be described as correct parameter selection.
+최초 LLM 입력에는 **원본 대화와 공개 함수 정의만** 넣습니다. Jev는 원본 대화, 전체 함수 목록과 현재 후보를 보고 함수·인자를 검사합니다. 수정 LLM 입력에는 모든 이전 후보와 실제 피드백을 시간순으로 직렬화한 사용자 메시지 하나를 원본 대화 앞에 붙입니다. 원래 사용자 요청과 기존 메시지 내용·순서는 유지하고, 이전 후보가 실행되지 않았음을 명시합니다.
 
-Keep AST accuracy and relevance/irrelevance accuracy separate. A macro-average
-of these categories, if presented, is a custom aggregate with stated weights.
-It is not the weighted score shown on the public BFCL leaderboard. In particular,
-the 15 test examples in `live_relevance` yield an imprecise estimate.
+`public_example`이 라우팅과 기록을 위해 ID·카테고리를 남기더라도 이를 프롬프트에 직렬화하면 안 됩니다. `irrelevance` 같은 카테고리 이름도 정답을 드러냅니다. 정답, 원본 채점용 함수, 별칭 복원 자료, 오프라인 점수와 오류, 개발 한도 선택 파일은 입력에서 제외합니다. 채점 오류에는 허용 정답 값이 포함될 수 있으므로 수정 피드백으로 사용하지 않습니다.
 
-Malformed structured output is scored as incorrect. It must not be converted to
-an empty call list, which would incorrectly reward failures on no-call tasks.
-Network failures, exhausted retries, and interrupted runs must be explicitly
-reported rather than silently removed from the denominator.
+## 공식 AST 채점기
 
-## Independent upstream cross-check
+`jev_fc.scoring.score_example`은 정답이 있는 네 AST 카테고리에 대해 고정 버전의 `eval_checker/ast_eval/ast_checker.py`를 호출합니다. 채점기 해시는 다음과 같습니다.
 
-The full official package is optional. To reproduce the upstream environment at
-the same revision, install it into a separate environment (its dependencies are
-substantially heavier than this project's):
+```text
+2aae7a68461a8f76c0be3894c8901b66b56967a1989d3ab066051e3fb97f1538
+```
+
+로더는 BFCL 모듈의 import 문만 제거하고 함수 본문과 상수는 유지합니다. 별칭을 복원한 뒤 같은 역할의 언어 enum과 `underscore_to_dot=False` 설정을 제공합니다. Python만 지원하므로 Java·JavaScript 변환기는 실행하지 않습니다. 이 방식으로 불필요한 모델·GPU 의존성을 설치하지 않고 공식 검사 본문을 사용합니다. 채점기 해시가 다르면 거절하며 원본 파일과 라이선스를 보존합니다.
+
+어댑터는 파싱한 JSON 호출을 받아 채점합니다. 생성된 Python 코드나 벤치마크 함수를 실행하지 않습니다. 측정값은 **BFCL AST 정답 일치**이며 실제 API 성공률이나 부작용 안전성이 아닙니다. 공식 채점기가 허용하는 동등한 문자열·숫자 표현을 그대로 인정합니다. 단순한 바이트 일치로 대체하지 않습니다.
+
+| 필드 | 의미 |
+|---|---|
+| `correct` | AST 정답 일치 또는 호출 유무 정답 일치 |
+| `function_correct` | 정답 함수 이름과 호출 수가 맞는지 평가. irrelevance에서는 no-call 정확도. `live_relevance`에서는 `null` |
+| `arguments_correct` | 함수 선택이 맞는 사례의 공식 AST 정답 일치. 함수가 틀리거나 호출 유무만 평가하는 문제에서는 `null` |
+| `presence_correct` | 호출 유무 문제의 정답 일치. 인자 정확도로 해석하지 않음 |
+
+인자 조건부 정확도의 분모는 `arguments_correct`가 `null`이 아닌 사례입니다. 함수 선택이 틀린 문제를 제외한 지표이므로 최종 정확도도 함께 보고합니다.
+
+AST 정확도, no-call 정확도, `live_relevance` 호출 여부 정확도를 구분합니다. 본문의 주 지표는 AST와 no-call 사례를 합친 자체 micro-average입니다. 테스트 분모는 `live_relevance` 15개를 제외한 **2,733개**입니다. 개발 한도 선택 분모는 같은 방식으로 **302개**입니다. 카테고리 평균을 추가하면 가중치를 명시해야 하며 BFCL 공식 가중 리더보드 점수로 부르면 안 됩니다. `live_relevance` 테스트 15개만의 추정치는 불확실성이 큽니다.
+
+잘못된 형식의 출력은 오답입니다. 이를 빈 호출로 바꾸면 no-call 문제에서 실패를 정답으로 세게 됩니다. API 오류, 재시도 소진, 중단된 실행은 명시적으로 보고하고 조용히 분모에서 빼지 않습니다.
+
+## 원본 환경과 독립적으로 대조하기
+
+원본 전체 패키지는 선택 사항입니다. 같은 버전을 별도 환경에 설치하려면 다음을 사용합니다. 이 프로젝트보다 의존성이 훨씬 많습니다.
 
 ```bash
 git clone https://github.com/ShishirPatil/gorilla.git work/gorilla
@@ -146,42 +97,28 @@ python -m venv work/bfcl-venv
 work/bfcl-venv/bin/python -m pip install -e work/gorilla/berkeley-function-call-leaderboard
 ```
 
-The exact programmatic scoring hook is:
+프로그램에서 원본 채점기를 호출하는 형식은 다음과 같습니다.
 
 ```python
 from bfcl_eval.constants.enums import Language
 from bfcl_eval.eval_checker.ast_eval.ast_checker import ast_checker
 
-# original_functions/ground_truth are the untouched BFCL fields;
-# decoded_calls is [{"original.function.name": {"argument": value}}, ...].
+# original_functions와 ground_truth는 수정하지 않은 BFCL 필드입니다.
+# decoded_calls는 [{"original.function.name": {"argument": value}}, ...]입니다.
 verdict = ast_checker(
     original_functions, decoded_calls, ground_truth,
     Language.PYTHON, category, "gorilla-openfunctions-v2",
 )
 ```
 
-Here `gorilla-openfunctions-v2` selects the official configuration with name
-rewriting disabled; it does **not** mean that this model generated the calls.
-After restoring aliases, that setting matches our adapter. The standard
-`bfcl evaluate --model MODEL_NAME --test-category ... --partial-eval` command is
-also supported upstream, but requires its registered model handler and result
-serialization format. This project intentionally uses the direct checker hook
-so that a custom generator/verifier does not impersonate another model handler.
+여기서 `gorilla-openfunctions-v2`는 이름 변환을 끄는 공식 채점 설정을 고릅니다. 이 모델이 예측을 생성했다는 뜻은 아닙니다. 별칭을 복원한 뒤 이 설정을 사용하면 어댑터와 맞습니다. 원본의 `bfcl evaluate --model MODEL_NAME --test-category ... --partial-eval`도 가능하지만 모델 핸들러 등록과 원본 결과 형식을 요구합니다. 이 프로젝트는 채점 함수를 직접 호출합니다.
 
-## Experimental reporting
+## 실험 실행과 보고
 
-Run the same examples with the same initial proposal under direct generation,
-schema-only feedback, self-feedback, Jev verification without repair, and Jev
-verification with one through three repair rounds. A repair budget of three
-means at most **four proposals**: the initial one and three revised proposals.
-Report the precise cap behavior; forced final dispatch and abstention are
-different policies. BFCL evaluation here simulates that final dispatch and does
-not perform external calls.
+테스트 전에 전체 개발 데이터에서 수정 한도를 고릅니다. 기본 후보는 `0,1,2,3,4,5`이며 바꿀 수 있습니다. **JBFC**를 가장 큰 한도로 3회 실행하고 각 기록의 앞부분으로 작은 한도를 평가합니다. 개발 기록은 **303개 × 3회 = 909개**이며, `live_relevance`를 제외한 **302개 × 3회 = 906개**의 최종 정확도가 가장 높은 값을 선택합니다. 동점이면 작은 한도를 고릅니다. 선택값과 설정, 원본 해시를 저장·검증한 뒤 테스트를 시작합니다.
 
-Include paired changes in final AST accuracy, exact function selection,
-conditional argument accuracy, repair/regression counts, call/no-call accuracy,
-verifier acceptance coverage, generator/verifier requests, tokens if returned,
-and end-to-end latency. Compute paired confidence intervals or a paired test on
-fixed examples. Distinguish deterministic schema validity from semantic
-verification and report an ablation for each check. No experimental result can
-be inferred from the number of prepared examples or from passing local tests.
+여섯 테스트 방법은 Direct, Schema-only, Self-refine, **JBFC-F**, **JBFC-A**, **JBFC**입니다. **2,748개 × 3회 × 6방법 = 49,464개 방법별 기록**을 만듭니다. 모든 수정 방법은 선택된 공통 `r`을 사용하고 Direct는 최초 제안만 사용합니다.
+
+여섯 방법은 사례·반복별로 같은 최초 LLM 제안 하나를 공유합니다. 각 방법을 단독으로 실행했을 때 필요한 비용을 비교하므로 최초 제안 비용을 방법별로 한 번씩 포함합니다. 이후 수정에서는 누적 피드백과 원본 요청을 사용하며 제안은 최대 `r+1`개입니다. 같은 수정 한도는 같은 토큰 수나 비용을 의미하지 않습니다.
+
+`execute_last`와 `abstain`은 별도 정책입니다. 벤치마크는 보류된 후보도 오프라인에서 채점하지만 외부 함수를 실행하지 않습니다. 마지막 후보 정확도, 함수 선택 정확도, 조건부 인자 정확도, 수정·퇴행, 호출 유무, 검사 수락 비율, 모델 요청 수, 토큰, 비용과 지연을 보고합니다. 같은 사례끼리 비교하는 신뢰구간을 사용하고 반복별 차이도 남깁니다. 준비된 데이터 수나 로컬 테스트 통과만으로 모델 성능을 추론하지 않습니다. 현재 실제 API 실험 결과는 없습니다.

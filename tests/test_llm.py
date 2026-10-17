@@ -51,7 +51,8 @@ def test_native_calls_and_feedback_without_fake_execution_or_oracles(example):
     assert observed[0]["tool_choice"] == "auto"
     assert observed[0]["parallel_tool_calls"] is False
     assert all(message["role"] != "tool" for message in observed[0]["messages"])
-    assert "NOT executed" in observed[0]["messages"][-1]["content"]
+    assert "NOT executed" in observed[0]["messages"][-2]["content"]
+    assert observed[0]["messages"][-1]["content"] == example["messages"][0]["content"]
     assert result["api_calls"] == 1
 
 
@@ -174,7 +175,8 @@ def test_apim_defaults_to_responses_and_never_sends_provider_authorization(examp
     assert payload["tools"][0]["parameters"]["required"] == ["city"]
     assert "additionalProperties" not in payload["tools"][0]["parameters"]
     assert "unit" not in payload["tools"][0]["parameters"]["required"]
-    assert "NOT executed" in payload["input"][-1]["content"]
+    assert "NOT executed" in payload["input"][0]["content"]
+    assert payload["input"][-1]["content"] == example["messages"][0]["content"]
     assert payload["instructions"] and all(item["role"] != "tool" for item in payload["input"])
     assert result["calls"] == [{"name": "weather", "arguments": {"city": "Seoul"}}]
     assert result["usage"] == {"prompt_tokens": 100, "completion_tokens": 20, "prompt_tokens_details": {"cached_tokens": 40}}
@@ -268,7 +270,8 @@ def test_anthropic_auth_message_tools_optional_schema_and_usage(example, gateway
         result = llm.generate(example, history)
     payload = seen[0]
     assert payload["max_tokens"] == 512 and "Use metric defaults." in payload["system"]
-    assert "NOT executed" in payload["messages"][-1]["content"]
+    assert "NOT executed" in payload["messages"][0]["content"]
+    assert payload["messages"][-1]["content"] == example["messages"][-1]["content"]
     assert all(message["role"] in {"user", "assistant"} for message in payload["messages"])
     assert payload["tool_choice"] == {"type": "auto", "disable_parallel_tool_use": True}
     assert payload["tools"][0]["input_schema"]["required"] == ["city"]
@@ -426,3 +429,81 @@ def test_responses_transport_errors_are_bounded_without_disclosing_exception_tex
     assert caught.value.attempts == len(attempts) == 2 and delays == [1]
     assert caught.value.status_code is None and caught.value.request_id is None
     assert "SECRET" not in str(caught.value)
+
+
+@pytest.mark.parametrize("style", ["chat_completions", "responses", "anthropic_messages"])
+def test_two_repairs_prepend_all_verdicts_before_unchanged_request_and_allow_function_change(example, style):
+    from jev_fc.jev import JevVerifier
+    from jev_fc.pipeline import run_example
+
+    original_request = "Weather in Seoul\nUse Celsius, please. "
+    example["messages"][0]["content"] = original_request
+    other = deepcopy(example["tools"][0])
+    other["function"]["name"] = "other"
+    example["tools"].append(other)
+    before = deepcopy(example)
+    planned = [("other", "Paris"), ("weather", "Paris"), ("weather", "Seoul")]
+    requests, checks, executions = [], [], []
+
+    def generator_http(request):
+        assert not executions, "A repair proposal must not run a function"
+        assert "ORACLE" not in request.content.decode()
+        payload = json.loads(request.content)
+        requests.append(payload)
+        name, city = planned[len(requests) - 1]
+        if style == "chat_completions":
+            body = response(json.dumps({"city": city}))
+            body["choices"][0]["message"]["tool_calls"][0]["function"]["name"] = name
+        elif style == "responses":
+            body = responses_body(json.dumps({"city": city}))
+            body["output"][0]["name"] = name
+        else:
+            body = anthropic_body()
+            body["content"][0].update(name=name, input={"city": city})
+        return httpx.Response(200, json=body)
+
+    def verifier_http(request):
+        assert not executions
+        assert "ORACLE" not in request.content.decode()
+        body = json.loads(request.content)
+        assert set(body["questions"]) == {"function_correct", "arguments_correct"}
+        assert body["state"]["messages"] == [{"role": "user", "content": original_request}]
+        assert [tool["name"] for tool in body["state"]["tools"]] == ["weather", "other"]
+        call, = body["state"]["proposed_calls"]
+        checks.append(call)
+        function_p = .95 if call["name"] == "weather" else .1
+        arguments_p = .95 if call["name"] == "other" or call["arguments"]["city"] == "Seoul" else .1
+        return httpx.Response(200, json={"model": "jev-1.13.0", "usage": {"input_tokens": 50, "output_tokens": 0},
+            "answers": {"function_correct": {"type": "noul", "noul": function_p},
+                        "arguments_correct": {"type": "noul", "noul": arguments_p}}})
+
+    with (httpx.Client(transport=httpx.MockTransport(generator_http)) as generator_client,
+          httpx.Client(transport=httpx.MockTransport(verifier_http)) as verifier_client):
+        generator = FunctionCallingLLM("test-key", model="test-model", api_style=style,
+                                       gateway="direct", client=generator_client)
+        verifier = JevVerifier("test-key", model="jev-1.13.0", gateway="direct", client=verifier_client)
+        result = run_example(example, generator, verifier, max_repairs=3,
+                             executor=lambda calls: executions.append(deepcopy(calls)))
+
+    assert result["repairs"] == 2 and result["accepted"]
+    assert len(requests) == len(checks) == 3 and len(executions) == 1
+    assert [call["name"] for call in checks] == ["other", "weather", "weather"]
+    for attempt, payload in enumerate(requests):
+        messages = payload["input" if style == "responses" else "messages"]
+        conversation = [message for message in messages if message["role"] != "system"]
+        assert conversation[-1] == {"role": "user", "content": original_request}
+        assert all(message["role"] != "tool" for message in messages)
+        assert payload["tools"] == requests[0]["tools"]
+        assert payload["tool_choice"] == ({"type": "auto", "disable_parallel_tool_use": True}
+                                          if style == "anthropic_messages" else "auto")
+        if attempt == 0:
+            assert conversation == [{"role": "user", "content": original_request}]
+        else:
+            assert len(conversation) == 2
+            header, encoded, instruction = conversation[0]["content"].split("\n", 2)
+            assert "oldest first" in header and "NOT executed" in header
+            accumulated = json.loads(encoded)
+            assert accumulated == [{"round": i + 1, "calls": result["trace"][i]["proposal"]["calls"],
+                                    "feedback": result["trace"][i]["feedback"]} for i in range(attempt)]
+            assert "original request below" in instruction
+    assert example == before

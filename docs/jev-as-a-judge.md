@@ -1,158 +1,168 @@
-# Reading notes: JEV-as-a-Judge
+# JEV-as-a-Judge 논문 독해
 
-Reviewed on October 15, 2026. The review covered the **complete version-5 main text, limitations, and Appendices A–Q**, not just the title or abstract. The full HTML was obtained from arXiv; reading the appendices was divided between two research agents and integrated with the main-text review.
+2026년 10월 15일에 **5판 본문 전체, 한계, 부록 A–Q**를 검토했습니다. 제목이나 초록만 읽은 요약이 아닙니다. arXiv 전체 HTML을 확보하여 두 조사 에이전트가 부록을 나누어 읽고 본문과 통합했습니다. **JBFC**의 누적 피드백 방식과의 관계 및 현재 Choice 문서 설명은 10월 16일에 보완했습니다.
 
-## Exact reference
+## 정확한 문헌
 
-**Yubo Li, Yidi Miao, Ramayya Krishnan, and Rema Padman. 2026. _JEV-as-a-Judge: Accept When Confident, Escalate When Unsure._ arXiv:2609.26550, version 5.** All four authors are affiliated with Carnegie Mellon University in the paper.
+**Yubo Li, Yidi Miao, Ramayya Krishnan, Rema Padman. 2026. _JEV-as-a-Judge: Accept When Confident, Escalate When Unsure._ arXiv:2609.26550, version 5.** 논문의 네 저자 소속은 Carnegie Mellon University입니다.
 
-- [Version-5 abstract and metadata](https://arxiv.org/abs/2609.26550v5)
-- [Complete version-5 HTML](https://arxiv.org/html/2609.26550v5)
-- [Version-5 PDF](https://arxiv.org/pdf/2609.26550v5)
+- [5판 초록과 서지 정보](https://arxiv.org/abs/2609.26550v5)
+- [5판 전체 HTML](https://arxiv.org/html/2609.26550v5)
+- [5판 PDF](https://arxiv.org/pdf/2609.26550v5)
 - DOI: [10.48550/arXiv.2609.26550](https://doi.org/10.48550/arXiv.2609.26550)
-- First arXiv submission: September 22, 2026, 15:05:56 UTC.
-- Version 5: October 9, 2026, 13:41:59 UTC. The document's cover date is September 29, but the versioned arXiv record identifies the October 9 revision used here.
-- Bibliography key: `li2026jevjudge` in `paper/references.bib`.
-- The verified publication type is an **arXiv preprint**. No peer-reviewed venue is asserted.
+- 최초 제출: 2026년 9월 22일 15:05:56 UTC.
+- 5판 제출: 2026년 10월 9일 13:41:59 UTC. 표지 날짜는 9월 29일이지만 여기서는 arXiv에 등록된 10월 9일 판을 사용합니다.
+- 인용 키: `paper/references.bib`의 `li2026jevjudge`.
+- 확인한 출판 형태는 arXiv 프리프린트입니다. 동료심사 학회가 확정되었다고 쓰지 않습니다.
 
-The GitHub repository `danielgshea/jev-as-a-judge`, whose README is titled “Jev as a judge for agent evals,” is a different project. It is not the requested paper and is not used as its bibliographic identity. Version 1 of the arXiv paper also has different sample sizes and cascade findings; the current notes and citation use **version 5 throughout**.
+GitHub의 `danielgshea/jev-as-a-judge`는 README 제목이 “Jev as a judge for agent evals”인 별도 프로젝트입니다. 요청받은 논문의 서지 정보로 사용하지 않습니다. arXiv 1판도 표본 수와 결과가 다르므로 아래 설명은 **5판으로 통일**했습니다.
 
-## Research question and method
+## 연구 질문과 방법
 
-The paper studies whether Jev can serve as an inexpensive first judge of **finished outputs**, reserving a stronger reasoning judge for cases where Jev is uncertain. This is serial escalation between judges, not iterative rewriting of a function call.
+논문은 **완성된 답변**을 저렴한 Jev가 먼저 판단하고, 확신이 부족할 때만 강한 추론 판단 모델로 넘기는 방식을 연구합니다. 판단 모델 사이의 순차 이관이며 함수 호출을 반복 수정하는 방식은 아닙니다.
 
-The main configuration is TypeSafe **Jev 1.13.0**. Except for an interface audit, the paper sends **one Choice question per request**. Every generative comparator receives the same task instructions, structured state, allowed labels, and decision-plus-probability contract, without a requested rationale. Its probability estimates are verbalized, whereas Jev returns them through its typed interface. The comparison therefore concerns complete deployed configurations; the paper does not isolate an architectural cause.
+주 설정은 Jev `1.13.0`입니다. 인터페이스 비교 실험을 제외하면 요청마다 Choice 질문 하나를 보냅니다. 생성 모델 비교군에도 같은 과제 설명, 구조화된 상태, 허용 라벨, 판단과 확률의 출력 조건을 제공하며 설명문은 요구하지 않습니다. 생성 모델은 확률을 텍스트로 표현하지만 Jev는 정해진 API 필드로 반환합니다. 따라서 실제로 제공되는 전체 설정의 비교이며 모델 구조만의 효과를 분리한 실험은 아닙니다.
 
-For label probabilities `p_k`, the reported confidence is **`q = max_k p_k`**, the probability of the selected verdict. This is explicitly **not Jev's native `confidence` field**, whose formula is not public. Correlations between native confidence and `q` are high but do not make the quantities interchangeable.
+논문이 쓰는 확신 값은 **`q = max_k p_k`**, 즉 선택한 판정의 확률입니다. Jev의 별도 `confidence` 필드가 아닙니다. 논문은 당시 그 필드의 공식이 공개되지 않았다고 설명합니다. 2026년 10월 16일에 확인한 현재 [TypeSafe 문서](https://docs.typesafe.ai/confidence)에는 **선택지가 둘 이상일 때 Choice의 공식 `(p_max - 1/n)/(1 - 1/n)`**이 공개되어 있습니다. 문서의 변화와 관계없이 이 논문이 실제 사용한 `q`는 최대 확률이며, 두 값을 바꾸어 쓰면 안 됩니다.
 
-For pairwise judgments, the frozen policy judges both candidate orders and aligns probabilities before averaging:
+두 후보를 비교할 때는 순서를 바꾸어 두 번 판단하고, 같은 후보의 확률로 맞춘 뒤 평균합니다.
 
-`p_bar(A) = [p_first(A,B) + 1 - p_first(B,A)] / 2`.
+```text
+p_bar(A) = [p_first(A,B) + 1 - p_first(B,A)] / 2
+```
 
-The chosen label is the more probable semantic response. If its order-averaged confidence reaches threshold `tau`, Jev's verdict is final. Otherwise, an **independent stronger judge**, which does not see Jev's verdict, supplies the final decision. Invalid first-stage outputs escalate; exact probability ties receive half credit. Both Jev orders are included in fee accounting. Repeated judgments are not rewritten until they become better answers.
+평균한 확률이 높은 판정을 선택하고 그 확률이 임계값 `tau` 이상이면 Jev의 판정을 확정합니다. 그보다 낮으면 **독립된 강한 판단 모델**의 결과를 사용합니다. 이 모델에는 Jev의 판정을 보여주지 않습니다. 잘못된 1단계 출력은 이관하고 확률이 정확히 같으면 정답 계산에서 절반의 점수를 줍니다. 비용에는 두 순서의 Jev 호출을 모두 포함합니다. 판단받은 답변을 더 나은 답변으로 다시 쓰는 절차는 아닙니다.
 
-## Experimental scope
+## 실험 범위
 
-The main comparison contains **17 configurations**: Jev plus 14 generative judges and two reward models, PairRM and Skywork-Reward-V2. The base workloads total **5,172 judgments**:
+주 비교는 Jev, 생성 판단 모델 14개, 보상 모델 PairRM과 Skywork-Reward-V2를 합친 **17개 설정**입니다. 기본 과제는 **5,172개 판단**입니다.
 
-| Workload | Number | What is judged |
+| 과제 | 수 | 판단 대상 |
 |---|---:|---|
-| RewardBench | 1,500 pairs | Preference across chat, difficult chat, safety, and reasoning |
-| JudgeBench, GPT-4o split | 350 pairs | Objective correctness, including knowledge, reasoning, math, and code |
-| HaluEval QA | 3,000 answers from 1,500 questions | Evidence-grounded factuality, one correct and one hallucinated answer per question |
-| Earlier final-answer data | 150 replies | Agreement with existing correct/incorrect/no-answer labels |
-| GSM8K conversation control | 108 replies | Final answers from repeated challenges; all references correct |
-| Synthetic evidence control | 64 judgments | Support, contradiction, missing information, and distractors |
+| RewardBench | 1,500쌍 | 일반·어려운 대화, 안전, 추론의 선호 |
+| JudgeBench GPT-4o 분할 | 350쌍 | 지식·추론·수학·코드의 객관적 정답 |
+| HaluEval QA | 1,500질문의 답변 3,000개 | 근거에 맞는 답변과 환각 답변 |
+| 기존 최종 답변 데이터 | 150개 | 기존 정답·오답·무응답 라벨과의 일치 |
+| GSM8K 대화 대조군 | 108개 | 반복된 이의 제기 뒤 최종 답변. 정답 참조는 모두 올바름 |
+| 합성 근거 대조군 | 64개 | 지지, 모순, 정보 부족, 방해 정보 |
 
-The 642-item pilot and 4,530-item held-out set share no source question. Public-task pilot examples are divided 40/60 into selection and pilot-test data. The **96 selection preference pairs** (64 RewardBench and 32 JudgeBench) determine the original frozen routing thresholds. The held-out preference evaluation has **1,610 pairs**, comprising 1,340 RewardBench and 270 JudgeBench pairs.
+파일럿 642개와 별도 평가 4,530개는 원본 질문이 겹치지 않습니다. 공개 과제의 파일럿은 선택용 40%, 파일럿 평가용 60%로 나눕니다. 최초 고정 임계값 선택에는 **선호 쌍 96개**, 즉 RewardBench 64개와 JudgeBench 32개를 씁니다. 별도 선호 평가는 **1,610쌍**, 즉 RewardBench 1,340개와 JudgeBench 270개입니다.
 
-Follow-ups include 100 four-way RewardBench 2 prompts, 500 RM-Bench prompts with style combinations and reversed orders, matched multiple-choice/free-response conditions, 400 grounded summaries, 200 reference-free responses, open-weight decision models, a live replication of 510 already studied pairs, and a prospective live experiment with 570 held-out pairs from two new workloads.
+추가 분석에는 RewardBench 2의 4지선다 질문 100개, 스타일과 순서를 바꾼 RM-Bench 500개, 같은 문제의 객관식·자유 응답 비교, 근거가 있는 요약 400개, 참조 없는 답변 200개, 공개 가중치 판단 모델, 이미 분석한 510쌍의 실제 API 재실험, 새 과제의 별도 570쌍을 사용한 사전 계획 실험이 있습니다.
 
-The main multi-family comparison and many slice analyses are exploratory. The frozen routing rule, primary human-adjudication outcome, and prospective live-test protocol were specified before their relevant evaluation outcomes. A held-out sample is not the same as a fully preregistered model-selection process: the paper makes this distinction explicitly.
+모델군 전체 비교와 여러 하위 집단 분석은 탐색적입니다. 고정 이관 규칙, 주 인간 재판정 지표, 새 과제의 실제 API 실험 절차는 해당 결과를 보기 전에 정했습니다. 별도 평가 표본이 있다는 사실과 전체 모델 선택 과정을 사전 등록했다는 주장은 다릅니다. 논문도 이 차이를 명시합니다.
 
-## Verified version-5 findings
+## 5판에서 보고한 결과
 
-These are **results reported by Li et al.**, not results produced by our function-calling project.
+**아래 수치는 Li 등의 논문 결과입니다. 이번 함수 호출 프로젝트에서 측정한 수치가 아닙니다.**
 
-### Stand-alone judging: main Table 1 and Sections 5–6
+### Jev 단독 판단: 표 1, 5–6절
 
-- Jev reaches **92.5% on RewardBench**, compared with GPT-6 Astra's 92.5%; **87.3% on HaluEval**, compared with 88.4%; and **78.6% on JudgeBench**, compared with 93.1%.
-- The JudgeBench gap is **−14.6 percentage points**, with a 95% source-cluster interval of **[−18.9, −10.3]**. It is particularly large for deriving or tracing a result in reasoning, code, and mathematics.
-- On the separate matched timing panel, Jev's median outcome latency is approximately **0.15 seconds**, its p95 is **0.24 seconds**, and its estimated fee is **$0.044 per 1,000 judgments**. GPT-6 Astra costs $12.182 per 1,000 on that panel, giving the reported **0.36% fee ratio**. These are measured configuration/workload comparisons, not universal prices per judgment or intrinsic model-inference times.
-- Jev ranks eighth of the 15 LLM-style judges on the pooled 4,850 public judgments. GPT-6 is a reference comparator, not uniformly the most accurate judge; GPT-5.6 Sol has higher pooled accuracy and roughly half its fee.
-- The authors interpret the pattern as **reading a verdict from supplied evidence versus deriving a result**. It is an observed operating pattern, not proof that the proprietary model is incapable of reasoning.
+- Jev 정확도는 RewardBench **92.5%**, HaluEval **87.3%**, JudgeBench **78.6%**입니다. GPT-6 Astra는 각각 92.5%, 88.4%, 93.1%입니다.
+- JudgeBench 차이는 **−14.6%p**, 원본 질문을 묶어 구한 95% 구간은 **[−18.9, −10.3]**입니다. 추론·코드·수학에서 답을 직접 도출하거나 따라가야 할 때 차이가 큽니다.
+- 별도로 조건을 맞춘 시간 측정에서는 Jev 중앙 지연 약 **0.15초**, p95 **0.24초**, 추정 비용은 **판단 1,000개당 $0.044**입니다. 같은 패널의 GPT-6 Astra는 $12.182이며 비율은 **0.36%**입니다. 특정 설정과 과제의 관측치이며 보편적인 건당 가격이나 순수 모델 추론 시간은 아닙니다.
+- 공개 판단 4,850개를 합치면 Jev는 LLM 형태의 판단 모델 15개 중 8위입니다. GPT-6가 모든 과제에서 가장 정확한 것은 아닙니다. GPT-5.6 Sol은 합친 정확도가 더 높고 비용은 약 절반입니다.
+- 저자는 ‘주어진 근거에서 판정을 읽기’와 ‘답을 도출하기’의 차이로 해석합니다. 관측된 경향이며 비공개 모델의 추론 불가능성을 증명하지는 않습니다.
 
-### Original frozen cascade: main Tables 3–4; Appendix L/Table 30
+### 최초 고정 이관 규칙: 표 3–4, 부록 L의 표 30
 
-The original threshold uses the **point-estimate rule**, not the later lower-confidence-bound rule: choose the highest-coverage threshold whose selection-set cascade accuracy falls no more than two points below its fallback. The grid and rule were fixed in advance; the threshold for Jev → GPT-6 Astra is **0.9**.
+최초 규칙은 뒤의 신뢰구간 하한 규칙이 아니라 **점추정 규칙**입니다. 선택 자료에서 최종 정확도가 강한 판단 모델보다 2%p 넘게 떨어지지 않는 임계값 중 Jev만으로 끝나는 비율이 가장 높은 값을 고릅니다. 후보와 규칙은 미리 정했으며 Jev → GPT-6 Astra의 임계값은 **0.9**입니다.
 
-| Held-out population | Jev alone | Cascade | GPT-6 alone | Cascade minus GPT-6 | Escalated | Reported fee ratio |
+| 평가 집단 | Jev 단독 | 두 단계 | GPT-6 단독 | 두 단계 − GPT-6 | 이관 비율 | 보고된 비용 비율 |
 |---|---:|---:|---:|---:|---:|---:|
-| RewardBench, 1,340 | 92.8% | 93.7% | 92.4% | +1.27 pp, CI [0.45, 2.03] | 24.8% | 0.267 |
-| JudgeBench, 270 | 81.3% | 92.2% | 93.0% | −0.74 pp, CI [−2.22, 0.74] | 64.8% | 0.668 |
-| Pooled, 1,610 | 90.9% | 93.4% | 92.5% | **+0.93 pp, CI [0.24, 1.66]** | 31.5% | **0.414** |
+| RewardBench 1,340개 | 92.8% | 93.7% | 92.4% | +1.27%p, CI [0.45, 2.03] | 24.8% | 0.267 |
+| JudgeBench 270개 | 81.3% | 92.2% | 93.0% | −0.74%p, CI [−2.22, 0.74] | 64.8% | 0.668 |
+| 합계 1,610개 | 90.9% | 93.4% | 92.5% | **+0.93%p, CI [0.24, 1.66]** | 31.5% | **0.414** |
 
-Jev-alone values here use aligned, order-averaged probabilities; they are not the single-order numbers in Table 1. The conservative upper pooled fee ratio is **0.440**, compared with the reported-usage ratio 0.414. The pooled sample is **83% RewardBench**, so its gain should not be presented as uniform improvement on difficult correctness. These table values are offline policy simulations from retained outputs.
+여기의 Jev 단독 값은 두 순서의 확률을 맞추어 평균한 결과입니다. 표 1의 한 순서 결과와 다릅니다. 보수적으로 계산한 전체 비용 비율 상한은 **0.440**이며 보고된 사용량 기준 0.414와 구분합니다. 합친 표본의 **83%가 RewardBench**이므로 어려운 정답 판단에서도 일관되게 개선했다고 쓰면 안 됩니다. 이 표는 저장한 출력으로 계산한 오프라인 정책 시뮬레이션입니다.
 
-### Live replication: Section 8; Appendix O/Table 37
+### 실제 API 재실험: 8절, 부록 O의 표 37
 
-The frozen 0.9 policy is rerun live on **510 previously analyzed pairs**: all 270 held-out JudgeBench pairs and 240 RewardBench pairs. Both Jev orders are submitted concurrently and the fallback runs only on escalations.
+이미 분석한 **510쌍**에 고정 임계값 0.9를 실제 API로 다시 적용합니다. JudgeBench 270쌍 전체와 RewardBench 240쌍입니다. Jev의 두 순서를 동시에 요청하고 필요한 경우에만 강한 판단 모델을 호출합니다.
 
-- Cascade accuracy is **92.5%**, compared with **93.1%** for GPT-6; paired difference **−0.59 pp**, CI **[−1.95, 0.59]**.
-- The fee ratio is **0.572**, and the escalation rate is 46.5%.
-- Median pair latency is **0.27 seconds**, compared with GPT-6's **2.10 seconds**; p95 is 4.26 versus 4.49 seconds. Escalated items wait for both stages, so the typical speedup shrinks on workloads that often escalate.
-- Live and offline accept/escalate choices agree on 98.6% of pairs.
+- 두 단계 정확도 **92.5%**, GPT-6 **93.1%**입니다. 같은 쌍의 차이는 **−0.59%p**, CI **[−1.95, 0.59]**입니다.
+- 비용 비율은 **0.572**, 이관 비율은 **46.5%**입니다.
+- 쌍당 중앙 지연은 **0.27초 대 2.10초**, p95는 **4.26초 대 4.49초**입니다. 이관 사례는 두 단계를 기다리므로 이관이 잦은 과제에서는 시간 절약이 줄어듭니다.
+- 실제 API와 오프라인 분석의 유지·이관 결정은 98.6% 일치합니다.
 
-This confirms an offline simulation on previously studied items; it is **not** the new-workload prospective test and does not have the pooled 1,610-pair accuracy/fee result.
+이것은 이미 연구한 항목의 재실험입니다. 다음의 새 과제 실험이나 1,610쌍을 합친 정확도·비용 결과와 섞으면 안 됩니다.
 
-### Prospective test: Section 9, main Table 5; Appendix N
+### 새 과제의 사전 계획 실험: 9절, 표 5, 부록 N
 
-Two new correctness workloads are collected under a protocol frozen before model calls: **500 PPE correctness pairs** and all **270 JudgeBench Claude-split pairs**. Each uses 100 local selection pairs; the remaining **400 PPE + 170 JudgeBench = 570 pairs** are held out.
+모델을 호출하기 전에 절차를 고정하고 **PPE 정답 판단 500쌍**과 **JudgeBench Claude 분할 전체 270쌍**을 수집합니다. 각 과제에서 100쌍을 현지 선택 자료로 쓰고 나머지 **PPE 400 + JudgeBench 170 = 570쌍**을 평가합니다.
 
-The selection rule now requires the one-sided 95% lower confidence bound on the mean paired cascade-minus-fallback difference to exceed −0.02:
+이번 선택 규칙은 두 단계와 강한 판단 모델의 쌍별 정확도 차이에 대한 단측 95% 하한이 −0.02 이상이어야 합니다.
 
-`mean(d) - 1.645 * sd(d) / sqrt(n) >= -0.02`, where `d` is −1, 0, or 1.
+```text
+mean(d) - 1.645 * sd(d) / sqrt(n) >= -0.02
+# d는 -1, 0, 1 중 하나입니다.
+```
 
-The rule selects **0.95 for PPE** and **0.99 for JudgeBench**, with every item escalated if no threshold qualifies. On the held-out data, the cascade matches GPT-6's **observed aggregate accuracy** on each workload: **88.2% on PPE** and **94.7% on JudgeBench**, pooled **90.2%**. This is equality of empirical accuracy, not identical decisions, an equivalence theorem, or a guarantee of parity on future requests.
+선택된 임계값은 **PPE 0.95**, **JudgeBench 0.99**입니다. 조건을 만족하는 임계값이 없으면 모두 이관합니다. 별도 평가에서 두 단계와 GPT-6의 **관측된 전체 정확도**는 PPE **88.2%**, JudgeBench **94.7%**, 합계 **90.2%**로 같습니다. 개별 판단이 같거나 미래 정확도가 같다는 보장은 아닙니다.
 
-The pooled cascade escalates **74.2%**, costs **75.5% of GPT-6's fee**, and has median latency **1.87 versus 1.91 seconds**. Thus a weaker first-stage workload produces much smaller savings than RewardBench. The cascade's pooled paired interval is **[−0.70, 0.70] pp**. Of the held-out Claude-split pairs, 57 questions were seen in the earlier GPT-4o split and 113 were not; parity is reported in both groups.
+합친 이관 비율은 **74.2%**, 비용은 GPT-6의 **75.5%**, 중앙 지연은 **1.87초 대 1.91초**입니다. Jev 단독 판단이 약한 과제에서는 RewardBench보다 절약이 훨씬 작습니다. 합친 쌍별 차이의 구간은 **[−0.70, 0.70]%p**입니다. 평가용 Claude 분할 중 57질문은 앞의 GPT-4o 분할에도 있었고 113질문은 없었으며 두 집단 모두 전체 정확도가 같다고 보고합니다.
 
-## Confidence, calibration, and failure modes
+## 확률과 실패 양상
 
-### A probability interface is not a reliability guarantee
+### 확률 API가 신뢰성을 보장하지는 않음
 
-Section 7 separates accuracy, calibration, and error ranking. On base judgments, Jev's Brier scores are **0.113 / 0.297 / 0.196** for RewardBench / JudgeBench / HaluEval. GPT-6 is substantially better on JudgeBench. Apparent relative calibration can reverse when questionable HaluEval labels are corrected (Appendix D/Table 11). A probabilistic API therefore needs task-specific empirical validation.
+7절은 정확도, 확률 보정, 오류 순위화를 구분합니다. 기본 판단에서 Jev의 Brier 점수는 RewardBench / JudgeBench / HaluEval 순으로 **0.113 / 0.297 / 0.196**입니다. GPT-6는 JudgeBench에서 훨씬 좋습니다. 의심스러운 HaluEval 라벨을 고치면 상대적 확률 보정의 우열도 바뀔 수 있습니다(부록 D, 표 11). 따라서 대상 과제에서 검증해야 합니다.
 
-### Threshold transfer and label budget
+### 임계값 이전과 정답 표본 수
 
-Temperature scaling fit on pilot data improves held-out HaluEval NLL but worsens RewardBench and JudgeBench NLL; fitted temperatures also point in different directions. A single universal temperature is not supported.
+파일럿에서 맞춘 temperature scaling은 별도 HaluEval의 NLL을 개선하지만 RewardBench와 JudgeBench에서는 악화시킵니다. 과제마다 맞춘 온도의 방향도 달라 보편적인 온도 하나를 지지하지 않습니다.
 
-The original 96-pair threshold sample has only 32 JudgeBench examples. For a GPT-5.6 fallback it selects 0.7, which loses **4.81 pp on held-out JudgeBench**, despite acceptable pooled/selection behavior. The paper's repeated label-budget study (Appendix L/Table 32) finds the point-estimate rule exceeds a two-point loss in about **40–50%** of draws. The lower-bound rule reduces this to about 5% at 96 or 192 labels, and per-workload thresholds reduce it to **0.6% at 96** and **0.1% at 192**. These are simulations on the same existing pool and do not establish protection under distribution shift.
+최초 임계값 선택 표본 96쌍 중 JudgeBench는 32개입니다. GPT-5.6를 후속 판단 모델로 쓰면 0.7이 선택되며, 선택·합친 지표에서는 괜찮아 보이지만 별도 JudgeBench 정확도는 **4.81%p** 떨어집니다. 반복 표본 분석(부록 L, 표 32)에서 점추정 규칙은 약 **40–50%**의 추출에서 2%p 넘게 손해를 봅니다. 하한 규칙은 96·192개 라벨에서 약 5%로 줄이고, 과제별 임계값은 **96개에서 0.6%, 192개에서 0.1%**로 줄입니다. 같은 기존 자료를 다시 뽑은 분석이므로 분포 변화에 대한 보호를 입증하지는 않습니다.
 
-### Fixed output type and presentation matter
+### 출력 유형과 제시 방식의 영향
 
-In the 48-example initial interface audit, equivalent Choice and Noul probabilities differ by **0.055 on average**; Choice and Score differ by 0.015; complementary Noul questions miss summing to one by **0.045 on average**; and one close hard decision changes between Choice and Noul. All were asked within a shared request. The authors identify co-question context, stochastic variation, and rounding as possible contributors and recommend tuning for a fixed output type (Section 7.3; Appendix J).
+초기 48사례 인터페이스 검사에서 뜻을 맞춘 Choice와 Noul 확률의 평균 차이는 **0.055**, Choice와 Score는 **0.015**입니다. 서로 반대인 Noul 두 질문은 합이 1에서 평균 **0.045**만큼 벗어나며, 경계 사례 하나는 Choice와 Noul의 결정이 달라집니다. 모두 같은 요청 안의 질문이었습니다. 저자는 함께 묻는 질문의 맥락, 확률적 변동, 반올림을 가능 원인으로 제시하고 출력 유형을 고정해 조정하라고 권합니다(7.3절, 부록 J).
 
-Jev changes no verdict across 96 repeated requests but changes four of 48 paraphrased rubrics. Candidate reversal flips 3.7% of RewardBench and 11.1% of JudgeBench decisions. Most flips are low-confidence, so the gate absorbs much of the order sensitivity. Averaging both orders raises pairwise accuracy slightly but does not uniformly improve calibration or error ranking; four-way rotation averaging reduces accuracy from 72% per rotation to 70% averaged while improving AUROC (Section 7.3; Appendix K). “More votes” is not automatically a better-calibrated decision.
+96개의 반복 요청에서는 판정이 바뀌지 않았지만 48개 기준 문구를 바꾼 비교에서는 4개가 바뀝니다. 후보 순서를 뒤집으면 RewardBench **3.7%**, JudgeBench **11.1%**의 결정이 바뀝니다. 대다수는 확신이 낮아 이관 규칙이 일부 흡수합니다. 두 순서 평균은 쌍별 정확도를 조금 높이지만 확률 보정과 오류 순위화를 항상 개선하지 않습니다. 네 선택지 회전 평균은 AUROC를 높이면서 정확도를 회전별 72%에서 평균 후 70%로 낮춥니다. 더 많은 판단을 합친다고 항상 좋아지지는 않습니다.
 
-### Confidently wrong cases remain
+### 자신 있게 틀리는 사례
 
-- On RM-Bench, Jev's accuracy falls from **85.4% with matched styles to 76.6% when the wrong answer is more elaborate**. GPT-6 falls from 91.8% to 90.1%. Two-order error-ranking AUROC weakens from **0.839 to 0.764** (Section 7.4; Appendix F).
-- On **200 reference-free prose judgments**, Jev is near chance at **53.5%**, despite mean maximum probability **0.91**. Error-detection AUROC is **0.498**, so confidence thresholding does not help. Grounded summaries differ in both content and label provenance, preventing a clean causal “remove the evidence” interpretation (Appendix H).
-- Serial escalation cannot correct errors shared by both judges. At `q=1`, Jev and GPT-6 agree in correctness on all but two of 2,332 public items; very high confidence does not establish truth (Sections 7–8).
+- RM-Bench에서 오답을 더 정교한 문체로 쓰면 Jev는 **85.4% → 76.6%**, GPT-6는 **91.8% → 90.1%**로 떨어집니다. 두 순서의 오류 순위화 AUROC도 **0.839 → 0.764**로 낮아집니다(7.4절, 부록 F).
+- **참조 없는 산문 200개**에서 Jev 정확도는 **53.5%**지만 평균 최대 확률은 **0.91**입니다. 오류 탐지 AUROC는 **0.498**이라 확률 문턱으로 도움을 얻지 못합니다. 근거 있는 요약과는 내용·라벨 출처도 달라 ‘근거만 제거한’ 인과 비교는 아닙니다(부록 H).
+- 두 판단 모델이 공유하는 오류는 이관으로 고칠 수 없습니다. `q=1`인 공개 항목 2,332개에서 두 모델의 정답·오답 여부는 두 사례를 제외하고 같습니다. 높은 확신은 참이라는 증거가 아닙니다(7–8절).
 
-## Study limitations and appendix qualifications
+## 한계와 부록의 조건
 
-- **Finished outputs, not agent control.** The limitations section explicitly says that tool choice, next-action decisions inside a long trajectory, and error propagation into later steps are not tested. This is the clearest distinction from the present function-calling experiment.
-- **One proprietary Jev version.** Weights, size, training data, and training recipe are not inspectable. Benchmark contamination cannot be excluded. Architecture cannot be isolated from settings, serving, model size, or reasoning effort.
-- **Human adjudication is internal.** Appendix D audits 183 selected items, not a random benchmark sample. One research-team human annotator is blind to labels and judge outputs; an LLM second pass flags disagreements, and an author resolves them. This is a deviation from the planned two-human procedure and is not independent external human validation. The labels of the separate 150-item final-answer set have undocumented annotators.
-- **Exploratory comparisons.** Multi-family comparisons, threshold sweeps, and slice analyses are retrospective. Only the specified frozen policies, primary adjudication outcome, and prospective test have the stronger advance-specification status.
-- **Operational measurements.** Timing comes from a separate matched 120-judgment panel with a persistent client and fixed pacing, not the contended bulk-evaluation loop. It includes network, provider, and retry time. Costs are usage-based estimates with conservative reservations for missing usage, not invoices or matched compute.
-- **Open-model appendix added in v5.** Appendix A compares 21 open-weight typed decision models. Six are within sampling error of Jev's **88.3% pooled accuracy**; the highest observed score is **89.0%**, with no model significantly exceeding Jev in the reported paired comparison. Several larger open models have better error-ranking AUROC. This narrows any claim that useful typed judging is unique to proprietary Jev. These models are tested as stand-alone judges; their escalation policies, deployment fees, and transfer to follow-up/prospective workloads are not established by this appendix.
-- **Prospective scope remains finite.** The genuinely new-workload experiment covers two correctness workloads and 570 held-out pairs; equality of aggregate accuracy should not be generalized to arbitrary tasks.
-- **Reproduction has an explicit boundary.** Appendix Q supplies public sampled inputs and rubrics, retained judgments, accounting/provenance, offline analyses, and prospective/live test records. It excludes private conversation data, raw API response logs, account metadata, and credentials. Some historical calibration, repeated-request, interface, and rubric-ablation findings are retained summary tables rather than completely regenerated pipelines. Offline analysis does not require paid API calls, and the study trains no new model.
+- **완성된 출력의 평가입니다.** 도구 선택, 긴 과정 안의 다음 행동, 후속 단계로 퍼지는 오류는 시험하지 않았다고 한계 절에 명시합니다. 이번 함수 호출 실험과 가장 직접적인 차이입니다.
+- **비공개 Jev 한 버전입니다.** 가중치·크기·학습 데이터·학습법을 확인할 수 없고 데이터 오염도 배제할 수 없습니다. 모델 구조의 효과를 설정·서빙·크기·추론량과 분리할 수 없습니다.
+- **사람의 재판정은 내부 절차입니다.** 부록 D의 183개는 무작위 표본이 아니라 선택된 사례입니다. 연구팀의 사람 한 명이 라벨과 모델 판정을 모른 채 평가하고, LLM이 불일치를 찾아 저자가 해결합니다. 계획했던 두 사람 절차와 다르며 독립적인 외부 검증은 아닙니다. 별도 최종 답변 150개의 라벨 작성자는 충분히 설명되지 않습니다.
+- **탐색 분석이 많습니다.** 여러 모델군 비교, 임계값 탐색, 하위 집단 분석은 사후적입니다. 명시된 고정 규칙과 주 재판정 지표, 새 과제 실험만 더 강한 사전 계획 조건을 갖습니다.
+- **시간·비용은 운영 관측치입니다.** 시간은 경쟁이 심한 대량 실행과 별도로, 연결을 유지하고 속도를 고정한 120개 패널에서 측정합니다. 네트워크·공급자·재시도 시간을 포함합니다. 비용은 누락 사용량에 보수적 여유를 둔 추정치이지 청구서나 동일 계산량 비교가 아닙니다.
+- **공개 가중치 부록은 5판에 추가되었습니다.** 부록 A는 정형 판단 모델 21개를 비교합니다. 6개는 Jev의 합친 정확도 **88.3%**와 표본 오차 안에 있고 최고 관측치는 **89.0%**입니다. 보고된 쌍별 비교에서 Jev보다 유의하게 높은 모델은 없습니다. 일부 큰 모델은 오류 순위화 AUROC가 더 좋습니다. 유용한 정형 판단이 Jev만의 능력이라는 주장은 약해집니다. 이들은 단독 판단으로 평가했으며 이관 정책·배포 비용·후속 과제 이전은 검증하지 않았습니다.
+- **새 과제 검증 범위도 제한적입니다.** 두 정답 판단 과제와 별도 570쌍입니다. 전체 정확도가 같다는 결과를 모든 과제로 일반화할 수 없습니다.
+- **재현 자료에도 경계가 있습니다.** 부록 Q는 공개 입력과 기준, 저장한 판단, 비용·출처 자료, 오프라인 분석, 새 과제·실제 API 기록을 제공합니다. 비공개 대화, 원본 API 응답 로그, 계정 자료와 키는 제외합니다. 일부 이전 보정·반복·인터페이스·기준 문구 실험은 전체 재생성 코드가 아닌 요약표로 남습니다. 오프라인 분석은 유료 API가 필요 없고 새 모델을 학습하지 않습니다.
 
-## Relationship to Jev-Backed Function Calling (**JBFC**)
+## **JBFC**와의 관계
 
-| Dimension | Li et al.'s JEV-as-a-Judge | **JBFC** |
+| 구분 | JEV-as-a-Judge | **JBFC** |
 |---|---|---|
-| Object evaluated | Finished candidate outputs, preference pairs, factuality, final answers | An unexecuted LLM-proposed function name and arguments |
-| Jev interface | Primarily one Choice per request | Two Noul questions in one shared request |
-| Gating quantity | `q = max label probability`: confidence in **either** verdict | `p(function correct)` and `p(arguments correct)`: probabilities of **yes** |
-| Gate outcome | Keep a confident Jev verdict, including a negative label | Pass only if the schema floor and both correctness checks pass |
-| Failure/uncertainty response | Independent stronger judge replaces the verdict | Failed checks condition a new proposal from the same generator, at most three repairs |
-| Pair-order treatment | Aligned two-order probability average for frozen pairwise policy | No pairwise A/B comparison; fixed normalized tool catalog and two-check schema |
-| Primary evaluation | Judgment accuracy, error ranking, calibration, fee, latency | BFCL candidate correctness, selection/argument diagnostics, gate errors, repair/regression, fee, latency |
-| Evidence not supplied by the prior work | Function-call repair effectiveness or safe execution | Must be measured in our experiments; cannot be inferred from prior judge benchmarks |
+| 대상 | 완성된 답변·선호·사실성 판단 | 실행 전 LLM 함수 호출 |
+| 함수 선택 | 평가 대상이 아님 | LLM이 선택하고 Jev가 Noul로 판정 |
+| 인자 생성 | 평가 대상이 아님 | LLM이 사용자 요청과 함수 정의를 보고 제안 |
+| Jev 인터페이스 | 주로 요청당 Choice 하나 | 한 요청의 Noul 두 개 |
+| 기준값 | 선택한 판정 확률의 최댓값 `q` | 함수·인자가 올바르다는 두 긍정 확률 |
+| 실패 대응 | 독립된 더 강한 판단 모델로 이관 | 이전 후보·실제 피드백을 누적해 원래 요청 앞에 넣고 같은 LLM이 수정 |
+| no-call | 함수 호출 과제가 아님 | LLM의 빈 호출 제안이 적절한지도 질문 정의에 포함 |
+| 순서 처리 | 두 후보의 순서를 바꿔 평균 | 고정된 함수 목록과 시간순 누적 피드백 |
+| 주 평가 | 판정 정확도·보정·비용·지연 | 최종 호출·검사·수정 정확도와 비용 |
 
-The paper directly motivates **measuring whether a cheap probabilistic checker adds value, retaining an independent correctness evaluator, and calibrating thresholds locally**. It also strengthens the need to report false acceptance, false rejection, correction/regression, and correlated errors rather than acceptance alone.
+이 논문은 저렴한 확률 판단이 실제로 도움이 되는지 측정하고, 독립된 정답 평가기를 유지하며, 대상 과제에서 임계값을 점검해야 한다는 근거입니다. 수락 비율만 보고하지 말고 오수락·오거절·수정·퇴행과 두 검사 오류의 관계도 살펴야 합니다.
 
-Its 0.9 confidence threshold does **not** validate our untuned 0.8 correctness thresholds. `max(p_yes, 1-p_yes)` and `p_yes` answer different questions; a confidently negative validity judgment would have high confidence in their sense but must fail our execution gate. Its Choice findings also do not automatically transfer to two batched Nouls. Our calibration script is an independently specified development-data analysis, not a reproduction of their paired-cascade lower-bound selection rule.
+논문의 확신 임계값 0.9는 이번 **JBFC**의 조정하지 않은 긍정 확률 임계값 0.8을 검증해 주지 않습니다. `max(p_yes, 1-p_yes)`와 `p_yes`는 다릅니다. ‘이 호출은 틀렸다’는 판정이 자신 있어도 **JBFC**는 그 호출을 통과시키지 않습니다.
 
-## Suggested concise manuscript treatment
+**JBFC**는 최초 사용자 요청을 유지하고, 수정할 때만 모든 이전 후보와 실제 피드백을 오래된 순서대로 직렬화하여 원본 대화 앞에 붙입니다. 원래 메시지의 내용과 순서를 보존하며 모든 후보가 미실행 상태라고 명시합니다. 이 누적 문맥은 다음 제안을 위한 정보이고, 이전 통과 판정을 다음 후보의 통과로 재사용하지 않습니다. 같은 LLM이 함수를 다시 고르거나 인자를 바꿀 수 있으며 Jev는 현재 후보에 대해 두 질문을 다시 평가합니다.
 
-**Related work:** “Li et al. study JEV-as-a-Judge, retaining confident Jev verdicts and escalating uncertain cases to an independent reasoning judge. Their version-5 evaluation finds workload-dependent accuracy–cost benefits, while confidence routing weakens under misleading answer styles and fails on reference-free prose. They evaluate finished outputs, leaving tool selection and error propagation inside agents untested. **JBFC** instead evaluates two batched Noul checks on an unexecuted function call and uses failed judgments to repair the proposal with the same generator.”
+기본 수정 한도는 **JBFC**의 개발 자료 303개를 3회 실행하고, 그중 완전한 정답이 있는 302개 × 3회 = 906개의 정확도로 선택합니다. 선택한 공통 `r`을 여섯 테스트 방법의 수정 예산으로 사용하며 Direct는 수정하지 않습니다. 이 절차는 위 논문의 판단 모델 이관 임계값 선택과 다른 실험입니다. 별도 개발 임계값 분석 역시 이 논문의 쌍별 신뢰구간 하한 규칙을 재현하는 것은 아닙니다.
 
-**Method or limitations:** “Because Choice and Noul probabilities can differ even for aligned questions, we treat thresholds as interface- and workload-specific rather than transferring the confidence thresholds of JEV-as-a-Judge.”
+여섯 방법은 사례·반복별로 같은 최초 LLM 제안 하나를 공유하며, 비용에는 최초 제안과 이후 수정·검사를 각 방법 기준으로 포함합니다. 테스트는 2,748개 × 3회 × 6방법 = 49,464개 기록이며 아직 실행하지 않았습니다. 이 선행논문의 정확도나 비용으로 빈 BFCL 결과표를 채우지 않습니다.
 
-Any numerical claim should be explicitly attributed to Li et al., tied to version 5 and its population, and kept separate from our still-pending BFCL results. The new reference belongs in both `paper/references.bib` and the standalone manuscript's inline bibliography.
+## 원고에서 사용할 요지
+
+관련 연구에서는 Li 등이 확신 있는 Jev 판정을 유지하고 불확실한 경우 강한 판단 모델로 이관했으며, 과제와 문체·근거 조건에 따라 효과가 달랐다고 설명합니다. 완성된 답변을 평가했으므로 함수 선택이나 호출 수정의 효과는 남은 질문입니다. 이번 연구는 **JBFC**의 함수·인자 이진 검사와 누적 피드백을 사용한 실행 전 수정을 평가합니다.
+
+방법과 한계에서는 Choice와 Noul이 뜻을 맞춘 질문에서도 다른 확률을 낼 수 있으므로 인터페이스와 과제별 검증이 필요하다고 씁니다. 선행논문의 수치를 인용할 때는 저자, 5판, 해당 표본을 명시하고 아직 없는 이번 BFCL 결과와 구분합니다.

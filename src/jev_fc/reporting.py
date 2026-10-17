@@ -18,27 +18,45 @@ LABELS = {"direct": "Direct", "schema_only": "Schema repair", "self_refine": "Se
           "jev_function": "JBFC-F", "jev_arguments": "JBFC-A", "jev_joint": "JBFC"}
 
 PAPER_SETTINGS = {
-    "replicates": 3, "max_repairs": 3, "threshold": .8,
+    "replicates": 3, "threshold": .8,
     "exhaustion_policy": "execute_last", "split_seed": 1729,
     "llm_model": "gpt-5.4-mini-2026-03-17", "jev_model": "jev-1.13.0",
     "reasoning_effort": "none", "temperature": None, "max_completion_tokens": 4096,
     "llm_provider": "openai", "llm_api_style": "responses", "llm_gateway": "apim",
     "jev_gateway": "apim",
 }
+PAPER_REPAIR_GRID = (0, 1, 2, 3, 4, 5)
 
 
 def paper_protocol_matches(manifest):
     """Whether a run uses the paper's declared model/interface protocol.
 
-    Dataset identity and completeness are additionally checked by update_paper.
+    Recheck the development selection and its source records. Test dataset
+    identity and completeness are additionally checked by update_paper.
     """
     prices = manifest.get("prices_usd_per_million", {})
-    return (manifest.get("split") == "test" and manifest.get("limit") is None
-            and set(manifest.get("methods", [])) == set(METHODS)
-            and all(manifest.get(k) == v for k, v in PAPER_SETTINGS.items())
-            and all(prices.get(k) == v for k, v in {
-                "llm_input": .75, "llm_cached_input": .075, "llm_output": 4.5, "jev_input": .042,
-            }.items()))
+    methods = manifest.get("methods")
+    if (not isinstance(prices, dict) or not isinstance(methods, (list, tuple))
+        or len(methods) != len(METHODS) or set(methods) != set(METHODS)
+        or manifest.get("split") != "test" or manifest.get("limit") is not None
+        or not all(manifest.get(k) == v for k, v in PAPER_SETTINGS.items())
+        or not all(prices.get(k) == v for k, v in {
+            "llm_input": .75, "llm_cached_input": .075, "llm_output": 4.5, "jev_input": .042,
+        }.items())):
+        return False
+    selection = manifest.get("repair_budget_selection")
+    if (not isinstance(selection, dict) or selection.get("grid") != list(PAPER_REPAIR_GRID)
+        or selection.get("selection_rule") != "max_dev_accuracy_then_smallest_budget"
+        or isinstance(manifest.get("max_repairs"), bool)
+        or not isinstance(manifest.get("max_repairs"), int)
+        or selection.get("selected_max_repairs") != manifest["max_repairs"]):
+        return False
+    from .tuning import validate_repair_budget_selection
+    try:
+        validate_repair_budget_selection(selection, test_config=manifest)
+    except (ValueError, OSError, KeyError, TypeError):
+        return False
+    return True
 
 
 def read_jsonl(path: str | Path) -> list[dict]:
@@ -126,15 +144,17 @@ def summarize_group(rows):
     gated = [r for r in exact if r.get("accepted") is not None]
     wrong = [r for r in gated if not r["score"]["correct"]]
     right = [r for r in gated if r["score"]["correct"]]
-    verifications = [t for r in rows for t in r["trace"] if t.get("verification", {}).get("function_probability") is not None]
+    verifications = [t for r in rows for t in r["trace"]
+                     if any(t.get("verification", {}).get(k) is not None
+                            for k in ("function_probability", "arguments_probability"))]
     brier_function = []
     brier_arguments = []
     for step in verifications:
         score = step.get("score", {})
         check = step["verification"]
-        if score.get("function_correct") is not None:
+        if score.get("function_correct") is not None and check.get("function_probability") is not None:
             brier_function.append((check["function_probability"] - int(score["function_correct"]))**2)
-        if score.get("arguments_correct") is not None:
+        if score.get("arguments_correct") is not None and check.get("arguments_probability") is not None:
             brier_arguments.append((check["arguments_probability"] - int(score["arguments_correct"]))**2)
     return {
         "n": len(rows), "exact_n": len(exact),
@@ -195,6 +215,11 @@ def build_summary(run_dir: str | Path) -> dict:
     directory = Path(run_dir)
     rows = read_jsonl(directory / "records.jsonl")
     manifest = json.loads((directory / "manifest.json").read_text())
+    methods = manifest.get("methods")
+    if (not isinstance(methods, (list, tuple)) or not methods
+        or any(not isinstance(method, str) for method in methods)
+        or len(methods) != len(set(methods)) or not set(methods).issubset(METHODS)):
+        raise ValueError("Manifest methods must be unique supported methods.")
     if any(r.get("synthetic") for r in rows) or manifest.get("synthetic"):
         raise ValueError("Synthetic demonstrations are excluded from benchmark and paper reports.")
     expected = {(example_id, replicate, method) for example_id in manifest["ids"]
@@ -223,7 +248,8 @@ def build_summary(run_dir: str | Path) -> dict:
         "initial_candidate_diagnostics": {
             m: {key: value for key, value in summarize_group([
                 {**r, "trace": r["trace"][:1], "score": r["trace"][0]["score"],
-                 "accepted": r["trace"][0]["gate_pass"]} for r in rows if r["method"] == m]).items()
+                 "accepted": r["trace"][0]["gate_pass"]}
+                for r in rows if r["method"] == m]).items()
                 if key in {"n", "exact_n", "accuracy", "gate_diagnostic_n", "coverage", "accepted_precision",
                            "selective_risk", "false_accept_rate", "false_reject_rate", "brier_function",
                            "brier_arguments", "brier_function_n", "brier_arguments_n", "verified_candidates_n"}}
@@ -241,21 +267,66 @@ def build_summary(run_dir: str | Path) -> dict:
     return summary
 
 
-def derive_policy_run(source_dir, output_dir, max_repairs=3, exhaustion_policy="execute_last"):
+def derive_policy_run(source_dir, output_dir, max_repairs=None, exhaustion_policy="execute_last"):
     """Truncate actual joint trajectories; changing only a stopping cap needs no new API call.
 
     This is valid because no benchmark tool executes before termination and the
     cap is never sent to either model. It must not be used to replay new prompts,
     thresholds, models, or repair feedback.
     """
-    if not 0 <= max_repairs <= 3 or exhaustion_policy not in {"execute_last", "abstain"}:
+    if (max_repairs is not None and (isinstance(max_repairs, bool)
+                                    or not isinstance(max_repairs, int) or max_repairs < 0)
+        or exhaustion_policy not in {"execute_last", "abstain"}):
         raise ValueError("Invalid bounded policy")
-    source_dir, output_dir = Path(source_dir), Path(output_dir)
+    source_dir, output_dir = Path(source_dir).resolve(), Path(output_dir).resolve()
+    if source_dir == output_dir:
+        raise ValueError("Replay output must differ from its source directory")
+    if output_dir.exists() and not output_dir.is_dir():
+        raise ValueError("Replay output must be a directory; existing files are not overwritten")
     manifest = json.loads((source_dir / "manifest.json").read_text())
-    source = [r for r in read_jsonl(source_dir / "records.jsonl") if r["method"] == "jev_joint"]
-    if manifest.get("synthetic") or len(source) != len(manifest["ids"]) * manifest["replicates"]:
+    rows = read_jsonl(source_dir / "records.jsonl")
+    ids, methods, replicates = manifest.get("ids"), manifest.get("methods"), manifest.get("replicates")
+    source_cap = manifest.get("max_repairs")
+    if (manifest.get("synthetic") is not False
+        or not isinstance(ids, list) or not ids or any(not isinstance(i, str) for i in ids)
+        or len(ids) != len(set(ids))
+        or not isinstance(methods, list) or any(not isinstance(m, str) for m in methods)
+        or len(methods) != len(set(methods))
+        or "jev_joint" not in methods or not set(methods).issubset(METHODS)
+        or isinstance(replicates, bool) or not isinstance(replicates, int) or replicates < 1
+        or isinstance(source_cap, bool) or not isinstance(source_cap, int) or source_cap < 0
+        or not isinstance(manifest.get("config_id"), str) or not manifest["config_id"]):
         raise ValueError("A complete empirical joint run is required for cap replay")
-    if max_repairs > manifest["max_repairs"]:
+    expected = {(example_id, replicate, method) for example_id in ids
+                for replicate in range(replicates) for method in methods}
+    seen = set()
+    for row in rows:
+        if (not isinstance(row, dict) or not isinstance(row.get("id"), str)
+            or not isinstance(row.get("method"), str) or isinstance(row.get("replicate"), bool)
+            or not isinstance(row.get("replicate"), int)):
+            raise ValueError("Malformed source result record")
+        key = (row.get("id"), row.get("replicate"), row.get("method"))
+        if (key in seen or key not in expected or row.get("synthetic") is not False
+            or row.get("config_id") != manifest["config_id"]):
+            raise ValueError("Duplicate, foreign or mismatched-config source record detected")
+        seen.add(key)
+    if seen != expected or manifest.get("expected_records") != len(expected):
+        raise ValueError("A complete empirical source run is required for cap replay")
+    source = [r for r in rows if r["method"] == "jev_joint"]
+    for row in source:
+        trace = row.get("trace")
+        if (not isinstance(trace, list) or not trace or len(trace) > source_cap + 1
+            or isinstance(row.get("max_repairs"), bool) or row.get("max_repairs") != source_cap
+            or isinstance(row.get("repairs"), bool) or row.get("repairs") != len(trace) - 1
+            or any(not isinstance(step, dict) or isinstance(step.get("attempt"), bool)
+                   or step.get("attempt") != index or not isinstance(step.get("gate_pass"), bool)
+                   for index, step in enumerate(trace))
+            or any(step["gate_pass"] for step in trace[:-1])
+            or (not trace[-1]["gate_pass"] and len(trace) != source_cap + 1)
+            or row.get("accepted") != trace[-1]["gate_pass"]):
+            raise ValueError("Source joint trajectory is incomplete or violates its recorded stopping rule")
+    max_repairs = source_cap if max_repairs is None else max_repairs
+    if max_repairs > source_cap:
         raise ValueError("Cannot replay a longer trajectory than was recorded")
     source_hash = hashlib.sha256((source_dir / "records.jsonl").read_bytes()).hexdigest()
     derived = []
@@ -279,27 +350,45 @@ def derive_policy_run(source_dir, output_dir, max_repairs=3, exhaustion_policy="
     manifest["config_id"] = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
     for row in derived:
         row["config_id"] = manifest["config_id"]
+    record_text = "".join(json.dumps(r) + "\n" for r in derived)
+    if output_dir.exists() and any(output_dir.iterdir()):
+        # A resumed suite can repeat a replay only when the complete expected
+        # manifest and records still match. Recompute from source first; never
+        # trust an existing summary or silently replace different trajectories.
+        try:
+            saved_manifest = json.loads((output_dir / "manifest.json").read_text())
+            saved_records = (output_dir / "records.jsonl").read_text()
+        except (OSError, json.JSONDecodeError):
+            raise ValueError("Existing replay results are incomplete and are not overwritten") from None
+        if saved_manifest != manifest or saved_records != record_text:
+            raise ValueError("Existing replay results differ from the source or policy and are not overwritten")
+        return build_summary(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    (output_dir / "records.jsonl").write_text("".join(json.dumps(r) + "\n" for r in derived))
+    (output_dir / "records.jsonl").write_text(record_text)
     return build_summary(output_dir)
 
 
 def latex_table(summary=None):
     def fmt(value, scale=1, precision=2):
         return "--" if value is None else f"{value * scale:.{precision}f}"
-    lines = [r"\begin{table}[t]", r"\centering\small", r"\setlength{\tabcolsep}{3.2pt}",
-             r"\begin{tabular}{lrrrr}", r"\toprule", r"Method & Acc. (\%) & Repairs & Sec. & USD/1k \\", r"\midrule"]
+    lines = [r"\begin{table}[t]", r"\centering\small", r"\setlength{\tabcolsep}{2.7pt}",
+             r"\begin{tabular}{lrrrrr}", r"\toprule", r"Method & Call & Func. & Args. & Sec. & USD/1k \\", r"\midrule"]
     for method in METHODS:
         values = (summary or {}).get("methods", {}).get(method, {})
         label = LABELS[method]
-        if label in {"JBFC", "JBFC-F", "JBFC-A"}:
+        if label.startswith("JBFC"):
             label = r"\textbf{" + label + "}"
         lines.append(label + " & " + " & ".join([
-            fmt(values.get("accuracy"), 100, 1), fmt(values.get("mean_repairs")),
-            fmt(values.get("mean_latency_s")), fmt(values.get("mean_cost_usd"), 1000, 3)]) + r" \\")
+            fmt(values.get("accuracy"), 100, 1), fmt(values.get("function_accuracy"), 100, 1),
+            fmt(values.get("arguments_accuracy_conditional"), 100, 1), fmt(values.get("mean_latency_s")), fmt(values.get("mean_cost_usd"), 1000, 3)]) + r" \\")
+    limit = "The repair limit is chosen on development data."
+    manifest = (summary or {}).get("manifest", {})
+    if manifest and paper_protocol_matches(manifest):
+        limit = f"Repair methods use $r={manifest['max_repairs']}$, chosen on development data."
     lines.extend([r"\bottomrule", r"\end{tabular}",
-                  r"\caption{Primary comparison on the held-out BFCL subset. Accuracy excludes the call-presence-only live relevance category. -- denotes an unavailable or unrun result; no empirical values are imputed.}",
+                  r"\caption{Methods on the BFCL test set. " + limit
+                  + r" Call and function accuracy (\%) exclude live relevance. Argument accuracy (\%) uses calls with the correct function and argument labels. -- means unavailable or unrun.}",
                   r"\label{tab:main}", r"\end{table}"])
     return "\n".join(lines)
 
@@ -309,7 +398,7 @@ def latex_category_table(summary=None):
                   ("irrelevance", "Irrelevance", 240, 216), ("live_simple", "Live simple", 258, 233),
                   ("live_multiple", "Live multiple", 1053, 948), ("live_irrelevance", "Live irrelevance", 884, 796),
                   ("live_relevance", r"Live relevance$^\dagger$", 16, 15)]
-    lines = [r"\begin{table}[t]", r"\centering\small", r"\setlength{\tabcolsep}{3.1pt}",
+    lines = [r"\begin{table}[t]", r"\centering\small", r"\setlength{\tabcolsep}{2.4pt}",
              r"\begin{tabular}{lrrrr}", r"\toprule", r"Category & All & Test & Direct & \textbf{JBFC}\\", r"\midrule"]
     for category, label, full, test in categories:
         cells = []
@@ -321,29 +410,43 @@ def latex_category_table(summary=None):
     total = [(summary or {}).get("methods", {}).get(m, {}).get("accuracy") for m in ("direct", "jev_joint")]
     lines += [r"\midrule", "Total & 3051 & 2748 & " + " & ".join("--" if x is None else f"{100*x:.1f}" for x in total) + r"\\",
               r"\bottomrule", r"\end{tabular}",
-              r"\caption{Prepared BFCL data and test accuracy (\%). Counts are data statistics. $^\dagger$Live relevance measures call presence only; total accuracy excludes these 15 cases. -- denotes an unrun experiment.}",
+              r"\caption{BFCL example counts and test accuracy (\%). Counts describe the prepared data. $^\dagger$Live relevance checks only whether a call is present; total accuracy excludes these 15 cases. -- means the experiment has not been run.}",
               r"\label{tab:categories}", r"\end{table}"]
     return "\n".join(lines)
 
 
-def latex_budget_table(budgets=None):
-    rows = [("Final correctness (\\%)", "accuracy", 100), ("Acceptance coverage (\\%)", "coverage", 100),
-            ("Accepted precision (\\%)", "accepted_precision", 100), ("False acceptance (\\%)", "false_accept_rate", 100),
-            ("False rejection (\\%)", "false_reject_rate", 100), ("Correction (\\%)", "initial_wrong_final_right", 100),
-            ("Regression (\\%)", "initial_right_final_wrong", 100), ("Cap exhaustion (\\%)", "exhaustion_rate", 100),
-            ("Mean proposals", "mean_llm_proposals", 1), ("p95 latency (s)", "p95_latency_s", 1)]
+def latex_budget_table(selection=None):
+    """Report development-only budget selection, never test-budget selection."""
+    candidates, selected = {}, None
+    grid = PAPER_REPAIR_GRID
+    if selection is not None:
+        from .tuning import validate_repair_budget_selection
+        selection = validate_repair_budget_selection(selection)
+        grid, selected = selection["grid"], selection["selected_max_repairs"]
+        candidates = {row["max_repairs"]: row for row in selection["candidates"]}
+
+    def fmt(value, scale=1, precision=2):
+        return "--" if value is None else f"{value * scale:.{precision}f}"
+
     lines = [r"\begin{table}[t]", r"\centering\small", r"\setlength{\tabcolsep}{3pt}",
-             r"\begin{tabular}{lrrrr}", r"\toprule", r"\textbf{JBFC} diagnostic & $r{=}0$ & $1$ & $2$ & $3$\\", r"\midrule"]
-    for label, metric, scale in rows:
-        values = [(budgets or {}).get(budget, {}).get("methods", {}).get("jev_joint", {}).get(metric) for budget in range(4)]
-        lines.append(label + " & " + " & ".join("--" if x is None else f"{x*scale:.1f}" for x in values) + r"\\")
+             r"\begin{tabular}{lrrrr}", r"\toprule", r"$r$ & Dev Acc. (\%) & Repairs & Sec. & USD/1k\\", r"\midrule"]
+    for budget in grid:
+        values = candidates.get(budget, {})
+        label = f"${budget}^{{*}}$" if budget == selected else f"${budget}$"
+        lines.append(label + " & " + " & ".join([
+            fmt(values.get("accuracy"), 100, 1), fmt(values.get("mean_repairs")),
+            fmt(values.get("mean_latency_s")), fmt(values.get("mean_cost_usd"), 1000, 3),
+        ]) + r"\\")
+    selected_note = r" $^{*}$ marks the selected limit." if selected is not None else ""
     lines += [r"\bottomrule", r"\end{tabular}",
-              r"\caption{Budget and verifier diagnostics; -- denotes an unrun experiment. False acceptance conditions on incorrect candidates. Correction and regression are fractions of all scored requests.}",
+              r"\caption{Development data choose the repair limit for \textbf{JBFC}. We choose the highest call accuracy; ties choose the smaller limit. Accuracy excludes live relevance."
+              + selected_note + r" -- means no result is available or the experiment has not been run.}",
               r"\label{tab:diagnostics}", r"\end{table}"]
     return "\n".join(lines)
 
 
 def update_paper(paper_path: str | Path, summary: dict | None = None):
+    selection = None
     if summary is not None:
         if summary["status"] != "complete" or summary["manifest"]["split"] != "test":
             raise ValueError("Only complete test runs may populate the manuscript; keep dev/smoke outputs separate.")
@@ -359,7 +462,8 @@ def update_paper(paper_path: str | Path, summary: dict | None = None):
         if manifest["dataset_sha256"] != hashlib.sha256(canonical_path.read_bytes()).hexdigest():
             raise ValueError("Manuscript data digest differs from the canonical prepared BFCL dataset.")
         if not paper_protocol_matches(manifest):
-            raise ValueError("Run differs from the manuscript's declared protocol. Update its protocol before using custom-model/config results.")
+            raise ValueError("Run differs from the manuscript's declared protocol or lacks a valid development repair-limit selection.")
+        selection = manifest["repair_budget_selection"]
     path = Path(paper_path)
     source = path.read_text()
     start, end = "% BEGIN AUTO RESULTS", "% END AUTO RESULTS"
@@ -374,20 +478,9 @@ def update_paper(paper_path: str | Path, summary: dict | None = None):
             prefix, rest = source.split(begin)
             _, suffix = rest.split(finish)
             source = prefix + begin + "\n" + content + "\n" + finish + suffix
-    budgets = {3: summary} if summary else {}
-    if summary:
-        main_dir = Path(summary["run_dir"])
-        for budget in range(3):
-            candidate = main_dir.parent / f"budget_{budget}" / "summary.json"
-            if candidate.exists():
-                item = json.loads(candidate.read_text())
-                if (item["status"] == "complete"
-                    and item["manifest"].get("source_records_sha256") == hashlib.sha256((main_dir / "records.jsonl").read_bytes()).hexdigest()
-                    and item["manifest"]["max_repairs"] == budget):
-                    budgets[budget] = item
     begin, finish = "% BEGIN AUTO DIAGNOSTICS", "% END AUTO DIAGNOSTICS"
     if begin in source and finish in source:
         prefix, rest = source.split(begin)
         _, suffix = rest.split(finish)
-        source = prefix + begin + "\n" + latex_budget_table(budgets) + "\n" + finish + suffix
+        source = prefix + begin + "\n" + latex_budget_table(selection) + "\n" + finish + suffix
     path.write_text(source)

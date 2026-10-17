@@ -14,6 +14,7 @@ from jev_fc import cli
 from jev_fc.benchmarks import load_examples, stratified_split
 from jev_fc.jev import JevVerifier
 from jev_fc.llm import FunctionCallingLLM
+from jev_fc.pipeline import METHODS
 from jev_fc.reporting import build_summary, read_jsonl, update_paper
 
 
@@ -48,15 +49,18 @@ def offline_run(tmp_path, monkeypatch, request):
         row["private_canary"] = "ORACLE_MUST_NOT_APPEAR_ON_WIRE"
     data_path = tmp_path / "tiny.jsonl"
     data_path.write_text("".join(json.dumps(row) + "\n" for row in selected))
-    observed = {"llm": [], "jev": [], "fail_next_jev": False, "fail_next_llm": False,
+    observed = {"llm": [], "jev": [], "histories": [], "fail_next_jev": False, "fail_next_llm": False,
                 "api_style": api_style, "gateway": gateway,
                 "subscription_key": "integration-subscription-before-rotation", "auth_providers": set()}
 
     def check_wire(body):
         text = json.dumps(body)
         assert "ORACLE_MUST_NOT_APPEAR_ON_WIRE" not in text
+        assert "REPAIR_SELECTION_MUST_NOT_APPEAR_ON_WIRE" not in text
         for secret in ("ground_truth", "bfcl_functions", "dataset_revision", "name_map", "private_canary"):
             assert secret not in text
+        for metadata in ("repair_budget_selection", "selected_max_repairs", "selection_rule", "selection_id", "selection_method"):
+            assert metadata not in text
         assert "category" not in body and "id" not in body
 
     def generator_http(request):
@@ -80,9 +84,20 @@ def offline_run(tmp_path, monkeypatch, request):
             return httpx.Response(403, headers={"apim-request-id": "req-llm-403"},
                                   json={"error": "PRIVATE_RESPONSE_BODY " + observed["subscription_key"]})
         user_messages = [message for message in body["input" if style == "responses" else "messages"] if message["role"] == "user"]
-        example_id = by_prompt[user_messages[0]["content"]]
+        example_id = by_prompt[user_messages[-1]["content"]]
+        history = []
+        if len(user_messages) > 1:
+            assert len(user_messages) == 2
+            context = user_messages[0]["content"]
+            assert context.startswith("Accumulated revision history (oldest first; proposals NOT executed):\n")
+            history, _ = json.JSONDecoder().raw_decode(context.split("\n", 1)[1])
+            assert [step["round"] for step in history] == list(range(1, len(history) + 1))
+            assert all(set(step) == {"round", "calls", "feedback"} for step in history)
+        observed["histories"].append((example_id, deepcopy(history)))
         calls = deepcopy(oracle_calls[example_id])
-        if len(user_messages) == 1:
+        if style != "anthropic_messages":
+            assert body["tool_choice"] == "auto"
+        if not history:
             # The initial proposal has valid JSON but missing required arguments.
             for call in calls:
                 call["arguments"] = {}
@@ -125,16 +140,20 @@ def offline_run(tmp_path, monkeypatch, request):
             assert str(request.url) == "https://mock-jev.invalid/v1/systemone"
         body = json.loads(request.content)
         check_wire(body)
-        assert set(body["state"]) == {"messages", "tools", "proposed_calls"}
         observed["jev"].append(deepcopy(body))
         if observed["fail_next_jev"]:
             observed["fail_next_jev"] = False
             return httpx.Response(401, headers={"apim-request-id": "req-jev-401"},
                                   json={"error": "PRIVATE_RESPONSE_BODY " + observed["subscription_key"]})
+        assert set(body["questions"]) == {"function_correct", "arguments_correct"}
+        assert all(question["type"] == "noul" for question in body["questions"].values())
+        assert set(body["state"]) == {"messages", "tools", "proposed_calls"}
         valid_arguments = all(call["arguments"] for call in body["state"]["proposed_calls"])
+        answers = {"arguments_correct": {"type": "noul", "noul": .99 if valid_arguments else .01},
+                   "function_correct": {"type": "noul", "noul": .99}}
         return httpx.Response(200, json={
             "model": "jev-1.13.0",
-            "answers": {"function_correct": {"type": "noul", "noul": .99}, "arguments_correct": {"type": "noul", "noul": .99 if valid_arguments else .01}},
+            "answers": answers,
             "usage": {"input_tokens": 300, "output_tokens": 0},
         })
 
@@ -161,6 +180,7 @@ def offline_run(tmp_path, monkeypatch, request):
         categories=None, split="all", split_seed=1729, limit=None,
         methods="direct,jev_joint", max_repairs=1, replicates=1, workers=1,
         threshold=.8, exhaustion_policy="execute_last", resume=False,
+        repair_budget_selection=None,
     )
     yield args, observed, selected
     llm_http.close()
@@ -332,6 +352,156 @@ def test_apim_cli_pipeline_scoring_report_and_key_rotation_resume(offline_run, m
     monkeypatch.setattr("sys.argv", ["jev-fc", "report", str(directory)])
     assert cli.main() == 0 and (directory / "summary.csv").exists()
     assert_saved_files_have_no_credentials(directory)
+
+
+def install_tiny_selected_run(args, monkeypatch, selected_budget, tmp_path):
+    """Mock source validation for a tiny integration fixture, never production runs.
+
+    tuning.py's own tests check real provenance and canonical split membership.
+    Here the real CLI, HTTP adapters, state machine, scoring and fingerprinting
+    operate on three saved examples rather than issuing thousands of requests.
+    """
+    args.split = "test"
+    args.methods = ",".join(METHODS)
+    args.max_repairs = selected_budget
+    selection_path = tmp_path / "repair_selection_fixture.json"
+    selection = {"kind": "repair_budget_selection", "selection_id": "fixture-selection-id",
+                 "selected_max_repairs": selected_budget, "grid": [0, 1, 2, 3, 4, 5],
+                 "selection_method": "jev_joint",
+                 "selection_rule": "max_dev_accuracy_then_smallest_budget",
+                 "provenance": {"split": "dev", "canary": "REPAIR_SELECTION_MUST_NOT_APPEAR_ON_WIRE"}}
+    selection_path.write_text(json.dumps(selection))
+    args.repair_budget_selection = str(selection_path)
+    monkeypatch.setattr(cli, "stable_split", lambda rows, split, seed: rows)
+    validations = []
+
+    def load_selection(path, test_config):
+        loaded = json.loads(Path(path).read_text())
+        assert test_config["split"] == "test" and test_config["limit"] is None
+        assert test_config["max_repairs"] == loaded["selected_max_repairs"]
+        assert test_config["methods"] == list(METHODS)
+        assert "repair_budget_selection" not in test_config
+        validations.append(deepcopy(test_config))
+        return loaded
+
+    monkeypatch.setattr(cli, "load_repair_budget_selection", load_selection)
+    return selection, selection_path, validations
+
+
+@pytest.mark.parametrize("offline_run", ["chat_completions", "responses", "anthropic_messages"], indirect=True)
+@pytest.mark.parametrize("selected_budget", [0, 5])
+def test_selected_budget_reaches_all_methods_and_manifest_but_never_model_inputs(
+    offline_run, monkeypatch, tmp_path, selected_budget
+):
+    args, observed, _ = offline_run
+    selection, _, validations = install_tiny_selected_run(args, monkeypatch, selected_budget, tmp_path)
+    cli.run(args)
+    assert len(validations) == 1
+    directory = Path(args.output)
+    manifest = json.loads((directory / "manifest.json").read_text())
+    assert manifest["repair_budget_selection"] == selection
+    assert manifest["max_repairs"] == selected_budget
+    assert manifest["methods"] == list(METHODS)
+    rows = read_jsonl(directory / "records.jsonl")
+    assert len(rows) == 3 * len(METHODS)
+    assert all(row["max_repairs"] == selected_budget for row in rows)
+    assert all(row["repairs"] == 0 for row in rows if row["method"] == "direct")
+    assert all(row["repairs"] == selected_budget for row in rows if row["method"] == "self_refine")
+    joint = [row for row in rows if row["method"] == "jev_joint"]
+    assert all(row["repairs"] <= min(1, selected_budget) for row in joint)
+    assert len(METHODS) == 6
+    assert all(row["initial_proposal_shared"] is True for row in rows)
+    assert manifest["shared_initial_methods"] == list(METHODS)
+    assert max(len(history) for _, history in observed["histories"]) == selected_budget
+    assert len(observed["llm"]) > 0 and len(observed["jev"]) > 0
+    assert_saved_files_have_no_credentials(directory)
+
+
+@pytest.mark.parametrize("orphan", ["records.jsonl", "initial.jsonl", "unfinished.jsonl"])
+def test_orphan_run_data_cannot_start_without_manifest(offline_run, orphan):
+    args, observed, _ = offline_run
+    directory = Path(args.output)
+    directory.mkdir()
+    (directory / orphan).write_text("{}\n")
+    with pytest.raises(ValueError, match="orphan run files"):
+        cli.run(args)
+    assert observed["llm"] == observed["jev"] == []
+    assert not (directory / "manifest.json").exists()
+
+
+def test_changed_selection_invalidates_resume_before_network_or_run_changes(offline_run, monkeypatch, tmp_path):
+    args, observed, _ = offline_run
+    selection, path, validations = install_tiny_selected_run(args, monkeypatch, 5, tmp_path)
+    cli.run(args)
+    directory = Path(args.output)
+    before_counts = len(observed["llm"]), len(observed["jev"])
+    before_files = {name: (directory / name).read_bytes() for name in ("manifest.json", "records.jsonl", "initial.jsonl")}
+    selection["selection_id"] = "different-development-selection"
+    path.write_text(json.dumps(selection))
+    args.resume = True
+    with pytest.raises(ValueError, match="different code/data/config fingerprint"):
+        cli.run(args)
+    assert len(validations) == 2
+    assert (len(observed["llm"]), len(observed["jev"])) == before_counts
+    assert all((directory / name).read_bytes() == value for name, value in before_files.items())
+
+
+def test_invalid_development_selection_denied_before_requests_and_output_creation(offline_run, monkeypatch, tmp_path):
+    args, observed, _ = offline_run
+    install_tiny_selected_run(args, monkeypatch, 5, tmp_path)
+
+    def reject_selection(*_, **__):
+        raise ValueError("Source development configuration does not match this test run")
+
+    monkeypatch.setattr(cli, "load_repair_budget_selection", reject_selection)
+    with pytest.raises(ValueError, match="does not match"):
+        cli.run(args)
+    assert observed["llm"] == observed["jev"] == []
+    assert not Path(args.output).exists()
+
+
+def test_real_selection_validator_rejects_forged_artifact_before_api_use(offline_run, monkeypatch, tmp_path):
+    args, observed, _ = offline_run
+    actual_validator = cli.load_repair_budget_selection
+    install_tiny_selected_run(args, monkeypatch, 5, tmp_path)
+    monkeypatch.setattr(cli, "load_repair_budget_selection", actual_validator)
+    with pytest.raises(ValueError, match="fingerprint"):
+        cli.run(args)
+    assert observed["llm"] == observed["jev"] == []
+    assert not Path(args.output).exists()
+
+
+def test_selection_metadata_alone_cannot_promote_fixture_to_paper_results(offline_run, monkeypatch, tmp_path):
+    args, _, _ = offline_run
+    install_tiny_selected_run(args, monkeypatch, 0, tmp_path)
+    cli.run(args)
+    paper = tmp_path / "guarded-paper.tex"
+    original = "% BEGIN AUTO RESULTS\n--\n% END AUTO RESULTS\n"
+    paper.write_text(original)
+    with pytest.raises(ValueError):
+        update_paper(paper, build_summary(args.output))
+    assert paper.read_text() == original
+
+
+@pytest.mark.parametrize("split,limit", [("dev", None), ("all", None), ("test", 1)])
+def test_selection_cannot_authorize_non_test_or_limited_run(offline_run, monkeypatch, tmp_path, split, limit):
+    args, observed, _ = offline_run
+    install_tiny_selected_run(args, monkeypatch, 0, tmp_path)
+    args.split, args.limit = split, limit
+    with pytest.raises(ValueError, match="complete test split"):
+        cli.run(args)
+    assert observed["llm"] == observed["jev"] == []
+    assert not Path(args.output).exists()
+
+
+def test_standalone_exploration_allows_repair_caps_above_three_without_selection(offline_run):
+    args, _, _ = offline_run
+    args.max_repairs = 5
+    args.methods = "direct,jev_joint"
+    cli.run(args)
+    manifest = json.loads((Path(args.output) / "manifest.json").read_text())
+    assert manifest["max_repairs"] == 5
+    assert "repair_budget_selection" not in manifest
 
 
 @pytest.mark.parametrize("offline_run", ["responses", "anthropic_messages"], indirect=True)

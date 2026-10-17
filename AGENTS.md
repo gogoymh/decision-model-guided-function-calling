@@ -3,12 +3,20 @@
 Keep paper/main.tex and the implementation consistent. The current manuscript is
 an unrun experimental protocol, not a completed empirical claim.
 
+- The user approved the current Abstract and Introduction on 2026-10-17. Preserve their exact wording unless the user explicitly asks to revise those sections. Figure and layout updates must not rewrite them.
+
 - Call the proposed method JBFC after its first expanded definition. Use JBFC-F and JBFC-A for function-only and argument-only ablations; Jev remains the verifier model name. Typeset every occurrence of JBFC, JBFC-F, and JBFC-A in bold, including running text, figure captions, and generated tables. Keep paper and generated table labels consistent.
+- The study centers on JBFC (jev_joint): an LLM proposes a function and arguments, Jev asks two Noul correctness questions about that same proposal, and failed checks guide the same LLM's next proposal. The six methods are direct, schema_only, self_refine, jev_function, jev_arguments, and jev_joint. Direct function selection with Jev Choice is outside the experiment; preserve accurate source notes about Jev's capabilities without presenting them as implemented comparison arms.
+- Leave the original conversation unchanged for the initial proposal. On every repair, serialize all previous proposals and their actual feedback in chronological order into one added user-context message before the original conversation and user request. Preserve all original messages and their order. Explicitly mark previous proposals as NOT executed. Retain the cumulative history; never replace the original request or invent Jev rationales or gold-derived hints.
+- The feedback loop may be compared to using observations in ReAct, but this experiment uses pre-execution Jev judgments and does not reproduce ReAct's full reasoning/action/environment-observation procedure.
+- Typeset the model display name as \textit{Jev} throughout the manuscript, including headings and figures. Preserve the established formatting of the method name Jev-Backed Function Calling, cited paper titles such as JEV-as-a-Judge, and literal API model identifiers such as jev-1.13.0.
 - Never fabricate benchmark values or promote synthetic/demo outputs into a paper.
 - Never send ground_truth, category labels, example IDs, offline scores or gold-derived feedback to models.
 - Keep the pinned BFCL inputs and official evaluator unchanged; document annotation anomalies.
-- Three repairs means four proposals including the first. Re-evaluate both checks on each candidate.
+- Treat the repair limit r as a nonnegative integer hyperparameter: select it using JBFC on complete development data and freeze it for all repair methods before testing. The default search grid is 0,1,2,3,4,5, not a method-level cap. Choose highest development final-call accuracy (excluding live relevance), breaking ties with smaller r. Save and validate selection provenance, including selection_method=jev_joint. r repairs permits at most r+1 LLM proposals; re-evaluate both JBFC checks on every new candidate rather than carrying forward a previous pass.
+- All six methods share one initial LLM proposal per example and replicate. Charge that proposal once to each method's standalone cost, along with its own later generation and verification work, including the cumulative feedback tokens. Keep development search cost separate from test cost. The canonical test grid is 2,748 examples x 3 replicates x 6 methods = 49,464 records.
 - Only the final dispatch boundary can invoke an application callback. Benchmark runs do not execute tools.
 - Never print, commit or package API keys or .env. Keep credential fields in .env.example blank. APIM uses only the project subscription key in api-key; do not forward provider credentials. Preserve API format/routing in run fingerprints and keep unknown pricing unavailable.
 - Run appropriate offline tests after code changes. Use the native LaTeX editor for the standalone manuscript,
   and verify the exported PDF has four body pages with references beginning on page five (six pages maximum).
+- Whenever paper/main.tex changes, compile it in the native editor and export the updated paper/main.pdf before replying. Keep distributed source/PDF copies in sync; updating only the editor preview is not enough.

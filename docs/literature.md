@@ -1,118 +1,124 @@
-# Literature and experiment protocol
+# 선행연구와 실험 설계
 
-Research date: October 15, 2026. The bibliography is `paper/references.bib`.
-These notes separate verified descriptions of prior work from proposed experiments.
-No paid model evaluation has been run, and there are no empirical findings for the proposed method yet.
+문헌은 2026년 10월 15일에 조사했고, Jev의 추가 기능과 ReAct는 10월 16일에 확인했습니다. 참고문헌은 `paper/references.bib`에 있습니다. 이 문서는 선행연구의 관찰과 이번 실험의 계획을 구분합니다. 현재 실제 API 실험은 수행하지 않았으므로 **JBFC**의 성능 결과는 없습니다.
 
-## Jev identity and primary documentation
+## Jev와 공식 자료
 
-Jev is TypeSafe AI's flagship **System One** model. It accepts a state and typed questions and returns structured answers, including probabilities and confidence fields. It is not an ordinary text-generating LLM. The relevant endpoint is `POST https://api.typesafe.ai/v1/systemone`.
+Jev는 TypeSafe AI의 System One 모델입니다. 상태와 정해진 유형의 질문을 입력받아 구조화된 결정을 반환합니다. Noul은 ‘예’의 확률을 반환하고, Choice는 선택한 항목, 전체 확률 분포와 confidence를 반환합니다. 직접 API는 `POST https://api.typesafe.ai/v1/systemone`입니다.
 
-- [Official model reference](https://docs.typesafe.ai/models) (`typesafe2026models`). As retrieved on October 15, 2026, `jev-1.13.0` is the stable version behind `jev-latest`, and the October 14 release `jev-1.14.0` is behind `jev-preview`. Pin a version rather than an alias in experiments, and log the version returned by the API.
-- [Official HTTP API](https://docs.typesafe.ai/api).
-- [Noul primitive](https://docs.typesafe.ai/primitives/noul): a yes/no question returns a probability of the answer being yes. The correctness-oriented questions should make the positive label explicit. Do not reverse the meaning of a risk-oriented probability in code.
-- [Confidence](https://docs.typesafe.ai/confidence): probability and confidence are distinct quantities. A reported high probability is not itself a guarantee of correctness, and the proposed benchmark must measure calibration and false acceptance rather than assume the provider's general claims transfer to this task.
-- [Introducing System One Models & Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev), TypeSafe announcement by Diogo Almeida, September 15, 2026. The provider describes its training as RLCD; this announcement is not a peer-reviewed Jev paper. Do not invent one or present provider performance claims as findings of this project.
+- [모델과 버전](https://docs.typesafe.ai/models), `typesafe2026models`: 확인 시점의 안정 버전은 `jev-1.13.0`이며 `jev-latest`가 가리킵니다. 10월 14일 공개된 `jev-1.14.0`은 `jev-preview`입니다. 실험에서는 별칭 대신 버전을 고정하고 API가 실제 반환한 버전도 기록합니다.
+- [HTTP API](https://docs.typesafe.ai/api): 요청·응답과 오류 형식의 근거입니다.
+- [Noul](https://docs.typesafe.ai/primitives/noul): ‘예’의 확률입니다. 올바름을 묻는 질문과 위험을 묻는 질문의 확률 방향을 혼동하면 안 됩니다.
+- [Choice](https://docs.typesafe.ai/primitives/choice): 주어진 유한 선택지 중 하나를 고릅니다. no-call은 별도 선택지로 넣습니다. 255개 제한이 있으므로 함수 254개와 no-call 한 개까지 가능합니다.
+- [Confidence](https://docs.typesafe.ai/confidence): Choice의 confidence는 선택 확률과 다릅니다. 높은 확률만으로 정답을 보장할 수 없으며, 해당 과제에서 오수락과 확률의 신뢰성을 측정해야 합니다.
+- [Introducing System One Models & Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev): Diogo Almeida가 2026년 9월 15일 쓴 TypeSafe 발표입니다. RLCD라는 학습 설명은 공급자의 설명이며 동료심사를 거친 Jev 기술 논문은 아닙니다. 이 설명을 프로젝트의 검증된 성과로 제시하지 않습니다.
 
-The official `llms.txt` index also contains two especially close examples:
+이번 실험에서는 **LLM이 함수와 인자를 제안하고 Jev가 두 Noul 질문으로 검사합니다**. 공급자의 다른 기능을 방법의 근거로 제시하지 않습니다. 공식 기능과 버전별 조사 기록은 [별도 문서](jev-research.md)에 보존하며, 함수 호출 및 SDE Cascade 예제는 논문 참고문헌에서 제외했습니다.
 
-1. [Function calling cookbook](https://docs.typesafe.ai/cookbooks/function_calling) (`typesafe2026functioncalling`). Jev directly selects a function and closed-set arguments through Choice/Noul questions. Function names and argument values have enumerated alternatives; unconstrained text, numbers, and dates are left at defaults in that example. The proposed project instead verifies the complete call proposed by a generative LLM, including arguments that are not closed-set values.
-2. [SDE cascade cookbook](https://docs.typesafe.ai/cookbooks/sde_cascade) (`typesafe2026sdecascade`). A small generative model extracts structured data, Jev evaluates per-field errors, and failures escalate to a larger reasoning model. The proposed project uses function-call selection/argument checks and bounded repair by the same configured generator. Therefore the broad idea of an LLM proposal followed by a Jev verifier is established in the provider's own examples.
+## 직접 관련된 선행연구
 
-## Closest formal prior work
-
-| Citation | Verified source and scope | Relationship to this project |
+| 문헌 | 확인한 출처 | 이번 실험과의 관계 |
 |---|---|---|
-| Mekala et al., 2024, **ToolVerifier: Generalization to New Tools via Self-Verification** (`mekala2024toolverifier`) | [arXiv](https://arxiv.org/abs/2402.14158), [full text](https://arxiv.org/html/2402.14158v2). Seven authors: Dheeraj Mekala, Jason Weston, Jack Lanchantin, Roberta Raileanu, Maria Lomeli, Jingbo Shang, Jane Dwivedi-Yu. | Explicitly decomposes tool selection and parameter generation and verifies both. A tool-selection model is fine-tuned on synthetic data; contrastive questions resolve top-two candidates; parameter verification compares alternatives. This precludes claiming that the two-part decomposition or verification itself is new. |
-| Hamad et al., 2025, **ToolCritic: Detecting and Correcting Tool-Use Errors in Dialogue Systems** (`hamad2025toolcritic`) | [arXiv](https://arxiv.org/abs/2510.17052). Hassan Hamad, Yingru Xu, Liang Zhao, Wenbo Yan, Narendra Gyanchandani. The verified reference is the preprint; no venue is asserted. | A diagnostic critic identifies eight tool-use error types and provides targeted feedback for the main LLM to revise its response. This is direct prior work for critic-driven tool-call correction. |
-| Gou et al., 2024, **CRITIC: Large Language Models Can Self-Correct with Tool-Interactive Critiquing** (`gou2024critic`) | [arXiv](https://arxiv.org/abs/2305.11738); the primary page identifies ICLR 2024. | External tool feedback supports progressive output revision in QA, program synthesis, and toxicity reduction. Do not claim the use of external feedback is novel. |
-| Madaan et al., 2023, **Self-Refine: Iterative Refinement with Self-Feedback** (`madaan2023selfrefine`) | [NeurIPS proceedings](https://proceedings.neurips.cc/paper_files/paper/2023/hash/91edff07232fb1b55a505a9e9f6c0ff3-Abstract-Conference.html), vol. 36, pp. 46534–46594. | Same-model feedback and revision supply a necessary control for improvement due simply to extra inference. |
-| Shinn et al., 2023, **Reflexion: Language Agents with Verbal Reinforcement Learning** (`shinn2023reflexion`) | [NeurIPS proceedings](https://proceedings.neurips.cc/paper_files/paper/2023/hash/1b44b878bb782e6954cd888628510e90-Abstract-Conference.html), vol. 36, pp. 8634–8652. | Linguistic feedback and episodic reflection improve later attempts without updating weights. The project shares feedback-conditioned inference but does not implement episodic memory or environmental trial-and-error. |
-| Huang et al., 2024, **Large Language Models Cannot Self-Correct Reasoning Yet** (`huang2024selfcorrect`) | [arXiv](https://arxiv.org/abs/2310.01798); the primary page identifies ICLR 2024. | Motivates measuring rather than assuming repair benefits. Its negative results concern intrinsic reasoning self-correction, so do not generalize them to all modern tool-calling models or claim they prove Jev will help. |
+| Mekala et al., 2024, **ToolVerifier: Generalization to New Tools via Self-Verification**, `mekala2024toolverifier` | [arXiv](https://arxiv.org/abs/2402.14158), [본문](https://arxiv.org/html/2402.14158v2). 저자는 Dheeraj Mekala, Jason Weston, Jack Lanchantin, Roberta Raileanu, Maria Lomeli, Jingbo Shang, Jane Dwivedi-Yu입니다. | 도구 선택과 인자 생성을 나누고 둘을 검증합니다. 합성 데이터로 선택 모델을 학습하고 상위 두 후보를 대비하는 질문과 인자 대안 비교를 사용합니다. 두 단계로 나누거나 검증하는 발상 자체를 새롭다고 주장할 수 없습니다. |
+| Hamad et al., 2025, **ToolCritic: Detecting and Correcting Tool-Use Errors in Dialogue Systems**, `hamad2025toolcritic` | [arXiv](https://arxiv.org/abs/2510.17052). 저자는 Hassan Hamad, Yingru Xu, Liang Zhao, Wenbo Yan, Narendra Gyanchandani입니다. 확인한 자료는 프리프린트입니다. | 비평 모델이 8종류의 도구 사용 오류를 찾아 주 LLM에 수정 피드백을 제공합니다. 외부 검사를 통한 함수 호출 수정의 직접적인 선행연구입니다. |
+| Gou et al., 2024, **CRITIC: Large Language Models Can Self-Correct with Tool-Interactive Critiquing**, `gou2024critic` | [arXiv](https://arxiv.org/abs/2305.11738), ICLR 2024로 확인했습니다. | 외부 도구 피드백으로 질문 답변, 프로그램, 유해 출력을 반복 수정합니다. 외부 피드백 사용 자체를 새 기여로 보지 않습니다. |
+| Madaan et al., 2023, **Self-Refine: Iterative Refinement with Self-Feedback**, `madaan2023selfrefine` | [NeurIPS](https://proceedings.neurips.cc/paper_files/paper/2023/hash/91edff07232fb1b55a505a9e9f6c0ff3-Abstract-Conference.html), 36권, 46534–46594쪽. | 같은 모델의 피드백과 수정입니다. Jev의 효과를 단순한 추가 생성 기회와 구분하는 비교 기준입니다. |
+| Shinn et al., 2023, **Reflexion: Language Agents with Verbal Reinforcement Learning**, `shinn2023reflexion` | [NeurIPS](https://proceedings.neurips.cc/paper_files/paper/2023/hash/1b44b878bb782e6954cd888628510e90-Abstract-Conference.html), 36권, 8634–8652쪽. | 가중치 변경 없이 언어 피드백과 에피소드별 성찰을 활용합니다. 이번 구현에는 에피소드 기억이나 환경에서의 시행착오가 없습니다. |
+| Yao et al., 2023, **ReAct: Synergizing Reasoning and Acting in Language Models** | [arXiv](https://arxiv.org/abs/2210.03629). 저자는 Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, Yuan Cao입니다. 최초 프리프린트는 2022년이며 2023년 v3에 ICLR camera-ready임을 명시합니다. | 추론 기록과 행동을 번갈아 생성하며 외부 지식·환경과의 상호작용에서 얻은 정보를 다음 단계에 사용합니다. **JBFC**의 누적 피드백과 개념상 관련되지만, 이 실험은 실행 전 Jev 판정을 사용하고 수정 중 함수를 실행하지 않습니다. ReAct 전체 절차의 재현은 아닙니다. |
+| Huang et al., 2024, **Large Language Models Cannot Self-Correct Reasoning Yet**, `huang2024selfcorrect` | [arXiv](https://arxiv.org/abs/2310.01798), ICLR 2024로 확인했습니다. | 수정이 도움이 된다고 가정하지 말고 측정해야 한다는 근거입니다. 특정 추론 자기 수정의 부정적 결과를 모든 최신 함수 호출 모델에 일반화하거나 Jev가 효과적이라는 증거로 쓰지 않습니다. |
+| Li et al., 2026, **JEV-as-a-Judge: Accept When Confident, Escalate When Unsure**, `li2026jevjudge` | [arXiv v5](https://arxiv.org/abs/2609.26550v5). 저자는 Yubo Li, Yidi Miao, Ramayya Krishnan, Rema Padman입니다. | 완성된 답변을 Jev가 판단하고 불확실할 때 독립된 강한 판단 모델로 넘깁니다. 함수 선택과 호출 수정은 평가하지 않습니다. Choice의 선택 확률과 두 Noul의 긍정 확률을 혼동하지 않아야 합니다. 전체 독해는 [별도 기록](jev-as-a-judge.md)에 있습니다. |
 
-The defensible contribution is an **implemented and reproducible evaluation of a particular Jev-backed pre-execution protocol**, including separate semantic judgments, their conjunction, bounded repair, and measured quality/cost/error tradeoffs. Without experiments it is a method-and-protocol draft, not a demonstrated accuracy improvement. Avoid “first,” “guarantees,” “eliminates hallucination,” and “state of the art.” If the paper needs a stronger novelty claim, establish it through experiments and further literature review rather than wording alone.
+이번 연구는 **JBFC의 두 의미 검사와 누적 피드백을 이용한 한도 내 수정**을 재현 가능한 코드와 평가 절차로 검증합니다. 모든 이전 후보와 실제 Jev 판정을 원래 사용자 요청 앞에 넣어 같은 LLM이 다시 제안하도록 하고, 정확도·비용·오류 변화를 측정합니다. 실험 전에는 방법과 평가 계획이며 개선 효과를 입증한 논문이 아닙니다. “최초”, “보장”, “환각 제거”, “최고 성능” 같은 주장은 근거가 없으면 사용하지 않습니다.
 
-## Benchmarks and tool-learning context
+## 벤치마크와 도구 학습 배경
 
-| Citation | Verified publication | Use |
+| 문헌 | 확인한 출판 정보 | 활용 범위 |
 |---|---|---|
-| Patil et al., 2025, **The Berkeley Function Calling Leaderboard (BFCL): From Tool Use to Agentic Evaluation of Large Language Models** (`patil2025bfcl`) | [PMLR](https://proceedings.mlr.press/v267/patil25a.html), ICML 2025, vol. 267, pp. 48371–48392. Correct author order from PMLR: Shishir G. Patil, Huanzhi Mao, Fanjia Yan, Charlie Cheng-Jie Ji, Vishnu Suresh, Ion Stoica, Joseph E. Gonzalez. | Primary evaluation source. Pin the dataset/evaluator revision and name the exact included categories. A single-turn subset is not the full BFCL V4 agentic leaderboard. Use the official category evaluator wherever possible. |
-| Li et al., 2023, **API-Bank: A Comprehensive Benchmark for Tool-Augmented LLMs** (`li2023apibank`) | [ACL Anthology](https://aclanthology.org/2023.emnlp-main.187/), EMNLP 2023, pp. 3102–3116. | Representative complementary runnable API/dialogue benchmark; useful for later external validation. Cite as context unless an adapter and its tests are actually implemented. |
-| Guo et al., 2024, **StableToolBench: Towards Stable Large-Scale Benchmarking on Tool Learning of Large Language Models** (`guo2024stabletoolbench`) | [ACL Anthology](https://aclanthology.org/2024.findings-acl.664/), Findings ACL 2024, pp. 11143–11156. | Explains reproducibility issues caused by live API drift and motivates frozen data/evaluators. Its cached/simulated server plus evaluator is not equivalent to a local exact-match check. |
-| Qin et al., 2024, **ToolLLM: Facilitating Large Language Models to Master 16000+ Real-world APIs** (`qin2024toolllm`) | [arXiv metadata](https://arxiv.org/abs/2307.16789), [official project repository](https://github.com/OpenBMB/ToolBench) confirms ICLR 2024. | ToolBench dataset and tool-use learning background. Do not confuse it with the different ToolBench dataset used by ToolVerifier without examining their sources. |
-| Patil et al., 2024, **Gorilla: Large Language Model Connected with Massive APIs** (`patil2024gorilla`) | [NeurIPS proceedings](https://proceedings.neurips.cc/paper_files/paper/2024/hash/e4c61f578ff07830f5c37378dd3ecb0d-Abstract-Conference.html), vol. 37, pp. 126544–126565. | Function-call training and API hallucination background. The arXiv preprint is dated 2023, but the cited proceedings version is 2024. |
+| Patil et al., 2025, **The Berkeley Function Calling Leaderboard (BFCL): From Tool Use to Agentic Evaluation of Large Language Models**, `patil2025bfcl` | [PMLR](https://proceedings.mlr.press/v267/patil25a.html), ICML 2025, 267권, 48371–48392쪽. 저자 순서는 Shishir G. Patil, Huanzhi Mao, Fanjia Yan, Charlie Cheng-Jie Ji, Vishnu Suresh, Ion Stoica, Joseph E. Gonzalez입니다. | 주 평가 자료입니다. 데이터와 채점기를 고정하고 포함 카테고리를 명시합니다. 단일 턴 하위 집합을 전체 리더보드로 부르지 않습니다. |
+| Li et al., 2023, **API-Bank: A Comprehensive Benchmark for Tool-Augmented LLMs**, `li2023apibank` | [ACL Anthology](https://aclanthology.org/2023.emnlp-main.187/), EMNLP 2023, 3102–3116쪽. | 실행 가능한 API·대화 과제로 향후 외부 검증에 활용할 수 있습니다. 현재 어댑터가 구현된 것처럼 쓰지 않습니다. |
+| Guo et al., 2024, **StableToolBench: Towards Stable Large-Scale Benchmarking on Tool Learning of Large Language Models**, `guo2024stabletoolbench` | [ACL Anthology](https://aclanthology.org/2024.findings-acl.664/), Findings ACL 2024, 11143–11156쪽. | 실제 API 변화에 따른 재현성 문제를 설명합니다. 캐시·시뮬레이션 서버의 평가는 단순 로컬 일치 검사와 다릅니다. |
+| Qin et al., 2024, **ToolLLM: Facilitating Large Language Models to Master 16000+ Real-world APIs**, `qin2024toolllm` | [arXiv](https://arxiv.org/abs/2307.16789), [공식 저장소](https://github.com/OpenBMB/ToolBench)에서 ICLR 2024를 확인했습니다. | ToolBench와 도구 학습의 배경입니다. ToolVerifier에서 같은 이름으로 부르는 다른 데이터와 혼동하지 않습니다. |
+| Patil et al., 2024, **Gorilla: Large Language Model Connected with Massive APIs**, `patil2024gorilla` | [NeurIPS](https://proceedings.neurips.cc/paper_files/paper/2024/hash/e4c61f578ff07830f5c37378dd3ecb0d-Abstract-Conference.html), 37권, 126544–126565쪽. | 함수 호출 학습과 API 환각의 배경입니다. 프리프린트는 2023년이지만 인용한 학회판은 2024년입니다. |
 
-The bibliography deliberately prioritizes close verification work over adding every foundational tool-use reference. Its 14 entries can be typeset in one or two reference pages. URLs and source metadata should be preserved in the `.bib` file even if a compact manuscript bibliography uses shortened venue names.
+짧은 논문에서는 직접 관련된 검증 연구를 우선합니다. 참고문헌의 URL과 출판 정보는 `.bib`에 보존합니다.
 
-## Prespecified experimental protocol
+## 사전에 정한 실험 조건
 
-### Definitions that must match the implementation
+### JBFC와 누적 수정 문맥
 
-- A **proposal** is the complete predicted call set for one user request, including zero calls when the request should not invoke a tool. Define whether sequential dependencies are supported; do not silently treat them as independent parallel calls.
-- The **selection** judgment asks whether the proposed function names, multiplicities, and abstention satisfy the request given the entire available catalog. It must catch missing and extra functions, not merely whether each proposed name exists.
-- The **arguments** judgment asks whether the values are supported by the request, assigned to the correct parameters, complete where required, and consistent with the selected signatures. It must cover semantic mistakes after ordinary schema checks.
-- Acceptance at round `t` is `schema_valid(t) AND selection_pass(t) AND arguments_pass(t)` on the **same candidate**. Jev evaluates all well-formed, parseable candidates, including those that fail schema validation, but the deterministic schema floor overrides acceptance. If any required check fails, use feedback to revise. Re-evaluate both semantic checks after every revision; a prior pass must not remain latched. Repair retains all previous proposal/feedback pairs in the conversation history.
-- Treat malformed output and schema validation separately. A schema-only repair control reveals whether gains come only from fixing types/required fields rather than semantic verification.
-- Define the retry cap explicitly. Recommended notation: `r in {0,1,2,3}` **repairs after the initial proposal**, hence at most `r+1` generator calls and verifier evaluations. If the chosen implementation caps total proposals at three, write that instead. Do not use “three iterations” ambiguously.
-- Define behavior after budget exhaustion. **Always-last** passes the final proposal to benchmark evaluation even if Jev rejects it or schema validation fails; malformed proposals score as incorrect. This matches forced completion after bounded repair. **Abstain** withholds rejected proposals. Report them separately and never treat withheld errors as corrected predictions.
-- The experiment should evaluate or execute calls only in the benchmark's controlled evaluator. Local parsing/equivalence is a proposal correctness test, not live execution or demonstrated downstream task success.
+- **제안**은 사용자 요청 하나에 대한 함수 이름과 인자입니다. no-call은 빈 호출 목록입니다. 현재 데이터는 단일 호출 또는 no-call이며 병렬·순차 실행을 평가하지 않습니다.
+- **JBFC**의 함수 질문은 전체 함수 목록과 요청에 비추어 선택한 함수, 호출 수, no-call이 맞는지 묻습니다. 이름이 존재하는지만 확인하지 않습니다. 인자 질문은 값의 근거, 역할, 필수 값, 함수 정의와의 일치를 묻습니다.
+- **JBFC**는 같은 후보에서 `schema_valid AND selection_pass AND arguments_pass`여야 통과합니다. 파싱 가능한 후보는 스키마 오류가 있어도 의미 검사를 수행하지만, 스키마 오류는 최종 통과를 막습니다. 수정 후 두 검사를 다시 하며 이전 통과를 재사용하지 않습니다.
+- 최초 요청은 원본 메시지를 유지하고 피드백을 추가하지 않습니다. 수정 때는 모든 이전 후보의 `round`, `calls`, 실제 `feedback`를 시간순으로 담은 사용자 메시지 하나를 원본 대화 앞에 붙입니다. 원래 사용자 요청과 메시지 내용·순서를 보존하고, 이전 후보를 실행하지 않았음을 명시합니다. 최신 피드백 하나만 남기거나 원본 요청을 대체하는 방식이 아닙니다.
+- 누적 기록에는 Jev가 반환한 확률·판정, 임계값, 로컬 스키마 오류를 사용합니다. Jev가 생성하지 않은 설명이나 정답에서 만든 힌트를 추가하지 않습니다. 함수와 인자는 다음 후보에서 모두 수정할 수 있습니다.
+- no-call은 LLM의 빈 호출 제안입니다. 함수 질문은 그 빈 제안이 적절한지 묻고, 인자 질문은 이 경우 긍정으로 답하도록 정의합니다. 반환된 두 확률에는 동일한 수락 기준을 적용합니다.
+- 파싱 실패와 스키마 실패를 구분합니다. Schema-only 비교는 의미 검증의 효과를 단순한 형식 수정과 분리합니다. API 오류를 검사 통과나 no-call로 바꾸지 않습니다.
+- 수정 한도 `r`은 0 이상의 정수입니다. 함수 호출이 필요한 사례에서 최초 제안 이후 최대 `r`회 수정하므로 제안은 최대 `r+1`개입니다. 기본 후보 `0,1,2,3,4,5`는 탐색 범위이며 구현의 고정 상한이 아닙니다.
+- 기본 `execute_last`는 끝까지 거부된 마지막 후보도 채점합니다. `abstain`은 거부된 후보를 실행 대상으로 넘기지 않습니다. 보류된 오답을 수정 성공으로 세지 않습니다.
+- 실제 BFCL 함수는 실행하지 않습니다. 공식 AST 채점은 호출 정확도의 검사이며 실제 API 성공이나 안전한 후속 행동을 입증하지 않습니다.
 
-### Data splits and leakage control
+### 데이터 분할과 정보 누출 방지
 
-1. Freeze a dataset revision, evaluator revision, ordered example IDs, category selection, preprocessing, model versions, prompts, thresholds, sampling settings, and repeat seeds before the test run.
-2. Split development/test by example IDs, preferably also protecting shared function templates when tuning prompts. A deterministic hash split is acceptable if fixed in a manifest. Report the resulting counts by category.
-3. Use development examples to choose thresholds and prompt wording. Test labels never enter the generator or verifier payload. Gold labels are read only by offline evaluation code after predictions are produced.
-4. The verifier may see the user request, available function schemas/descriptions, selected calls, and explicit execution constraints. It must not see reference calls, reference argument alternatives, official correctness labels, or evaluator feedback.
-5. Reject missing-label or unsupported-category records during preparation with explicit counts and reasons. Never silently discard hard failures at scoring time. Keep parse errors, API errors, rate limits, and exhausted loops in denominators or report their treatment explicitly.
-6. Keep provider errors distinct from method failure, use bounded retry/backoff for transient HTTP failures, and save resumable records. Log model version returned, usage, elapsed time, and a digest of request configuration without recording API keys.
-7. Freeze LLM capability mode (native tool calling versus text-JSON emulation). Different output modes are separate experimental conditions.
+1. 데이터·채점기 버전, ID 순서, 카테고리, 전처리, 모델, 프롬프트, 임계값, 샘플링과 반복 설정을 테스트 전에 고정합니다.
+2. 개발·테스트는 카테고리별 ID 해시로 나누고 분할 규칙과 수를 기록합니다. 공개 데이터의 숨겨진 정답 집합이라는 주장은 하지 않습니다. 함수 템플릿 공유나 학습 데이터 포함 가능성은 한계입니다.
+3. 개발 데이터로 수정 한도를 선택합니다. 기본 Noul 임계값은 조정하지 않은 `0.8`입니다. 별도 임계값 분석도 개발 데이터에서만 합니다. 테스트 정답은 모델에 전달하지 않습니다.
+4. 모델이 보는 것은 원본 대화, 공개 함수 정의, 제안된 호출, 실제 검사 피드백뿐입니다. 누적 수정 문맥도 이 정보만 사용합니다. 정답, 허용 인자 목록, 채점 결과·오류, 데이터 ID·카테고리, 개발 한도 선택 파일은 제외합니다.
+5. 지원하지 않는 카테고리나 필요한 정답이 없는 문제의 처리 기준을 사전에 정합니다. `live_relevance`는 호출 유무 지표로 따로 보존합니다. 어려운 실패를 채점 단계에서 조용히 제외하지 않습니다.
+6. 공급자 오류와 방법 실패를 구분합니다. 일시 오류는 별도 한도의 재시도로 처리하고 재개 가능한 기록을 남깁니다. 반환 모델, 사용량, 시간, 설정 해시를 저장하되 키와 원본 오류 본문은 저장하지 않습니다.
+7. 공급자 API 형식과 함수 호출 방식은 실험 조건입니다. 다른 인터페이스 결과를 같은 조건으로 합치지 않습니다.
 
-### Required comparison rows
+### 여섯 비교 방법
 
-| Method | Purpose |
+| 방법 | 실행 ID | 비교 목적 |
+|---|---|---|
+| Direct | `direct` | 최초 제안만 사용 |
+| Schema-only | `schema_only` | 구조·타입 오류만 수정 |
+| Self-refine | `self_refine` | 같은 LLM의 일반적인 재검토와 수정. 추가 생성 기회의 효과 확인 |
+| **JBFC-F** | `jev_function` | 함수 선택 검사만 통과 판단과 수정에 사용 |
+| **JBFC-A** | `jev_arguments` | 인자 검사만 통과 판단과 수정에 사용 |
+| **JBFC** | `jev_joint` | 두 의미 검사를 모두 사용 |
+
+**JBFC-F**와 **JBFC-A**는 두 Noul을 같은 요청에서 구하지만 지정한 검사와 공통 스키마 검사만 판단·피드백에 사용합니다. Self-refine은 전체 수정 한도를 사용하며 다른 수정 방법은 통과하면 일찍 종료할 수 있습니다.
+
+수정 한도는 **JBFC**의 전체 개발 303개를 3회 실행해 고릅니다. 가장 큰 후보 한도로 실행하고 같은 기록의 앞부분으로 작은 한도를 평가합니다. 기록은 909개이며, `live_relevance` 1개를 반복마다 제외한 **906개**의 최종 정확도가 선택 기준입니다. 정확도가 가장 높은 `r`을 고르고 동점이면 작은 값을 택합니다. 선택 파일과 원본을 검증한 후에만 전체 테스트를 시작합니다.
+
+여섯 방법은 선택된 공통 `r`로 **2,748개 × 3회 × 6방법 = 49,464개** 기록을 만듭니다. Direct는 수정하지 않습니다. 테스트 결과나 작은 한도로 재평가한 테스트 기록을 이용해 `r`을 다시 선택하지 않습니다.
+
+앞부분 재평가는 한도가 프롬프트에 없고 중간 함수 실행도 없기 때문에 가능합니다. 더 작은 한도에서 이전 제안과 피드백이 달라지지 않습니다. API 오류 뒤의 누락된 시도를 만들어 채우거나, 같은 기록의 재평가를 독립된 반복 실험으로 세지 않습니다. 개발 탐색 비용은 테스트 비용과 따로 보고하며 후보별 중복 구간의 비용을 모두 합하지 않습니다.
+
+여섯 방법은 사례·반복별로 같은 최초 LLM 제안 하나를 공유하고 방법별 비교 비용에는 그 제안을 각각 한 번 포함합니다. 이후 수정 입력에 누적되는 피드백의 토큰과 검사 비용도 포함합니다. 같은 한도는 같은 제안 수·토큰·시간·비용을 뜻하지 않습니다. 더 강한 비용 통제가 필요하면 관측된 비용이나 지연에 맞춘 비교를 추가해야 합니다. 정답을 보고 여러 샘플 중 최선을 고르는 방식은 배포 가능한 비교 기준이 아닙니다.
+
+### 지표와 분모
+
+완전한 정답이 있는 평가 사례 수를 `N`, 최종 정답 여부를 `C_i`, 방법의 수락 여부를 `A_i`라고 합니다. 모든 지표는 분모와 함께 보고합니다.
+
+| 지표 | 계산과 해석 |
 |---|---|
-| Direct generator | One proposal, no semantic verifier or repair. |
-| Schema-only repair | Repairs deterministic structural/type violations; separates semantics from format improvements. |
-| Self-feedback repair | Same generator critiques and repairs its candidate with the same proposal cap; measures gains from extra generation and feedback without Jev. Clearly document the actual critic prompt and whether critique consumes an additional call. |
-| **JBFC-F** (function-only) | Uses only selection feedback for the gate and repair. |
-| **JBFC-A** (argument-only) | Uses only argument feedback for the gate and repair. |
-| **JBFC** | Requires both criteria and feeds back both judgments. |
-| **JBFC** at caps 0, 1, 2, 3 | Identifies marginal repair benefit, regression, overhead, and early stopping. A zero-repair verifier arm is useful for studying acceptance alone. |
+| 최종 정확도 | `sum(C_i)/N`. 거부된 최종 후보도 공식 기준으로 채점합니다. |
+| 함수 선택 정확도 | 정답 함수 이름·호출 수와 일치하는 비율. 올바른 빈 호출도 포함합니다. |
+| 조건부 인자 정확도 | 함수 선택이 맞고 인자 정답이 있는 사례 중 인자가 맞는 비율. 전체 정확도와 함께 보고합니다. |
+| 수락 비율 | `sum(A_i)/N`. 실제 실행으로 넘긴 비율이나 의미 검사 통과 수와 같다고 가정하지 않습니다. |
+| 수락한 후보의 정확도 | `sum(A_i*C_i)/sum(A_i)`. 수락 사례가 없으면 `NA`입니다. |
+| 수락한 후보 중 오답 비율 | `sum(A_i*(1-C_i))/sum(A_i)`. 수락 정확도의 보수입니다. |
+| 오답 중 오수락 비율 | `sum(A_i*(1-C_i))/sum(1-C_i)`. 위 지표와 분모가 다릅니다. |
+| 정답 중 오거절 비율 | `sum((1-A_i)*C_i)/sum(C_i)`. |
+| 수정과 퇴행 | 처음 오답이 정답으로 바뀐 비율과 처음 정답이 오답으로 바뀐 비율. 실제 최초·최종 제안을 비교합니다. |
+| 과정 진단 | 제안 수, 통과 시점, 한도 소진, 파싱·스키마 오류, API 오류, no-call 정확도. |
+| 효율 | 실제 생성·검사 요청 수, 입력·출력 토큰, 날짜가 명시된 단가의 추정 비용, 평균·중앙·p95 지연. 재시도와 네트워크 시간을 포함하며 실행 동시성을 기록합니다. |
+| 확률 진단 | 선택적 분석으로 Brier 점수나 구간별 정답률을 측정합니다. 두 질문의 오류 독립성을 가정하거나 확률을 곱해 결합 정확도로 해석하지 않습니다. |
 
-The same proposal cap is a **cap-matched** comparison, not necessarily a token-, time-, or dollar-matched one. Measure observed generator/verifier calls, tokens, cost, and latency. For a stronger budget control, compare quality at matched observed spend or latency, or report a quality-cost curve. A fixed number of repeated samples followed by oracle-best selection is not a fair deployable baseline. Use identical initial proposals across methods when feasible, paired by example and generator seed, and make the reuse/cache policy explicit.
+Direct와 각 방법의 차이는 같은 사례끼리 계산합니다. 주 비교에는 고정 seed·반복 수의 paired bootstrap으로 95% 구간을 구하며 반복별 결과도 남깁니다. 서로 독립적으로 만든 신뢰구간의 겹침만으로 유의성을 주장하지 않습니다. 누락된 사용량의 비용은 미상으로 두고 0원으로 세지 않습니다. 누적 관측 지연과 전체 작업의 실제 경과 시간, 추정 단가와 공급자 청구액을 구분합니다.
 
-The implemented budget ablation uses **trajectory-prefix replay** rather than new model runs. Execute **JBFC** with a maximum of three repairs, then derive caps 0, 1, and 2 by stopping the same trace at the corresponding proposal (or its earlier first acceptance). This is valid here because the cap is not disclosed to either model, no tool executes during the repair trajectory, and all earlier feedback is unchanged by the later stopping decision. Reuse the same trace for the optional abstention dispatch policy. Compute candidate scores and logical usage/latency from the selected prefix. Raw usage and observed wall time are saved; logical estimated cost is not an actual provider bill and cannot include unreported usage from failed requests. Do not extrapolate missing proposals after a provider error, and do not describe these policy replays as independent replicate runs.
+### 네 쪽 원고의 결과표
 
-### Metrics and denominators
+원고에는 카테고리별 테스트 결과, 공통 한도에서 여섯 방법의 정확도·비용 비교, 개발 한도 선택 표를 둡니다. 더 자세한 조건부 인자 정확도, 오수락·오거절, 수정·퇴행 등은 결과 파일에 보존합니다.
 
-Let `N` be all test requests, `C_i` the official correctness of the final candidate, and `A_i` the joint gate decision. Report every metric with the relevant sample count.
+측정하지 않은 셀은 `--`로 두고 API 실험 전이라는 점을 명시합니다. 실제 준비 과정에서 센 데이터 수는 기입할 수 있지만 모델 결과와 구분합니다. 실험 후에는 개선이 없거나 악화되더라도 그 결과에 맞게 abstract·논의·한계·결론을 수정해야 합니다.
 
-- **Final candidate correctness:** `sum(C_i)/N`, scoring the final prediction regardless of gate. This is the primary correction metric for always-last mode. Use official AST/equivalence or executable evaluation; name a custom local proxy as a proxy.
-- **Selection correctness:** compare function names and call multiplicities under the benchmark's task semantics; include correct empty call sets. State how unordered parallel calls are matched.
-- **Argument correctness conditional on correct selection:** correct argument assignments divided by cases with correct function selection, with denominator shown. Joint correctness must also be reported so this conditional metric cannot hide selection errors.
-- **Acceptance coverage:** `sum(A_i)/N`. For always-last mode distinguish this from execution coverage, which may remain 100% for valid proposals.
-- **Accepted precision:** `sum(A_i*C_i)/sum(A_i)`. Undefined when no examples are accepted; display `NA`, not zero.
-- **False acceptance among accepted:** `sum(A_i*(1-C_i))/sum(A_i)`, equal to one minus accepted precision. Explicitly distinguish from **false-positive rate among incorrect candidates**, `sum(A_i*(1-C_i))/sum(1-C_i)`.
-- **False rejection among correct candidates:** `sum((1-A_i)*C_i)/sum(C_i)`.
-- **Correction and regression:** among initially incorrect candidates, the fraction corrected by repair; among initially correct candidates, the fraction made incorrect. Also report unchanged and unresolved cases.
-- **Loop diagnostics:** mean/median and distribution of proposal counts, acceptance round, cap exhaustion, generator parse/schema failures, verifier errors, and no-call accuracy on irrelevance cases.
-- **Efficiency:** end-to-end request latency (median and p95), separately timed generator/verifier network calls, actual input/output tokens, and estimated cost with dated prices. Include retries and normal network time; state concurrency. Separate cached replay from live timing.
-- **Calibration (optional diagnostic):** Brier score or reliability bins for each check on labeled held-out candidates. Do not call the two judgments statistically independent merely because they are separate questions, or multiply probabilities without testing that assumption.
+## 서지 정보 주의점
 
-Use paired differences on the same test examples with a 95% paired bootstrap confidence interval (fixed bootstrap seed and iteration count) for the principal direct-versus-joint comparison. Bootstrap examples rather than individual tool calls when a request has multiple calls. If several generator seeds are used, show across-run dispersion and consider a hierarchical bootstrap or report each run separately. Avoid claiming significance from overlapping/non-overlapping unpaired intervals alone.
-
-### Results tables to reserve in the four-page draft
-
-1. **Main comparison:** method, final correctness, selection correctness, conditional argument correctness, acceptance/coverage, false acceptance, mean proposals, latency, estimated cost. Split into two compact tables if necessary.
-2. **Ablation:** check configuration and cap, joint correctness, corrected initial errors, regressions, cap-exhaustion rate.
-3. **Category breakdown:** exact included BFCL category names, `N`, direct correctness, joint correctness, paired difference (CI).
-
-Every unmeasured result cell should be `--`/`pending`; the caption must say that no benchmark runs have yet been performed. Counts that are actually computed during dataset preparation may be filled, clearly distinguished from model results. The abstract and conclusion should state the proposed protocol and evaluation questions, without anticipating improvements. After execution, revise the abstract, experimental discussion, limitations, and conclusion to reflect the measured result even if the intervention fails to improve accuracy.
-
-## Metadata cautions
-
-- BFCL's website citation has an awkward author ordering/format; this bibliography follows the archival PMLR record.
-- Reflexion's current arXiv record lists an additional author relative to the NeurIPS proceedings. This bibliography cites the archival NeurIPS paper and its five listed authors consistently.
-- ToolVerifier and ToolCritic entries are explicitly preprints because no publication venue was established from the primary records used here.
-- ToolVerifier refers to a benchmark also called ToolBench. Its four evaluated API domains are weather, booking, home, and cat; do not conflate these with OpenBMB's 16,000-API ToolBench merely because the names match.
-- The Jev model alias and provider cookbooks can change. The experiment must save immutable configuration and retrieval dates and should pin the stable model ID.
+- BFCL 저자 순서는 웹사이트의 축약 표기가 아닌 PMLR 학회판을 따릅니다.
+- Reflexion은 현재 arXiv와 NeurIPS 학회판의 저자 수가 다릅니다. 여기서는 학회판의 다섯 저자를 일관되게 사용합니다.
+- ToolVerifier와 ToolCritic은 확인한 원본에서 학회가 확정되지 않아 프리프린트로 인용합니다.
+- ToolVerifier의 ToolBench는 weather·booking·home·cat 네 API 영역을 다룹니다. 이름이 같아도 OpenBMB의 16,000개 API ToolBench와 동일시하지 않습니다.
+- Jev 버전 별칭과 공식 예제는 변할 수 있습니다. 조회 날짜와 고정 모델, 프롬프트 및 실행 설정을 보존합니다.

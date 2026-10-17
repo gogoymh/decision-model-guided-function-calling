@@ -157,3 +157,31 @@ def test_function_only_feedback_does_not_leak_other_semantic_check(example):
     assert "arguments_probability" not in feedback
     assert "arguments_pass" not in feedback
     assert feedback["function_pass"] is False
+
+
+@pytest.mark.parametrize("budget", [0, 4, 5, 8])
+def test_arbitrary_nonnegative_budget_keeps_one_final_dispatch(example, budget):
+    generator = Generator([proposal()] * (budget + 1))
+    executions = []
+    verifier = Verifier([(False, False)] * (budget + 1), executions)
+    result = run_example(example, generator, verifier, max_repairs=budget, executor=executions.append)
+    assert len(generator.seen) == len(verifier.seen) == budget + 1
+    assert result["repairs"] == budget and result["exhausted"]
+    assert executions == [result["calls"]]
+
+
+def test_large_budget_still_stops_at_first_joint_pass(example):
+    generator = Generator([proposal(), proposal()])
+    executions = []
+    result = run_example(example, generator, Verifier([(False, True), (True, True)], executions),
+                         max_repairs=20, executor=executions.append)
+    assert result["repairs"] == 1 and not result["exhausted"]
+    assert len(generator.seen) == 2 and executions == [result["calls"]]
+
+
+@pytest.mark.parametrize("budget", [-1, True, False, 1.0, 2.5, None, "3", float("inf"), float("nan")])
+def test_invalid_budget_is_rejected_before_generation(example, budget):
+    generator = Generator([])
+    with pytest.raises(ValueError, match="nonnegative integer"):
+        run_example(example, generator, Verifier([]), max_repairs=budget)
+    assert generator.seen == []

@@ -31,8 +31,8 @@ def run_example(
     """
     if method not in METHODS:
         raise ValueError(f"Unknown method: {method}")
-    if not 0 <= max_repairs <= 3:
-        raise ValueError("max_repairs must be between 0 and 3 inclusive")
+    if isinstance(max_repairs, bool) or not isinstance(max_repairs, int) or max_repairs < 0:
+        raise ValueError("max_repairs must be a nonnegative integer")
     if exhaustion_policy not in {"execute_last", "abstain"}:
         raise ValueError("exhaustion_policy must be execute_last or abstain")
     if method.startswith("jev_") and verifier is None:
