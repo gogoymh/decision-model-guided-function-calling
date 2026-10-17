@@ -1,8 +1,10 @@
+import json
 from copy import deepcopy
 
+import httpx
 import pytest
 
-from jev_fc.jev import JevAPIError
+from jev_fc.jev import JevAPIError, JevVerifier
 from jev_fc.pipeline import run_example
 
 
@@ -204,6 +206,27 @@ def test_function_only_feedback_does_not_leak_other_semantic_check(example):
     assert "arguments_probability" not in feedback
     assert "arguments_pass" not in feedback
     assert feedback["function_pass"] is False
+
+
+def test_single_check_ablations_reuse_joint_feedback_without_hidden_check(example):
+    def handler(request):
+        questions = json.loads(request.content)["questions"]
+        return httpx.Response(200, json={"model": "jev-1.13.0",
+                                         "answers": {key: {"type": "noul", "noul": 0.1} for key in questions},
+                                         "usage": {"input_tokens": 10, "output_tokens": 1}})
+
+    feedback = {}
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        verifier = JevVerifier("test-key", gateway="direct", client=client)
+        for method in ("jev_joint", "jev_function", "jev_arguments"):
+            result = run_example(example, Generator([proposal()]), verifier, method=method, max_repairs=0)
+            feedback[method] = result["trace"][0]["feedback"]
+    joint = feedback["jev_joint"]
+    assert set(joint["checks"]) == {"function_selection", "arguments"}
+    for method, kept in (("jev_function", "function_selection"), ("jev_arguments", "arguments")):
+        # Same source, schema errors, thresholds and instruction; only the hidden verdict is removed.
+        assert feedback[method] == {**joint, "checks": {kept: joint["checks"][kept]}, "failed_checks": [kept]}
+        assert feedback[method]["checks"][kept]["threshold"] == 0.8
 
 
 @pytest.mark.parametrize("budget", [0, 4, 5, 8])

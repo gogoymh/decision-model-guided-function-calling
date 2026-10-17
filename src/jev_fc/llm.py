@@ -46,6 +46,13 @@ def _count(value):
     return value
 
 
+def _wait(delay):
+    """Sleep before a retry and return the measured wait, kept out of API time."""
+    started = time.perf_counter()
+    time.sleep(delay)
+    return time.perf_counter() - started
+
+
 def _normalized_usage(raw, style):
     """Canonical counts plus preserved provider cache-write fields.
 
@@ -230,6 +237,11 @@ class FunctionCallingLLM:
                        "max_completion_tokens": self.max_completion_tokens}
             if self.reasoning_effort:
                 payload["reasoning_effort"] = self.reasoning_effort
+        if not functions:
+            # Some BFCL irrelevance cases offer no functions. Their requests carry
+            # no tool settings instead of an empty tool list.
+            for key in ("tools", "tool_choice", "parallel_tool_calls"):
+                payload.pop(key, None)
         if self.temperature is not None:
             payload["temperature"] = self.temperature
         return payload
@@ -327,6 +339,7 @@ class FunctionCallingLLM:
     def _generate_payload(self, payload):
         start = time.perf_counter()
         attempts = 0
+        waited = 0.0
         for attempt in range(self.max_retries + 1):
             attempts += 1
             try:
@@ -339,7 +352,7 @@ class FunctionCallingLLM:
             except httpx.TransportError as exc:
                 if attempt == self.max_retries:
                     raise LLMAPIError(f"LLM transport failed after {attempts} attempts ({type(exc).__name__}).", attempts=attempts) from None
-                time.sleep(min(2**attempt, 8))
+                waited += _wait(min(2**attempt, 8))
                 continue
             if response.status_code in {408, 429} or response.status_code >= 500:
                 if attempt < self.max_retries:
@@ -347,7 +360,7 @@ class FunctionCallingLLM:
                         delay = float(response.headers.get("retry-after", 2**attempt))
                     except ValueError:
                         delay = 2**attempt
-                    time.sleep(max(0, min(delay, 30)) if math.isfinite(delay) else min(2**attempt, 30))
+                    waited += _wait(max(0, min(delay, 30)) if math.isfinite(delay) else min(2**attempt, 30))
                     continue
             if not response.is_success:
                 raise LLMAPIError(f"LLM HTTP {response.status_code}; check model access, endpoint and request settings.",
@@ -368,7 +381,8 @@ class FunctionCallingLLM:
                 "requested_model": self.model,
                 "usage": usage,
                 "raw_usage": deepcopy(data.get("usage")),
-                "latency_s": time.perf_counter() - start,
+                "latency_s": max(0.0, time.perf_counter() - start - waited),
+                "retry_wait_s": waited,
                 "api_calls": attempts,
                 "gateway": self.gateway,
                 "api_style": self.api_style,

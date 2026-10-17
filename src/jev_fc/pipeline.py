@@ -9,6 +9,27 @@ from typing import Callable
 from .jev import validate_calls
 
 METHODS = ("direct", "schema_only", "self_refine", "jev_function", "jev_arguments", "jev_joint", "jev_joint_latest")
+# Names of the two semantic checks in JevVerifier feedback records.
+_CHECK_RECORDS = {"function": "function_selection", "arguments": "arguments"}
+
+
+def _single_check_feedback(feedback: dict, keep: str) -> dict:
+    """Return jev_joint's feedback record without the other semantic check.
+
+    The function-only and argument-only ablations keep the same source, schema
+    errors, thresholds and repair instruction, so they differ from JBFC only in
+    which Jev verdict is shown and required.
+    """
+    hidden = "arguments" if keep == "function" else "function"
+    result = deepcopy(feedback)
+    if isinstance(result.get("checks"), dict):
+        result["checks"] = {name: value for name, value in result["checks"].items()
+                            if name != _CHECK_RECORDS[hidden]}
+    if isinstance(result.get("failed_checks"), list):
+        result["failed_checks"] = [name for name in result["failed_checks"] if name != _CHECK_RECORDS[hidden]]
+    for key in [key for key in result if key.startswith(hidden + "_")]:
+        del result[key]
+    return result
 
 
 def run_example(
@@ -29,6 +50,8 @@ def run_example(
     measured cost. No learned critic is used for schema_only/self_refine.
     jev_joint_latest sends only the last rejected record to the generator;
     its complete trace and all other joint-verification rules are unchanged.
+    jev_function and jev_arguments receive jev_joint's feedback record without
+    the semantic check they neither expose nor require.
     Benchmark mode leaves executor=None and records a simulated dispatch.
     """
     if method not in METHODS:
@@ -57,15 +80,10 @@ def run_example(
             check = verifier.verify(public, calls)
             if method == "jev_function":
                 accepted = local["accepted"] and check["function_pass"]
-                feedback = {"function_pass": check["function_pass"], "function_probability": check.get("function_probability"),
-                            "structural_errors": local["errors"],
-                            "instruction": "Reconsider whether the chosen function (or no-call decision) satisfies the request."}
+                feedback = _single_check_feedback(check["feedback"], keep="function")
             elif method == "jev_arguments":
                 accepted = bool(local["accepted"] and (check["arguments_skipped"] or check["arguments_pass"]))
-                feedback = {"arguments_pass": check["arguments_pass"], "arguments_probability": check.get("arguments_probability"),
-                            "arguments_skipped": check["arguments_skipped"],
-                            "structural_errors": local["errors"],
-                            "instruction": "Reconsider the values, required arguments and constraints of the proposed call."}
+                feedback = _single_check_feedback(check["feedback"], keep="arguments")
             else:
                 accepted = bool(local["accepted"] and check["function_pass"]
                                 and (check["arguments_skipped"] or check["arguments_pass"]))

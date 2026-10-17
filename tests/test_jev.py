@@ -1,11 +1,12 @@
 """Wire-contract and acceptance-policy tests; all HTTP requests are mocked."""
 
 import json
+import time
 
 import httpx
 import pytest
 
-from jev_fc.jev import JevAPIError, JevVerifier, validate_calls
+from jev_fc.jev import FUNCTION_QUESTION, JevAPIError, JevVerifier, validate_calls
 
 
 @pytest.fixture(autouse=True)
@@ -170,7 +171,7 @@ def test_malformed_calls_reject_locally_without_network(example, calls):
     assert result["function_probability"] is None
 
 
-@pytest.mark.parametrize("arguments", [{}, {"city": "Seoul", "invented": 1}, {"city": "Seoul", "days": True}, {"city": "Seoul", "days": 0}])
+@pytest.mark.parametrize("arguments", [{}, {"city": "Seoul", "invented": 1}, {"city": "Seoul", "days": True}, {"city": 3}])
 def test_structural_argument_errors(example, arguments):
     result = validate_calls(example, [{"name": "weather", "arguments": arguments}])
     assert result["function_pass"] is True
@@ -181,6 +182,70 @@ def test_unknown_function_is_not_available(example):
     result = validate_calls(example, [{"name": "invented", "arguments": {}}])
     assert result["function_pass"] is False
     assert result["arguments_pass"] is False
+
+
+def test_local_check_covers_required_names_and_types_not_value_constraints():
+    example = {"tools": [{"type": "function", "function": {"name": "book", "description": "", "parameters": {
+        "type": "object",
+        "properties": {
+            "genre": {"type": "string", "enum": ["Horror", "Comedy"]},
+            "rooms": {"type": "integer", "minimum": 1},
+            "metrics": {"type": "array", "enum": ["view", "trust"], "items": {"type": "string"}},
+            "start": {"type": "string", "default": None},
+            "end": {"type": "string"},
+            "filters": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]},
+        },
+        "required": ["genre"],
+    }}}]}
+
+    def check(arguments):
+        return validate_calls(example, [{"name": "book", "arguments": arguments}])
+
+    # Values outside enum or ranges are semantic questions for Jev, not local type errors.
+    # A BFCL array-level enum cannot constrain an array, and a declared null default is admissible.
+    passed = check({"genre": "Any", "rooms": 0, "metrics": ["view"], "start": None, "filters": {"city": "Seoul"}})
+    assert passed["accepted"] is True and passed["errors"] == []
+    for arguments in ({"genre": True}, {"genre": "Any", "rooms": "2"}, {"genre": "Any", "end": None},
+                      {"genre": "Any", "metrics": "view"}, {"rooms": 1}, {"genre": "Any", "extra": 1},
+                      {"genre": "Any", "filters": {}}):
+        result = check(arguments)
+        assert result["function_pass"] is True and result["arguments_pass"] is False, arguments
+
+
+def test_type_only_schema_keeps_alternatives_nesting_and_closed_objects():
+    from jev_fc.jev import _type_schema
+
+    parameters = {"type": "object", "additionalProperties": False, "required": ["x"], "properties": {
+        "x": {"oneOf": [{"type": "string", "enum": ["a"]}, {"type": "string", "maxLength": 1}]}}}
+    assert _type_schema(parameters) == {"type": "object", "additionalProperties": False, "required": ["x"],
+                                        "properties": {"x": {"allOf": [{"anyOf": [{"type": "string"}, {"type": "string"}]}]}}}
+    example = {"tools": [{"type": "function", "function": {"name": "f", "description": "", "parameters": parameters}}]}
+    assert validate_calls(example, [{"name": "f", "arguments": {"x": "abc"}}])["accepted"] is True
+    for arguments in ({"x": 3}, {}, {"x": "a", "y": 1}):
+        assert validate_calls(example, [{"name": "f", "arguments": arguments}])["accepted"] is False, arguments
+
+
+def test_function_question_matches_single_call_or_no_call_scope():
+    text = FUNCTION_QUESTION["instructions"]
+    assert "at most one function call" in text and "no call" in text
+    assert "Multiple calls" not in text
+    assert "more than one call" in FUNCTION_QUESTION["criteria"]["false"]
+
+
+def test_retry_wait_is_recorded_separately_from_api_time(example):
+    attempts = []
+
+    def handler(request):
+        attempts.append(request)
+        if len(attempts) == 1:
+            return httpx.Response(429, headers={"Retry-After": "0"})
+        return httpx.Response(200, json=wire_reply())
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = JevVerifier("test-key", client=client, sleep=lambda _: time.sleep(0.05)).verify(example, [])
+    assert result["api_calls"] == 2
+    assert result["retry_wait_s"] >= 0.04
+    assert 0 <= result["latency_s"] < result["retry_wait_s"]
 
 
 def test_explicit_open_keyword_schema_respected(example):

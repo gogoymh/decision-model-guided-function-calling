@@ -85,6 +85,48 @@ def test_skipped_no_call_arguments_do_not_become_brier_observations():
 PRICES = {"llm_input": .75, "llm_output": 4.5, "llm_cached_input": .075, "jev_input": .042}
 
 
+def repaired(name, initial_calls, final_calls, initial_score, final_score):
+    row = record(name, correct=final_score["correct"])
+    first = deepcopy(row["trace"][0])
+    first["proposal"]["calls"] = initial_calls
+    first["score"] = initial_score
+    last = deepcopy(first)
+    last.update(attempt=1, score=final_score)
+    last["proposal"]["calls"] = final_calls
+    row.update(trace=[first, last], score=final_score, repairs=1)
+    row["accounting"] = token_cost(row, PRICES)
+    return row
+
+
+def test_initial_to_final_transitions_tokens_and_gate_denominators_are_reported():
+    right = {"correct": True, "function_correct": True, "arguments_correct": True}
+    wrong_function = {"correct": False, "function_correct": False, "arguments_correct": None}
+    wrong_arguments = {"correct": False, "function_correct": True, "arguments_correct": False}
+    calls = [{"name": "fixture_function", "arguments": {}}]
+    other = [{"name": "other_function", "arguments": {}}]
+    rows = [repaired("function_fix", other, calls, wrong_function, right),
+            repaired("argument_fix", calls, calls, wrong_arguments, right),
+            repaired("regression", calls, other, right, wrong_function)]
+    metrics = summarize_group(rows)
+    assert metrics["function_change_rate"] == pytest.approx(2 / 3)
+    assert metrics["function_transition_n"] == 3
+    assert metrics["function_fix_rate"] == pytest.approx(1 / 3)
+    assert metrics["function_regression_rate"] == pytest.approx(1 / 3)
+    assert metrics["argument_transition_n"] == 1 and metrics["argument_fix_rate"] == 1
+    assert metrics["argument_regression_rate"] == 0
+    assert (metrics["accepted_n"], metrics["gate_correct_n"], metrics["gate_incorrect_n"]) == (3, 2, 1)
+    assert metrics["token_observed_n"] == 3
+    assert metrics["mean_llm_input_tokens"] == 20 and metrics["mean_llm_output_tokens"] == 4
+    assert metrics["mean_jev_input_tokens"] == 10
+
+    unknown = deepcopy(rows[0])
+    unknown["trace"][1]["proposal"]["usage"] = {}
+    unknown["accounting"] = token_cost(unknown, PRICES)
+    assert unknown["accounting"]["tokens_complete"] is False
+    partial = summarize_group([rows[1], unknown])
+    assert partial["token_observed_n"] == 1 and partial["mean_llm_input_tokens"] is None
+
+
 def test_missing_usage_never_means_free_inference():
     row = record()
     row["trace"][0]["verification"]["usage"]["input_tokens"] = None
@@ -453,6 +495,16 @@ def test_main_table_does_not_invent_a_selected_limit():
     assert "chosen on development data" in table
     assert "$r=" not in table
     assert r"\textbf{JBFC-L} & -- & -- & -- & -- & --" in table
+
+
+def test_main_table_lists_jbfc_last_below_its_variants():
+    from jev_fc.pipeline import METHODS
+    from jev_fc.reporting import TABLE_METHOD_ORDER
+
+    assert sorted(TABLE_METHOD_ORDER) == sorted(METHODS)
+    rows = [line.split(" & ")[0] for line in latex_table().splitlines() if " & " in line][1:]
+    assert rows == ["Direct", "Schema repair", "Self-refine", r"\textbf{JBFC-F}", r"\textbf{JBFC-A}",
+                    r"\textbf{JBFC-L}", r"\textbf{JBFC}"]
 
 
 def test_raw_test_manifest_without_selection_cannot_match_paper():

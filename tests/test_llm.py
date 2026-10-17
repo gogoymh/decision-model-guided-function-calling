@@ -1,4 +1,5 @@
 import json
+import time
 from copy import deepcopy
 
 import httpx
@@ -54,6 +55,34 @@ def test_native_calls_and_feedback_without_fake_execution_or_oracles(example):
     assert "NOT executed" in observed[0]["messages"][-2]["content"]
     assert observed[0]["messages"][-1]["content"] == example["messages"][0]["content"]
     assert result["api_calls"] == 1
+
+
+@pytest.mark.parametrize("style", ["responses", "chat_completions", "anthropic_messages"])
+def test_request_without_functions_omits_tool_settings(example, style):
+    model = "claude-test-model" if style == "anthropic_messages" else None
+    generator = FunctionCallingLLM("test-key", model=model, api_style=style)
+    try:
+        payload = generator._payload({**example, "tools": []}, None)
+        assert not {"tools", "tool_choice", "parallel_tool_calls"} & set(payload)
+        assert generator._payload(example, None)["tools"]
+    finally:
+        generator.close()
+
+
+def test_retry_wait_is_recorded_separately_from_api_time(example, monkeypatch):
+    original_sleep = time.sleep
+    monkeypatch.setattr("jev_fc.llm.time.sleep", lambda _: original_sleep(0.05))
+    observed = []
+
+    def handler(request):
+        observed.append(request)
+        return httpx.Response(429, headers={"Retry-After": "0"}) if len(observed) == 1 else httpx.Response(200, json=response())
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = FunctionCallingLLM("test-key", client=client).generate(example)
+    assert result["api_calls"] == 2
+    assert result["retry_wait_s"] >= 0.04
+    assert 0 <= result["latency_s"] < result["retry_wait_s"]
 
 
 def test_malformed_argument_json_is_repairable_proposal(example):

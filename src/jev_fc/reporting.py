@@ -17,6 +17,9 @@ from .pipeline import METHODS
 LABELS = {"direct": "Direct", "schema_only": "Schema repair", "self_refine": "Self-refine",
           "jev_function": "JBFC-F", "jev_arguments": "JBFC-A", "jev_joint": "JBFC",
           "jev_joint_latest": "JBFC-L"}
+# Table 2 lists the baselines, then the JBFC variants, with JBFC itself in the last row.
+TABLE_METHOD_ORDER = ("direct", "schema_only", "self_refine", "jev_function", "jev_arguments",
+                      "jev_joint_latest", "jev_joint")
 
 PAPER_SETTINGS = {
     "replicates": 3, "threshold": .8,
@@ -86,13 +89,13 @@ def token_cost(record, prices):
     result = dict(llm_input=0, llm_cached_input=0, llm_cache_write_5m=0,
                   llm_cache_write_1h=0, llm_cache_write_unknown=0,
                   llm_output=0, jev_input=0, estimated_usd=0.)
-    complete = True
+    complete = tokens_complete = True
     for step in record["trace"]:
         usage = step["proposal"].get("usage") or {}
         input_tokens = usage.get("prompt_tokens", usage.get("input_tokens"))
         output_tokens = usage.get("completion_tokens", usage.get("output_tokens"))
         if input_tokens is None or output_tokens is None:
-            complete = False
+            complete = tokens_complete = False
         result["llm_input"] += input_tokens or 0
         result["llm_output"] += output_tokens or 0
         details = usage.get("prompt_tokens_details") or usage.get("input_tokens_details") or {}
@@ -111,7 +114,7 @@ def token_cost(record, prices):
         verification = step["verification"]
         jev_input = (verification.get("usage") or {}).get("input_tokens")
         if verification.get("api_calls", 0) > 0 and jev_input is None:
-            complete = False
+            complete = tokens_complete = False
         result["jev_input"] += jev_input or 0
     uncached = (result["llm_input"] - result["llm_cached_input"] - result["llm_cache_write_5m"]
                 - result["llm_cache_write_1h"] - result["llm_cache_write_unknown"])
@@ -128,6 +131,7 @@ def token_cost(record, prices):
         elif count:
             result["estimated_usd"] += count * rate / 1_000_000
     result["complete"] = complete
+    result["tokens_complete"] = tokens_complete
     if not complete:
         result["estimated_usd"] = None
     return result
@@ -157,6 +161,27 @@ def summarize_group(rows):
             brier_function.append((check["function_probability"] - int(score["function_correct"]))**2)
         if score.get("arguments_correct") is not None and check.get("arguments_probability") is not None:
             brier_arguments.append((check["arguments_probability"] - int(score["arguments_correct"]))**2)
+    # Token use is reported only when every record's usage is known.
+    accounting = [r.get("accounting") or {} for r in rows]
+    token_rows = [a for a in accounting if a.get("tokens_complete", a.get("complete", False))]
+    tokens_known = bool(rows) and len(token_rows) == len(rows)
+
+    def token_mean(name):
+        return avg([a.get(name) for a in token_rows]) if tokens_known else None
+
+    def names(calls):
+        if not isinstance(calls, list):
+            return None
+        return sorted(str(c.get("name")) if isinstance(c, dict) else "<invalid>" for c in calls)
+
+    # Initial-to-final transitions on the same records (function changes, fixes and new errors).
+    function_pairs = [(r["trace"][0].get("score", {}).get("function_correct"), r["score"].get("function_correct"))
+                      for r in exact]
+    function_pairs = [(a, b) for a, b in function_pairs if a is not None and b is not None]
+    argument_pairs = [(r["trace"][0].get("score", {}).get("arguments_correct"), r["score"].get("arguments_correct"))
+                      for r in exact if r["trace"][0].get("score", {}).get("function_correct") is True
+                      and r["score"].get("function_correct") is True]
+    argument_pairs = [(a, b) for a, b in argument_pairs if a is not None and b is not None]
     return {
         "n": len(rows), "exact_n": len(exact),
         "accuracy": avg([int(r["score"]["correct"]) for r in exact]),
@@ -173,6 +198,7 @@ def summarize_group(rows):
         "selective_risk": avg([not r["score"]["correct"] for r in accepted]),
         "false_accept_rate": avg([r["accepted"] for r in wrong]),
         "false_reject_rate": avg([not r["accepted"] for r in right]),
+        "accepted_n": len(accepted), "gate_correct_n": len(right), "gate_incorrect_n": len(wrong),
         "mean_repairs": avg([r["repairs"] for r in rows]),
         "exhaustion_rate": avg([r["exhausted"] for r in rows]),
         "dispatch_rate": avg([r["dispatched"] for r in rows]),
@@ -189,6 +215,19 @@ def summarize_group(rows):
         "verified_candidates_n": len(verifications),
         "initial_wrong_final_right": avg([not r["trace"][0]["score"]["correct"] and r["score"]["correct"] for r in exact]),
         "initial_right_final_wrong": avg([r["trace"][0]["score"]["correct"] and not r["score"]["correct"] for r in exact]),
+        "function_change_rate": avg([names(r["trace"][0]["proposal"].get("calls"))
+                                     != names(r["trace"][-1]["proposal"].get("calls")) for r in exact]),
+        "function_transition_n": len(function_pairs),
+        "function_fix_rate": avg([not a and b for a, b in function_pairs]),
+        "function_regression_rate": avg([a and not b for a, b in function_pairs]),
+        "argument_transition_n": len(argument_pairs),
+        "argument_fix_rate": avg([not a and b for a, b in argument_pairs]),
+        "argument_regression_rate": avg([a and not b for a, b in argument_pairs]),
+        "token_observed_n": len(token_rows),
+        "mean_llm_input_tokens": token_mean("llm_input"),
+        "mean_llm_cached_input_tokens": token_mean("llm_cached_input"),
+        "mean_llm_output_tokens": token_mean("llm_output"),
+        "mean_jev_input_tokens": token_mean("jev_input"),
     }
 
 
@@ -413,7 +452,7 @@ def latex_table(summary=None):
         return "--" if value is None else f"{value * scale:.{precision}f}"
     lines = [r"\begin{table}[t]", r"\centering\small", r"\setlength{\tabcolsep}{2.7pt}",
              r"\begin{tabular}{lrrrrr}", r"\toprule", r"Method & Call & Func. & Args. & Sec. & USD/1k \\", r"\midrule"]
-    for method in METHODS:
+    for method in TABLE_METHOD_ORDER:
         values = (summary or {}).get("methods", {}).get(method, {})
         label = LABELS[method]
         if label.startswith("JBFC"):

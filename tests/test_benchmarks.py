@@ -11,6 +11,8 @@ import pytest
 from jev_fc.benchmarks import (
     BFCL_REVISION,
     KNOWN_ANNOTATION_ISSUES,
+    PRESENCE_CATEGORIES,
+    SCHEMA_TYPE_CONFLICTS,
     _fetch_verified,
     json_schema,
     load_examples,
@@ -19,6 +21,7 @@ from jev_fc.benchmarks import (
     public_example,
     stratified_split,
 )
+from jev_fc.jev import validate_calls
 from jev_fc.scoring import canonical_calls, load_official_checker, score_example
 
 
@@ -222,6 +225,34 @@ def test_prepared_manifest_counts_and_split_if_available():
     assert len(dev) + len(test) == len(rows)
 
 
+def _dictionary_candidate(alternatives):
+    return {key: next((x for x in values if x != ""), []) for key, values in alternatives.items() if "" not in values}
+
+
+def _gold_candidate_calls(row):
+    """One reference call per labelled row, omitting optional parameters that may be absent."""
+    functions = {f["name"]: f for f in row["bfcl_functions"]}
+    aliases = {original: alias for alias, original in row["name_map"].items()}
+    calls = []
+    for truth in row["ground_truth"]:
+        name, parameters = next(iter(truth.items()))
+        schema = functions[name]["parameters"]
+        arguments = {}
+        for parameter, choices in parameters.items():
+            if parameter not in schema["required"] and "" in choices:
+                continue
+            value = next((x for x in choices if x != ""), choices[0] if choices else [])
+            parameter_schema = schema["properties"].get(parameter, {})
+            kind = parameter_schema.get("type")
+            if kind == "dict" and isinstance(value, dict):
+                value = _dictionary_candidate(value)
+            if kind in {"array", "tuple"} and parameter_schema.get("items", {}).get("type") == "dict" and isinstance(value, list):
+                value = [_dictionary_candidate(item) for item in value]
+            arguments[parameter] = value
+        calls.append({"name": aliases[name], "arguments": arguments})
+    return calls
+
+
 def test_all_prepared_gold_candidates_have_only_prespecified_source_anomalies(checker_path):
     from jsonschema import Draft202012Validator
 
@@ -231,34 +262,31 @@ def test_all_prepared_gold_candidates_have_only_prespecified_source_anomalies(ch
     rows = load_examples(directory)
     observed_failures = set()
     present_ids = {row["id"] for row in rows}
-
-    def dictionary_candidate(alternatives):
-        return {key: next((x for x in values if x != ""), []) for key, values in alternatives.items() if "" not in values}
-
     for row in rows:
         for tool in row["tools"]:
             Draft202012Validator.check_schema(tool["function"]["parameters"])
         if row["category"] in {"irrelevance", "live_irrelevance", "live_relevance"}:
             continue
-        functions = {f["name"]: f for f in row["bfcl_functions"]}
-        aliases = {original: alias for alias, original in row["name_map"].items()}
-        calls = []
-        for truth in row["ground_truth"]:
-            name, parameters = next(iter(truth.items()))
-            schema = functions[name]["parameters"]
-            arguments = {}
-            for parameter, choices in parameters.items():
-                if parameter not in schema["required"] and "" in choices:
-                    continue
-                value = next((x for x in choices if x != ""), choices[0] if choices else [])
-                parameter_schema = schema["properties"].get(parameter, {})
-                kind = parameter_schema.get("type")
-                if kind == "dict" and isinstance(value, dict):
-                    value = dictionary_candidate(value)
-                if kind in {"array", "tuple"} and parameter_schema.get("items", {}).get("type") == "dict" and isinstance(value, list):
-                    value = [dictionary_candidate(item) for item in value]
-                arguments[parameter] = value
-            calls.append({"name": aliases[name], "arguments": arguments})
-        if not score_example(row, calls, checker_path)["correct"]:
+        if not score_example(row, _gold_candidate_calls(row), checker_path)["correct"]:
             observed_failures.add(row["id"])
     assert observed_failures == present_ids.intersection(KNOWN_ANNOTATION_ISSUES)
+
+
+def test_local_check_accepts_every_scorable_gold_candidate_except_documented_type_conflicts(checker_path):
+    directory = checker_path.parent.parent
+    if not (directory / "examples.jsonl").exists():
+        pytest.skip("Prepared BFCL data not present")
+    assert not set(SCHEMA_TYPE_CONFLICTS) & set(KNOWN_ANNOTATION_ISSUES)
+    rows = load_examples(directory)
+    rejected = {}
+    for row in rows:
+        if row["category"] in PRESENCE_CATEGORIES or row["id"] in KNOWN_ANNOTATION_ISSUES:
+            continue
+        calls = _gold_candidate_calls(row)
+        local = validate_calls(row, calls)
+        if not local["accepted"]:
+            rejected[row["id"]] = local["errors"]
+            # The checker accepts only a reference value whose type contradicts the schema.
+            assert score_example(row, calls, checker_path)["correct"] is True
+    assert set(rejected) == {row["id"] for row in rows}.intersection(SCHEMA_TYPE_CONFLICTS)
+    assert all("is not of type" in error["message"] for errors in rejected.values() for error in errors)

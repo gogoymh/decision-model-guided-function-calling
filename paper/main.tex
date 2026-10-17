@@ -191,7 +191,7 @@ When a proposal passes all applicable checks, we return it. If the repair limit 
 
 \section{Experiments}
 \subsection{Data and Evaluation}
-We prepare 3,051 BFCL examples from seven categories at repository revision \texttt{6ea57973c7a6}\footnote{Full revision: \nolinkurl{6ea57973c7a6097fd7c5915698c54c17c5b1b6c8}. The saved setup file lists source URLs, file hashes, format changes, and example IDs.}. Table~\ref{tab:categories} shows downloaded and test counts. We sort each category by the SHA-256 hash of \texttt{seed:id}. The first $\max(1,\lfloor0.1N_k\rfloor)$ examples form the development set; $N_k$ is the category size. Seed 1729 gives 303 development and 2,748 test examples. Model experiments have not been run.
+We prepare 3,051 BFCL examples from seven categories at repository revision \texttt{6ea57973c7a6}\footnote{Full revision: \nolinkurl{6ea57973c7a6097fd7c5915698c54c17c5b1b6c8}. The saved setup file lists source URLs, file hashes, and format changes; the hashed split files list the example IDs.}. Table~\ref{tab:categories} shows downloaded and test counts. We sort each category by the SHA-256 hash of \texttt{seed:id}. The first $\max(1,\lfloor0.1N_k\rfloor)$ examples form the development set; $N_k$ is the category size. Seed 1729 gives 303 development and 2,748 test examples. Model experiments have not been run.
 
 % BEGIN AUTO CATEGORIES
 \begin{table}[t]
@@ -217,14 +217,14 @@ Total & 3051 & 2748 & -- & --\\
 \end{table}
 % END AUTO CATEGORIES
 
-For categories with reference calls, the original Python abstract syntax tree (AST) checker tests function names and arguments against allowed answers. Irrelevance categories require no call. Live relevance checks only call presence, not function or argument correctness. We exclude it from main accuracy and verifier calibration that needs those labels. The main score covers 2,733 test examples per repeated run. We report category accuracy and a micro-average, which weights examples equally. Category scores show what the larger live categories may hide in the average.
+For categories with reference calls, the original Python abstract syntax tree (AST) checker tests function names and arguments against allowed answers. Irrelevance categories require no call. Live relevance checks only call presence, not function or argument correctness. We exclude it from main accuracy and from Brier scores, which need those labels. The main score covers 2,733 test examples per repeated run. We report category accuracy and a micro-average, which weights examples equally. Category scores show what the larger live categories may hide in the average.
 
 BFCL's ``multiple'' categories offer several functions to choose from, without parallel calls. We exclude parallel calls, multi-turn state, web search, memory, and live execution. ``Live'' is a category name. AST checks compare call structure with annotated alternatives; passing them does not prove execution success, authorization, or task completion.
 
 \subsection{Models and Methods}
-The generator is \texttt{gpt-5.4-mini-2026-03-17}, with reasoning effort \texttt{none}; \textit{Jev} is pinned to \texttt{jev-1.13.0}. We use OpenAI Responses and System One through an APIM gateway, preserve supplied schemas, and plan three repeated runs with fixed prompts. Models, thresholds, and prompts can be changed, but their selection must use development data before the test setup is frozen.
+The generator is \texttt{gpt-5.4-mini-2026-03-17}, with reasoning effort \texttt{none}; \textit{Jev} is pinned to \texttt{jev-1.13.0}. We use OpenAI Responses and System One through an APIM gateway, convert BFCL schemas to JSON Schema with API-safe function names, and plan three repeated runs with fixed prompts. Models, thresholds, and prompts can be changed, but their selection must use development data before the test setup is frozen.
 
-We compare seven methods, sharing one initial proposal per example and run. \emph{Direct} uses the initial proposal; \emph{Schema-only} repairs schema errors. \emph{Self-refine} uses generic self-review, not the full Self-Refine method~\cite{madaan2023selfrefine}. \textbf{JBFC-F} and \textbf{JBFC-A} obtain applicable \texttt{Noul} judgments but expose and require only the function or argument verdict, plus schema checks. \textbf{JBFC-A} accepts no call on schema checks alone. \textbf{JBFC} requires all applicable checks. \textbf{JBFC-L} shares its settings and initial proposal but shows only the latest rejected proposal and feedback. Other repair methods show all earlier records before the request. Costs can differ.
+We compare seven methods, sharing one initial proposal per example and run. \emph{Direct} uses the initial proposal; \emph{Schema-only} repairs schema errors. \emph{Self-refine} uses generic self-review in all $r$ repairs, not the full Self-Refine method~\cite{madaan2023selfrefine}. \textbf{JBFC-F} and \textbf{JBFC-A} obtain applicable \texttt{Noul} judgments but expose and require only the function or argument verdict, plus schema checks. \textbf{JBFC-A} accepts no call on schema checks alone. \textbf{JBFC} requires all applicable checks. \textbf{JBFC-L} shares its settings and initial proposal but shows only the latest rejected proposal and feedback. Other repair methods show all earlier records before the request. Costs can differ.
 
 \paragraph{Choosing the repair limit.}
 We choose $r$ before testing. The initial candidates are $\mathcal{R}=\{0,1,2,3,4,5\}$, a configurable search range. \textbf{JBFC} has no built-in limit of five. In three development runs, we allow up to $\max\mathcal{R}$ repairs and stop early when all applicable checks pass. Neither model sees the limit, and no function runs during repair. Each smaller limit can therefore be tested on the same saved sequence without more API calls. \textit{Jev} thresholds stay at $0.8$ during this search.
@@ -248,8 +248,8 @@ Schema repair & -- & -- & -- & -- & -- \\
 Self-refine & -- & -- & -- & -- & -- \\
 \textbf{JBFC-F} & -- & -- & -- & -- & -- \\
 \textbf{JBFC-A} & -- & -- & -- & -- & -- \\
-\textbf{JBFC} & -- & -- & -- & -- & -- \\
 \textbf{JBFC-L} & -- & -- & -- & -- & -- \\
+\textbf{JBFC} & -- & -- & -- & -- & -- \\
 \bottomrule
 \end{tabular}
 \caption{Methods on the BFCL test set. The repair limit is chosen on development data. Call and function accuracy (\%) exclude live relevance. Argument accuracy (\%) uses calls with the correct function and argument labels. -- means unavailable or unrun.}
@@ -283,14 +283,14 @@ $5$ & -- & -- & -- & --\\
 \end{table}
 % END AUTO DIAGNOSTICS
 
-Reported costs count all recorded generation and verification work, with shared initial calls charged to each method. Growing history adds input tokens on later attempts, and these tokens count toward cost. We report mean and p95 time, token use, estimated cost, and per-run scores. Test costs exclude the development search. Missing usage or prices remain unavailable, not zero. Charges for failed requests may be missing. Default prices on October 15, 2026, per million tokens are \$0.75/\$0.075/\$4.50 for uncached/cached/output LLM tokens and \$0.042 for \textit{Jev} input, with free \textit{Jev} output; gateway fees are excluded.
+Reported costs count all recorded generation and verification work, with shared initial calls charged to each method. Growing history adds input tokens on later attempts, and these tokens count toward cost. We report mean and p95 API time without retry waits, token use, estimated cost, and per-run scores. Test costs exclude the development search. Missing usage or prices remain unavailable, not zero. Charges for failed requests may be missing. Default prices on October 15, 2026, per million tokens are \$0.75/\$0.075/\$4.50 for uncached/cached/output LLM tokens and \$0.042 for \textit{Jev} input, with free \textit{Jev} output; gateway fees are excluded.
 
 We compare repairs with Direct and \textbf{JBFC} with \textbf{JBFC-L}, matching examples, runs, and initial proposals. We average accuracy differences across runs per example, then bootstrap IDs 2,000 times with seed 1729 for 95\% intervals. Histories differ from repair 2; $r\leq1$ cannot test cumulative history. Tables~\ref{tab:main}--\ref{tab:diagnostics} remain unrun; partial or synthetic runs cannot fill them.
 
 \subsection{Study Limits}
 The verifier can accept a wrong call or share the generator's mistake. Repair can introduce errors, and later proposals may differ from development examples. Accumulated feedback can reinforce an earlier mistake or distract the LLM from the original request. The history also grows with each repair, increasing context use and cost. Binary verdicts do not explain how to fix an error. Higher acceptance alone does not show improvement.
 
-The study uses one model pair, mostly English requests, and single-turn calls. Public examples may overlap with training data. We keep four documented annotation inconsistencies in the main score. The candidate grid and small development set can affect the chosen repair limit. A common limit chosen for \textbf{JBFC} may disadvantage other methods. Further studies should tune each method separately and test more models and domains. API failures and incomplete runs remain visible. Conclusions must follow measured results, including no gain or worse performance.
+The study uses one model pair, mostly English requests, and single-turn calls. Public examples may overlap with training data. We keep ten documented annotation inconsistencies in the main score. In six, reference values contradict declared types, so schema-checked methods cannot accept a correct call. The candidate grid and small development set can affect the chosen repair limit. A common limit chosen for \textbf{JBFC} may disadvantage other methods. Further studies should tune each method separately and test more models and domains. API failures and incomplete runs remain visible. Conclusions must follow measured results, including no gain or worse performance.
 
 \section{Conclusion}
 \textbf{JBFC} uses \textit{Jev}'s function and argument judgments as accumulated prompt feedback. After a failed check, earlier proposals and judgments appear before the original user request, allowing the LLM to revise the complete call. A development-chosen repair limit bounds this process. The code separates correctness, acceptance, and cost. Experiments remain to be run; they will test whether this feedback improves function calling and whether the gains justify the added work.

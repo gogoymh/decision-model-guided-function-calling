@@ -33,6 +33,18 @@ KNOWN_ANNOTATION_ISSUES = {
     "live_multiple_862-181-3": "Ground-truth journey_start_time is absent from the selected function's parameter schema",
     "live_multiple_964-207-0": "Ground-truth question is absent from the selected function's parameter schema",
 }
+# Reference values whose JSON type contradicts the declared parameter type. The
+# pinned checker accepts only the reference type, so a call that satisfies the
+# declared types cannot be scored correct, and the reference call fails the local
+# type check. They stay in every denominator.
+SCHEMA_TYPE_CONFLICTS = {
+    "live_multiple_552-153-1": "Reference is_unisex is boolean true; the parameter is a string ('True', 'False', 'dontcare')",
+    "live_multiple_595-158-1": "Reference number_of_rooms is integer 2; the parameter is a string ('1', '2', '3', 'dontcare')",
+    "live_multiple_596-158-2": "Reference number_of_rooms is integer 1; the parameter is a string ('1', '2', '3', 'dontcare')",
+    "live_multiple_731-167-2": "Reference in_unit_laundry is boolean true; the parameter is a string ('True', 'False', 'dontcare')",
+    "live_multiple_733-167-4": "Reference in_unit_laundry is boolean true; the parameter is a string ('True', 'False', 'dontcare')",
+    "live_multiple_735-167-6": "Reference in_unit_laundry is boolean true; the parameter is a string ('True', 'False', 'dontcare')",
+}
 
 # Hashes were measured from the official repository at BFCL_REVISION. Updates
 # deliberately require review of schemas/checker behavior and a new pin.
@@ -299,6 +311,7 @@ def prepare_bfcl(
         "score_scope": "Official BFCL Python AST checker and separate call-presence metrics; not the complete BFCL leaderboard aggregate",
         "normalization": "dict->object; float->number; tuple->array; any->string; API-safe function aliases; original functions and answers retained only for scoring",
         "known_annotation_issues": KNOWN_ANNOTATION_ISSUES,
+        "schema_type_conflicts": SCHEMA_TYPE_CONFLICTS,
         "annotation_policy": "Retain all original data and denominators; any exclusion sensitivity must be declared separately",
     }
     (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
