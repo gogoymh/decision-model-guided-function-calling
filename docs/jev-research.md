@@ -63,7 +63,7 @@ https://docs.typesafe.ai/sdk/python/api/retries
 ## Method design consequences for JBFC
 
 1. Jev receives the original conversation, available tool schemas, and current proposed calls. The generating LLM also receives actual prior feedback during repairs. Never send reference answers, evaluator labels, or benchmark ground truth to either model.
-2. Ask separate function-selection and argument-correctness questions in one request. Accept only when both pass their respective probability thresholds **and** deterministic schema validation passes.
+2. For a proposed call, ask separate function-selection and argument-correctness questions in one request. Accept only when both pass their respective probability thresholds **and** deterministic schema validation passes. For an empty call list, send only the function question and omit the argument threshold. Record the argument check as skipped, with no verdict or probability, rather than assigning a yes answer.
 3. Function selection must check missing, unnecessary, and wrong functions, including whether an empty call set is appropriate. Argument verification is conditional on the selected functions and must check parameter roles and evidence, not merely JSON validity.
 4. Return structured feedback containing failed dimension IDs, probabilities, thresholds, and deterministic schema errors. Jev does not produce a natural-language explanation; do not attribute a fabricated explanation to it.
 5. Thresholds require validation. Vendor claims of calibration or type safety do not establish semantic correctness on function calling. Do not call this method zero-hallucination or formally safe.
@@ -83,7 +83,7 @@ The defensible contribution is an auditable evaluation of **dual semantic checks
 
 ## Additional documented Jev capabilities (outside this experiment)
 
-The following capability notes were checked on 2026-10-16. They describe the official API and examples, not an implemented comparison arm in this project. **JBFC** uses the LLM to propose functions and arguments and Jev to check them with two Noul questions.
+The following capability notes were checked on 2026-10-16. They describe the official API and examples, not an implemented comparison arm in this project. **JBFC** uses the LLM to propose functions and arguments and Jev to check them with two Noul questions when a call is present; no-call receives only the function question.
 
 ### Choice: options, probabilities, and confidence
 
@@ -116,7 +116,7 @@ The official function-calling cookbook already uses Jev for routing and for sele
 
 Do **not** claim that Jev cannot produce argument values in general. The Jev 1.13 jaggedness page says it is not trained to generate text and recommends getting candidate extractions from a generative model or regex before asking Jev to choose among them. This supports a narrower description of **JBFC**: the LLM proposes function names and argument values from the request and supplied schemas, while Jev checks the current proposal.
 
-The experiment does not use Choice for direct routing or fixed-option argument selection. Its repair context contains the accumulated prior calls and actual verifier feedback before the unchanged original request. Both function and argument choices can change in a new proposal, and both correctness questions are asked again before accepting it.
+The experiment does not use Choice for direct routing or fixed-option argument selection. Its repair context contains the accumulated prior calls and actual verifier feedback before the unchanged original request. Both function and argument choices can change in a new proposal. Each proposal receives all applicable correctness questions again; no-call skips the argument question, while a selected function with missing required arguments still receives it.
 
 Sources:
 https://docs.typesafe.ai/cookbooks/function_calling

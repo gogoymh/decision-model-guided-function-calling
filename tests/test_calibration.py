@@ -17,12 +17,16 @@ def write_run(directory, candidates, **overrides):
         function_probability, arguments_probability, correct, schema_pass = candidate[:4]
         category = candidate[4] if len(candidate) > 4 else "simple_python"
         score = {"correct": correct}
+        calls = [] if len(candidate) > 5 and candidate[5] else [{"name": "fixture_function", "arguments": {}}]
         records.append({
             "id": str(index), "replicate": 0, "method": "jev_joint", "category": category,
             "config_id": "config", "synthetic": False, "max_repairs": 0, "repairs": 0, "score": score,
-            "trace": [{"attempt": 0, "proposal": {"model": "generator-v1"},
+            "trace": [{"attempt": 0, "proposal": {"model": "generator-v1", "calls": calls},
                        "verification": {"function_probability": function_probability,
-                                        "arguments_probability": arguments_probability, "model": "jev-1.13.0"},
+                                        "arguments_probability": arguments_probability,
+                                        "arguments_skipped": calls == [],
+                                        "arguments_pass": None if calls == [] else True,
+                                        "model": "jev-1.13.0"},
                        "schema": {"accepted": schema_pass}, "score": score}],
         })
     manifest = {"split": "dev", "limit": None, "max_repairs": 0, "synthetic": False,
@@ -65,6 +69,32 @@ def test_equal_balanced_accuracy_prefers_higher_coverage(tmp_path):
     result = calibration.calibrate(tmp_path, [.7, .9])
     assert [row["balanced_gate_accuracy"] for row in result["metrics"]] == [.5, .5]
     assert result["recommendation"]["threshold"] == .7
+
+
+def test_no_call_calibration_uses_function_only_without_inventing_argument_probability(tmp_path):
+    write_run(tmp_path, [(.9, None, True, True, "irrelevance", True),
+                         (.6, None, False, True, "simple_python", True)])
+    result = calibration.calibrate(tmp_path, [.5, .8, .95])
+    assert result["recommendation"]["threshold"] == .8
+    observations = result["observations"]
+    assert observations["evaluable_records"] == 2
+    assert observations["both_probabilities_observed"] == 0
+    assert observations["required_probabilities_observed"] == 2
+    assert observations["arguments_skipped"] == 2
+    assert observations["excluded"]["missing_probabilities"] == 0
+    assert [row["counts"]["accepted"] for row in result["metrics"]] == [2, 1, 0]
+
+
+@pytest.mark.parametrize("empty,mutation", [(True, {"arguments_probability": .99}),
+                                          (True, {"arguments_pass": True}),
+                                          (True, {"arguments_skipped": False}),
+                                          (False, {"arguments_skipped": True})])
+def test_calibration_rejects_inconsistent_skipped_checks(tmp_path, empty, mutation):
+    rows, _ = write_run(tmp_path, [(.9, None if empty else .9, True, True, "irrelevance", empty)])
+    rows[0]["trace"][0]["verification"].update(mutation)
+    (tmp_path / "records.jsonl").write_text(json.dumps(rows[0]) + "\n")
+    with pytest.raises(ValueError, match="skip status"):
+        calibration.calibrate(tmp_path)
 
 
 @pytest.mark.parametrize("correct", [True, False])

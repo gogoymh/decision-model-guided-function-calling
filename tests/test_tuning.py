@@ -102,9 +102,11 @@ def write_dev_fixture(directory, *, max_repairs=5, replicates=1):
                 def verify(self, public, calls):
                     local = validate_calls(public, calls)
                     p = .9 if example["id"] == early and not calls else .1
-                    return {"function_probability": p, "arguments_probability": p,
+                    skipped = calls == []
+                    return {"function_probability": p, "arguments_probability": None if skipped else p,
+                            "arguments_skipped": skipped,
                             "function_pass": local["function_pass"] and p >= .8,
-                            "arguments_pass": local["arguments_pass"] and p >= .8,
+                            "arguments_pass": None if skipped else local["arguments_pass"] and p >= .8,
                             "feedback": {"source": "offline-fixture"}, "api_calls": 1,
                             "usage": {"input_tokens": 5}, "latency_s": .25}
 
@@ -219,6 +221,35 @@ def test_selection_rechecks_scores_and_trajectory_integrity(dev_run, mutation):
     _write_rows(directory / "records.jsonl", rows)
     with pytest.raises(ValueError):
         select_repair_budget(directory)
+
+
+@pytest.mark.parametrize("empty,mutation", [
+    (True, {"arguments_skipped": False}), (True, {"arguments_skipped": 1}),
+    (True, {"arguments_probability": .95}), (True, {"arguments_pass": True}),
+    (True, {"arguments_pass": False}), (False, {"arguments_skipped": True}),
+    (False, {"arguments_skipped": 0}), (False, {"arguments_pass": None}),
+])
+def test_selection_rejects_forged_skipped_argument_checks(dev_run, empty, mutation):
+    directory, _, rows, _ = dev_run
+    step = next(step for row in rows for step in row["trace"]
+                if (step["proposal"]["calls"] == []) is empty)
+    step["verification"].update(mutation)
+    _write_rows(directory / "records.jsonl", rows)
+    with pytest.raises(ValueError, match="skip status|Verifier decisions"):
+        select_repair_budget(directory)
+
+
+def test_selected_prefix_preserves_no_call_skip_and_function_rejection(dev_run):
+    directory, _, rows, _ = dev_run
+    result = select_repair_budget(directory)
+    no_calls = [step for row in rows for step in row["trace"] if step["proposal"]["calls"] == []]
+    assert no_calls
+    assert all(step["verification"]["arguments_skipped"] is True for step in no_calls)
+    assert all(step["verification"]["arguments_pass"] is None for step in no_calls)
+    assert all(step["verification"]["arguments_probability"] is None for step in no_calls)
+    assert any(step["gate_pass"] is True for step in no_calls)
+    assert any(step["gate_pass"] is False for step in no_calls)
+    assert result["selected_max_repairs"] == 2
 
 
 def test_missing_optional_provider_fields_produce_unknown_cost_or_latency(dev_run):

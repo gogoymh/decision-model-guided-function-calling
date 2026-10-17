@@ -105,6 +105,8 @@ def calibrate(run_dir: str | Path, grid: tuple[float, ...] | list[float] = DEFAU
     excluded = Counter(live_relevance=0, missing_correctness_label=0, missing_probabilities=0)
     candidates = []
     probabilities_observed = 0
+    required_probabilities_observed = 0
+    skipped_argument_checks = 0
     schema_rejected_without_probabilities = 0
     for row in joint:
         if row["category"] == "live_relevance":
@@ -121,19 +123,29 @@ def calibrate(run_dir: str | Path, grid: tuple[float, ...] | list[float] = DEFAU
         if not isinstance(schema_pass, bool):
             raise ValueError("Every candidate needs a boolean schema.accepted verdict.")
         check = step.get("verification", {})
+        arguments_skipped = step.get("proposal", {}).get("calls") == []
+        if (check.get("arguments_skipped") is not arguments_skipped
+                or (arguments_skipped and (check.get("arguments_probability") is not None
+                                          or check.get("arguments_pass") is not None))):
+            raise ValueError("Argument-check skip status differs from the proposed call collection.")
         probabilities = [check.get("function_probability"), check.get("arguments_probability")]
         for value in probabilities:
             if value is not None and not _valid_probability(value):
                 raise ValueError("A recorded Jev probability is outside its numeric 0–1 contract.")
-        both_observed = all(value is not None for value in probabilities)
-        if both_observed:
+        if arguments_skipped:
+            skipped_argument_checks += 1
+            probabilities = probabilities[:1]
+        observed = all(value is not None for value in probabilities)
+        if observed:
+            required_probabilities_observed += 1
+        if observed and not arguments_skipped:
             probabilities_observed += 1
-        elif schema_pass:
-            # A passing schema cannot determine the semantic gate without both
-            # observations. Exclude it explicitly rather than manufacture zeros.
+        elif not observed and schema_pass:
+            # A passing schema needs a function observation and, for nonempty
+            # calls, an argument observation. Do not manufacture missing values.
             excluded["missing_probabilities"] += 1
             continue
-        else:
+        elif not observed:
             # An AND gate always rejects structural failures, independently of
             # unobserved semantic probabilities (e.g. malformed argument JSON).
             schema_rejected_without_probabilities += 1
@@ -172,8 +184,8 @@ def calibrate(run_dir: str | Path, grid: tuple[float, ...] | list[float] = DEFAU
         })
 
     reasons = []
-    if probabilities_observed == 0:
-        reasons.append("No eligible candidate has both Jev probabilities; no threshold recommendation is identifiable.")
+    if required_probabilities_observed == 0:
+        reasons.append("No eligible candidate has all required Jev probabilities; no threshold recommendation is identifiable.")
     if not candidates:
         reasons.append("No eligible candidates remain after exclusions.")
     elif not any(candidate["correct"] for candidate in candidates) or not any(not candidate["correct"] for candidate in candidates):
@@ -197,6 +209,8 @@ def calibrate(run_dir: str | Path, grid: tuple[float, ...] | list[float] = DEFAU
             "joint_records": len(joint), "evaluable_records": len(candidates),
             "evaluable_unique_ids": len({candidate["id"] for candidate in candidates}),
             "both_probabilities_observed": probabilities_observed,
+            "required_probabilities_observed": required_probabilities_observed,
+            "arguments_skipped": skipped_argument_checks,
             "schema_rejected_without_probabilities": schema_rejected_without_probabilities,
             "excluded": dict(excluded),
         },

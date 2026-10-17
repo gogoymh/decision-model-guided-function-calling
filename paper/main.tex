@@ -121,38 +121,39 @@ Li et al.'s \emph{JEV-as-a-Judge}~\cite{li2026jevjudge} checks finished outputs 
 
 \section{Method}
 \subsection{Propose and Check a Call}
-Let $x$ be the user request, $\mathcal{F}$ the available functions, and $G$ the generating LLM. A proposal is $c_t=(f_t,a_t)$, with function $f_t$ and arguments $a_t$. We study single-call-or-no-call decisions.\footnote{We treat single-turn decisions as the basic unit of function calling. Parallel calling combines multiple such decisions, while multi-turn interactions repeat them with updated context. We therefore evaluate the verification and repair loop on this basic unit and exclude parallel and multi-turn settings from this study.} Code checks that a proposal can be read, uses an available function, and supplies required arguments with the right types. Write $S(c_t)=1$ when these checks pass.
-
-The LLM generates both the function choice and argument values using the user's request and function schemas.
+Let $x$ be the user request, $\mathcal{F}$ the available functions, and $G$ the generating LLM. A proposal is $c_t=(f_t,a_t)$, with function $f_t$ and arguments $a_t$, or $c_t=\varnothing$ for no call. We study single-call-or-no-call decisions.\footnote{We treat single-turn decisions as the basic unit of function calling. Parallel calling combines multiple such decisions, while multi-turn interactions repeat them with updated context. We therefore evaluate the verification and repair loop on this basic unit and exclude parallel and multi-turn settings from this study.} Local code checks readability, function availability, required arguments, and types. Write $S(c_t)=1$ when these checks pass.
 
 \paragraph{Binary verification: \textbf{JBFC}.}
-The LLM chooses both the function and its arguments. For each readable proposal, one \textit{Jev} request asks two \texttt{Noul} questions:
+For each readable proposal, one \textit{Jev} request checks the function choice and, when a call is present, its arguments:
 \begin{align}
  c_t&=G(H_t,x,\mathcal{F}),\\
  p_f^{(t)}&=J_f(x,\mathcal{F},c_t),\qquad
  p_a^{(t)}=J_a(x,\mathcal{F},c_t).
 \end{align}
-Here $H_t$ contains earlier proposals and feedback and is empty at $t=0$. The function question asks whether the selected function, or no call, fits the request. The argument question checks required values, their support in the request, and their roles in the selected function. For an empty proposal, the function question asks whether no call is needed; the argument question is defined to answer yes. Both returned probabilities must still pass. Both questions see the same state, so their errors need not be independent.
+Here $H_t$ contains earlier proposals and feedback and is initially empty. The function \texttt{Noul} question asks whether the function choice, including no call, fits the request. The argument question checks required values, their support in the request, and their parameter roles. For no call, it is skipped and $p_a^{(t)}$ is undefined. A selected function with missing arguments still receives both checks. Both must pass for a call.
 
 \subsection{Accept or Repair a Call}
 The acceptance rule is
 \begin{equation}
- A_t=S(c_t)\,\mathbf{1}[p_f^{(t)}\geq\tau_f]\,
-                         \mathbf{1}[p_a^{(t)}\geq\tau_a].
+ A_t=\begin{cases}
+ S(c_t)\,\mathbf{1}[p_f^{(t)}\geq\tau_f], & c_t=\varnothing,\\
+ S(c_t)\,\mathbf{1}[p_f^{(t)}\geq\tau_f]\,
+ \mathbf{1}[p_a^{(t)}\geq\tau_a], & \text{otherwise}.
+ \end{cases}
 \label{eq:gate}
 \end{equation}
 We start with $\tau_f=\tau_a=0.8$. These are untuned defaults. Noul returns a probability of yes; the winning-verdict confidence in JEV-as-a-Judge is a different quantity~\cite{li2026jevjudge}. A confident no rejects a proposed call.
 
-The repair limit $r$ is any nonnegative integer, chosen on development data. It permits at most $r+1$ LLM proposals, with early stopping after acceptance. Every new proposal is checked again; an earlier pass is never reused. Reference answers and offline scores stay out of model requests. API failures stop the affected request after limited transport retries, which are separate from repairs.
+The repair limit $r$ is any nonnegative integer, chosen on development data. It permits at most $r+1$ LLM proposals, with early stopping after acceptance. Every new proposal receives all applicable checks; an earlier pass is never reused. Reference answers and offline scores stay out of model requests. API failures stop the affected request after limited transport retries, which are separate from repairs.
 
 \paragraph{Feedback before the user request.}
-If $A_t=0$ and another repair is allowed, let $d_t$ contain the two yes probabilities, pass/fail flags, thresholds, and code-detected errors. We append the latest record to the history:
+If $A_t=0$ and another repair is allowed, $d_t$ contains returned probabilities, pass/fail flags, thresholds, and local errors. For no call, the argument check is marked as skipped, with no verdict or probability. We append the record:
 \begin{equation}
  H_{t+1}=H_t\mathbin{\Vert}[(c_t,d_t)].
 \end{equation}
-Here $\Vert$ appends a record, and $H_0$ is empty. The next prompt places a text message containing all records, from oldest to newest, before the original request messages. Each record has a round number, proposed calls, and feedback. The original messages keep their content and order, and all function schemas remain available. Thus feedback about a wrong function can lead to a different function on the next attempt.
+Here $\Vert$ appends a record. The next prompt places all records, from oldest to newest, before the original request. Each has a round number, proposed calls, and feedback. Original messages keep their content and order, and all schemas remain available. Feedback about a wrong function can lead to a different function next.
 
-The prefix states that the proposals have not been executed and asks the LLM to reconsider both function choice and arguments. We serialize the records as JSON within an ordinary user message; provider-specific system instructions and tool schemas remain separate. \textit{Jev} returns probabilities rather than explanations, so the code does not invent reasons for its judgments. For unreadable proposals, local parsing errors provide feedback without a \textit{Jev} request. \textit{Jev} checks each readable candidate against the original request and schemas, without receiving the accumulated repair history. This keeps the checker focused on the current call.
+The prefix marks proposals as not executed and asks the LLM to reconsider function choice and arguments. Records are JSON in an ordinary user message; system instructions and tool schemas remain separate. \textit{Jev} returns probabilities, so we do not invent explanations. Unreadable proposals receive local parsing feedback without a \textit{Jev} request. \textit{Jev} sees only the original request, schemas, and current proposal, keeping its check focused on that proposal.
 
 \subsection{Return and Record the Result}
 The main \texttt{execute\_last} policy returns the final proposal for scoring even after a failed check. The optional \texttt{abstain} policy withholds rejected calls; we still score them offline. An application callback can run only at the final dispatch boundary, never during repair. The benchmark never executes functions, so correctness does not establish successful real-world execution.
@@ -194,10 +195,10 @@ BFCL's ``multiple'' categories offer several functions to choose from, without p
 \subsection{Models and Methods}
 The generator is \texttt{gpt-5.4-mini-2026-03-17}, with reasoning effort \texttt{none}; \textit{Jev} is pinned to \texttt{jev-1.13.0}. We use OpenAI Responses and System One through an APIM gateway, preserve supplied schemas, and plan three repeated runs with fixed prompts. Models, thresholds, and prompts can be changed, but their selection must use development data before the test setup is frozen.
 
-We compare six methods. \emph{Direct} uses the initial LLM proposal. \emph{Schema-only} repairs code-detected errors. \emph{Self-refine} uses a fixed self-review instruction; it is a generic control, not a reproduction of the full Self-Refine method~\cite{madaan2023selfrefine}. \mbox{\textbf{JBFC-F}} and \mbox{\textbf{JBFC-A}} obtain both Noul judgments but use only the function or argument verdict, respectively, with schema checks. Their feedback exposes only the corresponding semantic check. \textbf{JBFC} uses both verdicts. All repair methods keep their earlier proposals and allowed feedback before the original request, and share a maximum proposal count. Actual time and cost can differ. Direct uses no repairs.
+We compare six methods. \emph{Direct} uses the initial LLM proposal. \emph{Schema-only} repairs code-detected errors. \emph{Self-refine} uses a fixed self-review instruction, a generic control rather than the full Self-Refine method~\cite{madaan2023selfrefine}. \mbox{\textbf{JBFC-F}} and \mbox{\textbf{JBFC-A}} obtain the applicable Noul judgments but use only the function or argument check, respectively, with schema checks. Feedback exposes only that check. With no argument check, \textbf{JBFC-A} accepts no call on schema checks alone. \textbf{JBFC} requires all applicable checks. Repair methods keep earlier proposals and feedback before the original request and share a maximum proposal count. Actual time and cost can differ.
 
 \paragraph{Choosing the repair limit.}
-We choose $r$ before testing. The initial candidates are $\mathcal{R}=\{0,1,2,3,4,5\}$, a configurable search range. \textbf{JBFC} has no built-in limit of five. In three development runs, we allow up to $\max\mathcal{R}$ repairs and stop early when all checks pass. Neither model sees the limit, and no function runs during repair. Each smaller limit can therefore be tested on the same saved sequence without more API calls. \textit{Jev} thresholds stay at $0.8$ during this search.
+We choose $r$ before testing. The initial candidates are $\mathcal{R}=\{0,1,2,3,4,5\}$, a configurable search range. \textbf{JBFC} has no built-in limit of five. In three development runs, we allow up to $\max\mathcal{R}$ repairs and stop early when all applicable checks pass. Neither model sees the limit, and no function runs during repair. Each smaller limit can therefore be tested on the same saved sequence without more API calls. \textit{Jev} thresholds stay at $0.8$ during this search.
 
 We choose the limit with the highest final-call accuracy on development data. Ties choose the smaller limit:
 \begin{equation}

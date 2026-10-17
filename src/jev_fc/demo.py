@@ -20,7 +20,7 @@ def demo():
     class Verifier:
         def verify(self, example, calls):
             correct = calls[0]["arguments"]["unit"] == "celsius"
-            return {"function_pass": True, "arguments_pass": correct,
+            return {"function_pass": True, "arguments_pass": correct, "arguments_skipped": False,
                     "function_probability": .99, "arguments_probability": .99 if correct else .05,
                     "accepted": correct, "feedback": {"function_pass": True, "arguments_pass": correct},
                     "model": "offline-demo", "usage": {}, "latency_s": 0, "api_calls": 0}

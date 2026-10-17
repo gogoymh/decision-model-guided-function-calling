@@ -54,12 +54,14 @@ def run_example(
                             "structural_errors": local["errors"],
                             "instruction": "Reconsider whether the chosen function (or no-call decision) satisfies the request."}
             elif method == "jev_arguments":
-                accepted = local["accepted"] and check["arguments_pass"]
+                accepted = bool(local["accepted"] and (check["arguments_skipped"] or check["arguments_pass"]))
                 feedback = {"arguments_pass": check["arguments_pass"], "arguments_probability": check.get("arguments_probability"),
+                            "arguments_skipped": check["arguments_skipped"],
                             "structural_errors": local["errors"],
                             "instruction": "Reconsider the values, required arguments and constraints of the proposed call."}
             else:
-                accepted = bool(local["accepted"] and check["function_pass"] and check["arguments_pass"])
+                accepted = bool(local["accepted"] and check["function_pass"]
+                                and (check["arguments_skipped"] or check["arguments_pass"]))
                 feedback = check["feedback"]
         elif method == "schema_only":
             check = local

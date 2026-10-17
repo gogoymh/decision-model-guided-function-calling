@@ -145,16 +145,18 @@ def offline_run(tmp_path, monkeypatch, request):
             observed["fail_next_jev"] = False
             return httpx.Response(401, headers={"apim-request-id": "req-jev-401"},
                                   json={"error": "PRIVATE_RESPONSE_BODY " + observed["subscription_key"]})
-        assert set(body["questions"]) == {"function_correct", "arguments_correct"}
+        calls = body["state"]["proposed_calls"]
+        assert set(body["questions"]) == ({"function_correct", "arguments_correct"} if calls else {"function_correct"})
         assert all(question["type"] == "noul" for question in body["questions"].values())
         assert set(body["state"]) == {"messages", "tools", "proposed_calls"}
-        valid_arguments = all(call["arguments"] for call in body["state"]["proposed_calls"])
-        answers = {"arguments_correct": {"type": "noul", "noul": .99 if valid_arguments else .01},
-                   "function_correct": {"type": "noul", "noul": .99}}
+        valid_arguments = all(call["arguments"] for call in calls)
+        answers = {"function_correct": {"type": "noul", "noul": .99}}
+        if calls:
+            answers["arguments_correct"] = {"type": "noul", "noul": .99 if valid_arguments else .01}
         return httpx.Response(200, json={
             "model": "jev-1.13.0",
             "answers": answers,
-            "usage": {"input_tokens": 300, "output_tokens": 0},
+            "usage": {"input_tokens": 300 if calls else 200, "output_tokens": 0},
         })
 
     llm_http = httpx.Client(transport=httpx.MockTransport(generator_http))
@@ -334,11 +336,16 @@ def test_apim_cli_pipeline_scoring_report_and_key_rotation_resume(offline_run, m
             if anthropic:
                 assert proposal["usage"]["cache_creation_input_tokens"] == 5
                 assert proposal["raw_usage"]["cache_creation"]["ephemeral_5m_input_tokens"] == 5
-            assert step["verification"]["usage"]["input_tokens"] == 300
+            assert step["verification"]["usage"]["input_tokens"] == (300 if proposal["calls"] else 200)
+            assert step["verification"]["arguments_skipped"] is (not proposal["calls"])
+            if not proposal["calls"]:
+                assert step["verification"]["arguments_pass"] is None
+                assert step["verification"]["arguments_probability"] is None
         assert joint["accounting"]["complete"] is True
         assert joint["accounting"]["estimated_usd"] > 0
         if example_id == "irrelevance_0":
             assert direct["calls"] == joint["calls"] == []
+            assert joint["accounting"]["jev_input"] == 200
 
     before = {name: (directory / name).read_bytes() for name in ("manifest.json", "initial.jsonl", "records.jsonl")}
     before_counts = len(observed["llm"]), len(observed["jev"])

@@ -26,8 +26,10 @@ def record(name="a", category="simple_python", correct=False, accepted=True, ini
     if initial_correct is None:
         initial_correct = correct
     score = {"correct": correct, "function_correct": correct, "arguments_correct": correct if correct else None}
-    trace = [{"attempt": 0, "proposal": {"calls": [], "latency_s": 1, "usage": {"prompt_tokens": 10, "completion_tokens": 2}},
+    trace = [{"attempt": 0, "proposal": {"calls": [{"name": "fixture_function", "arguments": {}}],
+                                         "latency_s": 1, "usage": {"prompt_tokens": 10, "completion_tokens": 2}},
               "verification": {"function_probability": .7, "arguments_probability": .9,
+                               "arguments_skipped": False,
                                "latency_s": .1, "api_calls": 1, "usage": {"input_tokens": 5}},
               "score": {**score, "correct": initial_correct}, "gate_pass": accepted}]
     return {"id": name, "category": category, "method": "jev_joint", "replicate": 0, "score": score,
@@ -61,6 +63,22 @@ def test_no_accepted_predictions_yields_unavailable_precision():
     result = summarize_group([record(accepted=False)])
     assert result["accepted_precision"] is None
     assert result["coverage"] == 0
+
+
+def test_skipped_no_call_arguments_do_not_become_brier_observations():
+    called = record("called", correct=True)
+    empty = record("empty", category="irrelevance", correct=True)
+    empty["trace"][0]["proposal"]["calls"] = []
+    empty["trace"][0]["verification"].update(arguments_skipped=True, arguments_probability=None,
+                                              arguments_pass=None)
+    empty["score"]["arguments_correct"] = None
+    empty["trace"][0]["score"]["arguments_correct"] = None
+    metrics = summarize_group([called, empty])
+    assert metrics["verified_candidates_n"] == 2
+    assert metrics["brier_function_n"] == 2
+    assert metrics["brier_arguments_n"] == 1
+    assert metrics["brier_arguments"] == pytest.approx(.01)
+    assert metrics["arguments_scored_n"] == 1
 
 
 PRICES = {"llm_input": .75, "llm_output": 4.5, "llm_cached_input": .075, "jev_input": .042}

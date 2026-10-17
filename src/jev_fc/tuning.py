@@ -188,6 +188,12 @@ def _validate_joint_trace(row, example, initial, manifest, checker):
         local = validate_calls(example, proposal["calls"])
         if step.get("schema") != local:
             raise ValueError("Saved schema validation differs from the candidate")
+        arguments_skipped = proposal["calls"] == []
+        if (verification.get("arguments_skipped") is not arguments_skipped
+                or "arguments_probability" not in verification or "arguments_pass" not in verification
+                or (arguments_skipped and (verification["arguments_probability"] is not None
+                                          or verification["arguments_pass"] is not None))):
+            raise ValueError("Argument-check skip status differs from the proposed call collection")
         probabilities = [verification.get(f"{name}_probability") for name in ("function", "arguments")]
         for probability in probabilities:
             if probability is not None and (isinstance(probability, bool)
@@ -197,10 +203,13 @@ def _validate_joint_trace(row, example, initial, manifest, checker):
         expected_passes = [bool(local[f"{name}_pass"] and probability is not None
                                 and probability >= manifest["threshold"])
                            for name, probability in zip(("function", "arguments"), probabilities)]
+        if arguments_skipped:
+            expected_passes[1] = None
         if any(verification.get(f"{name}_pass") is not passed
                for name, passed in zip(("function", "arguments"), expected_passes)):
             raise ValueError("Verifier decisions differ from the fixed threshold/schema checks")
-        passed = bool(local["accepted"] and all(expected_passes))
+        passed = bool(local["accepted"] and expected_passes[0]
+                      and (arguments_skipped or expected_passes[1]))
         if step.get("gate_pass") is not passed or (index < len(trace) - 1 and passed):
             raise ValueError("Development trajectory violates its acceptance/early-stop rule")
         # Re-score saved calls offline; reference labels never enter model inputs.

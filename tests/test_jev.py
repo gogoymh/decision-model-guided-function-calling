@@ -64,6 +64,8 @@ def test_wire_contract_excludes_reference_labels_and_checks_together(example):
         result = verifier.verify(example, [{"name": "weather", "arguments": {"city": "Seoul"}, "reference": "DO_NOT_SEND"}])
     assert len(observed) == 1
     assert result["accepted"] is True
+    assert result["arguments_skipped"] is False
+    assert result["feedback"]["checks"]["arguments"]["skipped"] is False
     assert result["usage"]["input_tokens"] == 1200
     assert result["api_calls"] == 1
     assert result["model"] == "jev-1.13.0"
@@ -89,12 +91,70 @@ def test_schema_failure_overrides_high_probability(example):
     assert result["schema_errors"]
 
 
-def test_empty_call_collection_valid_structurally_and_judged_semantically(example):
+@pytest.mark.parametrize("probability,accepted", [(0.95, True), (0.8, True), (0.79, False), (0.1, False)])
+def test_empty_call_collection_checks_only_function_selection(example, probability, accepted):
     assert validate_calls(example, [])["accepted"] is True
-    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, json=wire_reply(0.1, 1.0)))) as client:
+    observed = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        observed.append(body)
+        assert body["state"]["proposed_calls"] == []
+        assert set(body["questions"]) == {"function_correct"}
+        reply = wire_reply(function=probability)
+        del reply["answers"]["arguments_correct"]
+        return httpx.Response(200, json=reply)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         result = JevVerifier("test-key", client=client).verify(example, [])
-    assert result["function_pass"] is False
-    assert result["arguments_pass"] is True
+    assert len(observed) == 1
+    assert result["function_pass"] is accepted
+    assert result["function_probability"] == probability
+    assert result["accepted"] is accepted
+    assert result["arguments_skipped"] is True
+    assert result["arguments_pass"] is None
+    assert result["arguments_probability"] is None
+    assert result["feedback"]["checks"]["arguments"] == {
+        "skipped": True,
+        "pass": None,
+        "probability_yes": None,
+        "threshold": 0.8,
+        "schema_pass": True,
+    }
+    assert result["feedback"]["failed_checks"] == ([] if accepted else ["function_selection"])
+    assert result["usage"] == {"input_tokens": 1200, "output_tokens": 40}
+    assert result["model"] == "jev-1.13.0"
+    assert result["requested_model"] == "jev-1.13.0"
+    assert result["api_calls"] == 1
+    assert result["latency_s"] >= 0
+
+
+@pytest.mark.parametrize("required,argument_probability,accepted", [(True, 0.95, False), (False, 0.95, True), (False, 0.1, False)])
+def test_real_call_with_empty_arguments_is_still_checked(example, required, argument_probability, accepted):
+    if not required:
+        example["tools"][0]["function"]["parameters"].pop("required")
+    observed = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        observed.append(body)
+        assert body["state"]["proposed_calls"] == [{"name": "weather", "arguments": {}}]
+        assert set(body["questions"]) == {"function_correct", "arguments_correct"}
+        assert "empty, answer yes" not in body["questions"]["arguments_correct"]["instructions"]
+        assert "or no calls were proposed" not in body["questions"]["arguments_correct"]["criteria"]["true"]
+        return httpx.Response(200, json=wire_reply(arguments=argument_probability))
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        result = JevVerifier("test-key", client=client).verify(example, [{"name": "weather", "arguments": {}}])
+    assert len(observed) == 1
+    assert result["function_pass"] is True
+    assert result["arguments_skipped"] is False
+    assert result["arguments_probability"] == argument_probability
+    assert result["arguments_pass"] is accepted
+    assert result["accepted"] is accepted
+    assert result["feedback"]["checks"]["arguments"]["skipped"] is False
+    assert bool(result["schema_errors"]) is required
+    assert result["feedback"]["failed_checks"] == ([] if accepted else ["arguments"])
 
 
 @pytest.mark.parametrize("calls", [None, ["weather"], [{"name": "weather", "arguments": "{}"}], [{"name": "weather", "arguments": {"city": float("nan")}}]])
@@ -105,6 +165,7 @@ def test_malformed_calls_reject_locally_without_network(example, calls):
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         result = JevVerifier("test-key", client=client).verify(example, calls)
     assert result["accepted"] is False
+    assert result["arguments_skipped"] is False
     assert result["api_calls"] == 0
     assert result["function_probability"] is None
 
@@ -148,7 +209,7 @@ def test_invalid_api_response_is_error_not_pass(example):
     body["answers"]["arguments_correct"]["noul"] = "0.99"
     with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, json=body))) as client:
         with pytest.raises(JevAPIError, match="invalid Noul probability"):
-            JevVerifier("test-key", client=client).verify(example, [])
+            JevVerifier("test-key", client=client).verify(example, [{"name": "weather", "arguments": {"city": "Seoul"}}])
 
 
 def test_auth_failure_does_not_retry_or_disclose_response(example):
@@ -233,7 +294,7 @@ def test_apim_gateway_keyword_overrides_direct_environment(example, monkeypatch)
         return httpx.Response(200, json=wire_reply(.9, .7))
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        result = JevVerifier(gateway="apim", client=client).verify(example, [])
+        result = JevVerifier(gateway="apim", client=client).verify(example, [{"name": "weather", "arguments": {"city": "Seoul"}}])
     assert result["function_pass"] is True
     assert result["arguments_pass"] is False
     assert result["accepted"] is False
@@ -287,7 +348,7 @@ def test_apim_retries_preserve_gateway_auth_and_semantics(example, monkeypatch):
         return httpx.Response(200, json=wire_reply(.7, .95))
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
-        result = JevVerifier(client=client, sleep=delays.append).verify(example, [])
+        result = JevVerifier(client=client, sleep=delays.append).verify(example, [{"name": "weather", "arguments": {"city": "Seoul"}}])
     assert delays == [.1]
     assert result["api_calls"] == 2
     assert result["accepted"] is False

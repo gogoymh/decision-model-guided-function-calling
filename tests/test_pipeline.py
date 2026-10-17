@@ -50,10 +50,14 @@ class Verifier:
         if self.execution_events is not None:
             assert self.execution_events == []
         function_pass, arguments_pass = next(self.verdicts)
+        arguments_skipped = calls == []
+        arguments_pass = None if arguments_skipped else arguments_pass
         return {"function_pass": function_pass, "arguments_pass": arguments_pass,
+                "arguments_skipped": arguments_skipped,
                 "function_probability": .95 if function_pass else .2,
-                "arguments_probability": .95 if arguments_pass else .2,
-                "feedback": {"function_pass": function_pass, "arguments_pass": arguments_pass},
+                "arguments_probability": None if arguments_skipped else .95 if arguments_pass else .2,
+                "feedback": {"function_pass": function_pass, "arguments_pass": arguments_pass,
+                             "arguments_skipped": arguments_skipped},
                 "latency_s": .5, "api_calls": 1, "usage": {"input_tokens": 300, "output_tokens": 0}}
 
 
@@ -83,6 +87,48 @@ def test_joint_gate_must_pass_on_same_candidate(example):
     assert [step["gate_pass"] for step in result["trace"]] == [False, False, True]
     assert result["accepted"] is True
     assert result["exhausted"] is False
+
+
+@pytest.mark.parametrize("method", ["jev_function", "jev_arguments", "jev_joint"])
+@pytest.mark.parametrize("function_pass", [True, False])
+def test_no_call_skips_argument_gate_without_changing_ablation_meaning(example, method, function_pass):
+    result = run_example(example, Generator([{"calls": [], "latency_s": 2}]),
+                         Verifier([(function_pass, None)]), method=method, max_repairs=0,
+                         exhaustion_policy="abstain")
+    expected = True if method == "jev_arguments" else function_pass
+    assert result["accepted"] is expected
+    assert result["dispatched"] is expected
+    check = result["trace"][0]["verification"]
+    assert check["arguments_skipped"] is True
+    assert check["arguments_pass"] is None and check["arguments_probability"] is None
+    if method == "jev_arguments":
+        assert "function_pass" not in result["trace"][0]["feedback"]
+        assert result["trace"][0]["feedback"]["arguments_skipped"] is True
+
+
+def test_rejected_no_call_can_be_repaired_to_call_with_argument_check(example):
+    generator = Generator([{"calls": [], "latency_s": 2}, proposal()])
+    result = run_example(example, generator, Verifier([(False, None), (True, True)]), max_repairs=1)
+    assert result["accepted"] is True and result["repairs"] == 1
+    assert [step["verification"]["arguments_skipped"] for step in result["trace"]] == [True, False]
+    assert generator.seen[1][1][0]["feedback"]["arguments_pass"] is None
+
+
+def test_repair_to_no_call_accepts_without_a_fictional_argument_pass(example):
+    result = run_example(example, Generator([proposal(), {"calls": [], "latency_s": 2}]),
+                         Verifier([(False, True), (True, None)]), max_repairs=1)
+    assert result["accepted"] is True and result["calls"] == []
+    assert result["trace"][-1]["verification"]["arguments_pass"] is None
+
+
+@pytest.mark.parametrize("method", ["jev_function", "jev_arguments", "jev_joint"])
+def test_empty_argument_object_is_not_an_empty_call_collection(example, method):
+    candidate = {"calls": [{"name": "weather", "arguments": {}}]}
+    result = run_example(example, Generator([candidate]), Verifier([(True, True)]),
+                         method=method, max_repairs=0)
+    assert result["accepted"] is False
+    assert result["trace"][0]["verification"]["arguments_skipped"] is False
+    assert result["trace"][0]["schema"]["arguments_pass"] is False
 
 
 def test_abstention_does_not_execute_failed_final_proposal(example):
