@@ -31,6 +31,8 @@ https://docs.typesafe.ai/primitives/noul
 https://docs.typesafe.ai/confidence
 https://docs.typesafe.ai/introduction
 
+Rechecked on 2026-10-17: the first-party Noul page defines its output as the probability that the answer is yes and explicitly states that it has no separate `confidence` field. The Confidence page gives an optional derived measure `abs(2*p - 1)` for Noul and the normalized maximum-option measure for Choice documented below. These API definitions should cite TypeSafe's documentation directly, rather than JEV-as-a-Judge. The JBFC threshold `0.8` is this experiment's untuned default, not a fixed vendor recommendation. JEV-as-a-Judge's maximum-verdict probability is a separate study-specific measure.
+
 ## Model pin and cost
 
 The model page on the access date lists:

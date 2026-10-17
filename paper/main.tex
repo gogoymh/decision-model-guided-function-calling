@@ -4,6 +4,8 @@
 \usepackage{mathptmx}
 \usepackage{amsmath,amssymb}
 \usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
 \usepackage{graphicx}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning}
@@ -25,9 +27,9 @@
 \setcounter{bottomnumber}{2}
 \pagestyle{plain}
 \raggedbottom
-\title{\vspace{-1.3em}\textbf{Jev-Backed Function Calling:\\Iterative Prompting with Verification Feedback}\vspace{-0.4em}}
-\author{Anonymous Author(s)}
-\date{}
+\title{\vspace{-1.3em}\textbf{Jev-Backed Function Calling:\\Verify, Accumulate, Refine}\vspace{-0.4em}}
+\author{Minhyeong Yu\\[-1pt]{\small Enhans}\\[-1pt]{\small\href{mailto:minhyeong@enhans.ai}{\texttt{minhyeong@enhans.ai}}}}
+\date{\vspace{-2.5em}}
 
 \begin{document}
 \maketitle
@@ -142,23 +144,48 @@ The acceptance rule is
  \end{cases}
 \label{eq:gate}
 \end{equation}
-We start with $\tau_f=\tau_a=0.8$. These are untuned defaults. Noul returns a probability of yes; the winning-verdict confidence in JEV-as-a-Judge is a different quantity~\cite{li2026jevjudge}. A confident no rejects a proposed call.
+Noul returns the probability of yes, with no separate confidence field~\cite{typesafe2026noul,typesafe2026confidence}. We start with $\tau_f=\tau_a=0.8$, untuned defaults chosen for this experiment.
 
-The repair limit $r$ is any nonnegative integer, chosen on development data. It permits at most $r+1$ LLM proposals, with early stopping after acceptance. Every new proposal receives all applicable checks; an earlier pass is never reused. Reference answers and offline scores stay out of model requests. API failures stop the affected request after limited transport retries, which are separate from repairs.
+Algorithm~\ref{alg:jbfc} summarizes the loop: $r+1$ proposals at most, with fresh checks each time. Reference answers stay out of model requests. API errors stop without dispatch after transport retries, separate from repairs.
+
+\begin{algorithm}[t]
+\caption{\textbf{JBFC}: verification and prompt repair}
+\label{alg:jbfc}
+\footnotesize
+\begin{algorithmic}[1]
+\Require Request $x$, functions $\mathcal{F}$, generator $G$, \textit{Jev} $J$,
+\Statex \hspace{\algorithmicindent}repair limit $r$, thresholds $\tau_f,\tau_a$, final policy
+\State $H\gets[\,]$
+\For{$t=0,\ldots,r$}
+  \State $c\gets G(\mathrm{Prefix}(H,x),\mathcal{F})$
+  \State $(s,e,\mathrm{readable})\gets\mathrm{SchemaCheck}(c,\mathcal{F})$
+  \State $p_f,p_a\gets\mathrm{null},\mathrm{null}$
+  \If{$\mathrm{readable}$}
+    \State $Q\gets\{\mathrm{function}\}$
+    \State \textbf{if} $c\ne\varnothing$ \textbf{then} $Q\gets Q\cup\{\mathrm{arguments}\}$
+    \State $(p_f,p_a)\gets J(x,\mathcal{F},c,Q)$
+  \EndIf
+  \State $A\gets\mathrm{Accept}(s,c,p_f,p_a,\tau_f,\tau_a)$ \Comment{Eq.~\ref{eq:gate}}
+  \State $d\gets\mathrm{Feedback}(e,p_f,p_a,\tau_f,\tau_a,c)$
+  \State $\mathrm{Record}(t,c,d,A)$
+  \State \textbf{if} $A=1$ \textbf{or} $t=r$ \textbf{then break}
+  \State $H\gets H\mathbin{\Vert}[(c,d)]$
+\EndFor
+\State $\mathrm{FinalDispatch}(c,A,\mathrm{policy})$
+\end{algorithmic}
+\end{algorithm}
 
 \paragraph{Feedback before the user request.}
-If $A_t=0$ and another repair is allowed, $d_t$ contains returned probabilities, pass/fail flags, thresholds, and local errors. For no call, the argument check is marked as skipped, with no verdict or probability. We append the record:
+For a rejected proposal, $d_t$ contains probabilities, pass/fail flags, thresholds, and local errors. No-call marks the argument check as skipped, with no verdict or probability. If repairs remain, we append the record:
 \begin{equation}
  H_{t+1}=H_t\mathbin{\Vert}[(c_t,d_t)].
 \end{equation}
-Here $\Vert$ appends a record. The next prompt places all records, from oldest to newest, before the original request. Each has a round number, proposed calls, and feedback. Original messages keep their content and order, and all schemas remain available. Feedback about a wrong function can lead to a different function next.
-
-The prefix marks proposals as not executed and asks the LLM to reconsider function choice and arguments. Records are JSON in an ordinary user message; system instructions and tool schemas remain separate. \textit{Jev} returns probabilities, so we do not invent explanations. Unreadable proposals receive local parsing feedback without a \textit{Jev} request. \textit{Jev} sees only the original request, schemas, and current proposal, keeping its check focused on that proposal.
+\texttt{Prefix} places JSON records, oldest first, before unchanged original messages. Empty history adds no prefix. Records include round numbers and mark proposals as not executed. The LLM can change both function and arguments. Schemas remain available; system instructions stay separate. In Algorithm~\ref{alg:jbfc}, $s=S(c)$ and $e$ lists local errors. Readable proposals receive \textit{Jev} checks even if their schema fails; unreadable ones receive local feedback. \textit{Jev} never receives history. Unasked $p_a$ stays null. Null required probabilities cannot pass the gate; invalid API responses stop the run.
 
 \subsection{Return and Record the Result}
-The main \texttt{execute\_last} policy returns the final proposal for scoring even after a failed check. The optional \texttt{abstain} policy withholds rejected calls; we still score them offline. An application callback can run only at the final dispatch boundary, never during repair. The benchmark never executes functions, so correctness does not establish successful real-world execution.
+The final dispatch returns the proposal under \texttt{execute\_last}, even if rejected. The optional \texttt{abstain} policy withholds rejected calls, which are still scored offline. Only this boundary can run an application callback. Benchmark dispatch is simulated; no function executes during repair or scoring.
 
-Records contain proposals, checks, feedback, stopping reason, returned model versions, usage, and timings. API keys stay outside records. The manifest records data, source-code hashes, models, routes, and runtime settings. All six methods share one initial LLM proposal per example and repeated run. Each method is charged for all work it would use alone, including the shared first proposal and tokens used for accumulated history.
+Records save stopping reasons, model versions, usage, and timings; manifests save data, code hashes, routes, and settings. Keys stay outside records. Methods share the first proposal for each example and run, charged to each method with its own later work.
 
 \section{Experiments}
 \subsection{Data and Evaluation}
@@ -190,7 +217,7 @@ Total & 3051 & 2748 & -- & --\\
 
 For categories with reference calls, the original Python abstract syntax tree (AST) checker tests function names and arguments against allowed answers. Irrelevance categories require no call. Live relevance checks only call presence, not function or argument correctness. We exclude it from main accuracy and verifier calibration that needs those labels. The main score covers 2,733 test examples per repeated run. We report category accuracy and a micro-average, which weights examples equally. Category scores show what the larger live categories may hide in the average.
 
-BFCL's ``multiple'' categories offer several functions to choose from, without parallel calls. We exclude parallel calls, multi-turn state, web search, memory, and live service execution. ``Live'' names a category; the experiment makes no network request to execute a function. The official AST check compares call structure with annotated alternatives. Passing it does not prove successful execution, authorization, or completion of a larger user task.
+BFCL's ``multiple'' categories offer several functions to choose from, without parallel calls. We exclude parallel calls, multi-turn state, web search, memory, and live execution. ``Live'' is a category name. AST checks compare call structure with annotated alternatives; passing them does not prove execution success, authorization, or task completion.
 
 \subsection{Models and Methods}
 The generator is \texttt{gpt-5.4-mini-2026-03-17}, with reasoning effort \texttt{none}; \textit{Jev} is pinned to \texttt{jev-1.13.0}. We use OpenAI Responses and System One through an APIM gateway, preserve supplied schemas, and plan three repeated runs with fixed prompts. Models, thresholds, and prompts can be changed, but their selection must use development data before the test setup is frozen.
@@ -269,7 +296,7 @@ The study uses one model pair, mostly English requests, and single-turn calls. P
 This work was created as part of the No-More-Slops group activities at Pseudo Lab.
 
 \clearpage
-\begin{thebibliography}{14}
+\begin{thebibliography}{16}
 \small
 
 \bibitem{patil2025bfcl}
@@ -343,6 +370,18 @@ TypeSafe.
 \newblock Models: \textit{Jev} and the System One API.
 \newblock Technical documentation, 2026. Accessed October 15, 2026.
 \newblock \url{https://docs.typesafe.ai/models}.
+
+\bibitem{typesafe2026noul}
+TypeSafe.
+\newblock Noul.
+\newblock Technical documentation, 2026. Accessed October 17, 2026.
+\newblock \url{https://docs.typesafe.ai/primitives/noul}.
+
+\bibitem{typesafe2026confidence}
+TypeSafe.
+\newblock Confidence.
+\newblock Technical documentation, 2026. Accessed October 17, 2026.
+\newblock \url{https://docs.typesafe.ai/confidence}.
 
 \bibitem{li2026jevjudge}
 Yubo Li, Yidi Miao, Ramayya Krishnan, and Rema Padman.
