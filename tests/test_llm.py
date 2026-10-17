@@ -432,7 +432,8 @@ def test_responses_transport_errors_are_bounded_without_disclosing_exception_tex
 
 
 @pytest.mark.parametrize("style", ["chat_completions", "responses", "anthropic_messages"])
-def test_two_repairs_prepend_all_verdicts_before_unchanged_request_and_allow_function_change(example, style):
+@pytest.mark.parametrize("method", ["jev_joint", "jev_joint_latest"])
+def test_two_repairs_prepend_selected_history_before_unchanged_request_and_allow_function_change(example, style, method):
     from jev_fc.jev import JevVerifier
     from jev_fc.pipeline import run_example
 
@@ -482,7 +483,7 @@ def test_two_repairs_prepend_all_verdicts_before_unchanged_request_and_allow_fun
         generator = FunctionCallingLLM("test-key", model="test-model", api_style=style,
                                        gateway="direct", client=generator_client)
         verifier = JevVerifier("test-key", model="jev-1.13.0", gateway="direct", client=verifier_client)
-        result = run_example(example, generator, verifier, max_repairs=3,
+        result = run_example(example, generator, verifier, method=method, max_repairs=3,
                              executor=lambda calls: executions.append(deepcopy(calls)))
 
     assert result["repairs"] == 2 and result["accepted"]
@@ -503,7 +504,9 @@ def test_two_repairs_prepend_all_verdicts_before_unchanged_request_and_allow_fun
             header, encoded, instruction = conversation[0]["content"].split("\n", 2)
             assert "oldest first" in header and "NOT executed" in header
             accumulated = json.loads(encoded)
-            assert accumulated == [{"round": i + 1, "calls": result["trace"][i]["proposal"]["calls"],
-                                    "feedback": result["trace"][i]["feedback"]} for i in range(attempt)]
+            expected = [{"round": i + 1, "calls": result["trace"][i]["proposal"]["calls"],
+                         "feedback": result["trace"][i]["feedback"]} for i in range(attempt)]
+            assert accumulated == (expected[-1:] if method == "jev_joint_latest" else expected)
+            assert accumulated[-1]["round"] == attempt
             assert "original request below" in instruction
     assert example == before

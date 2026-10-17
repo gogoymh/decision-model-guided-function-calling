@@ -15,6 +15,7 @@ from jev_fc.reporting import (
     derive_policy_run,
     latex_budget_table,
     latex_table,
+    paired_delta,
     paper_protocol_matches,
     summarize_group,
     token_cost,
@@ -167,6 +168,104 @@ def test_initial_diagnostics_do_not_include_final_cost_and_repairs(tmp_path):
     assert "mean_latency_s" not in initial
 
 
+def test_paired_delta_uses_requested_baseline_and_clusters_repeated_runs():
+    rows = []
+    for name, replicate, main_correct, latest_correct in [
+        ("a", 0, True, False), ("a", 1, True, False),
+        ("b", 0, False, True), ("c", 0, False, False),
+    ]:
+        for method, correct in (("jev_joint", main_correct), ("jev_joint_latest", latest_correct), ("direct", True)):
+            rows.append({**record(name, correct=correct), "method": method, "replicate": replicate})
+    # Different repeats cannot be paired, and presence-only labels are excluded.
+    rows += [{**record("unpaired", correct=True), "method": "jev_joint", "replicate": 0},
+             {**record("unpaired", correct=False), "method": "jev_joint_latest", "replicate": 1},
+             {**record("presence", category="live_relevance", correct=True), "method": "jev_joint"},
+             {**record("presence", category="live_relevance", correct=False), "method": "jev_joint_latest"}]
+    paired = paired_delta(rows, "jev_joint", samples=100, baseline="jev_joint_latest")
+    assert paired["n_paired_ids"] == 3
+    assert paired["n_paired_records"] == 4
+    # Per-ID differences are +1, -1, and 0, not a +0.25 unclustered average.
+    assert paired["delta"] == 0
+    assert len(paired["ci95"]) == 2
+    assert paired == paired_delta(rows, "jev_joint", samples=100, baseline="jev_joint_latest")
+
+
+def test_paired_delta_default_baseline_and_positional_seed_remain_compatible():
+    rows = [{**record(correct=False), "method": "direct"}, record(correct=True)]
+    default = paired_delta(rows, "jev_joint", 17, 25)
+    assert default == paired_delta(rows, "jev_joint", 17, 25, baseline="direct")
+    assert default["delta"] == 1 and default["ci95"] == [1, 1]
+    rows[0]["score"]["correct"] = None
+    assert paired_delta(rows, "jev_joint")["delta"] is None
+
+
+def history_pair(name="a", main_correct=True, latest_correct=False, replicate=0):
+    rows = []
+    initial = record(name, correct=False, accepted=False)["trace"][0]
+    for method, correct in (("jev_joint", main_correct), ("jev_joint_latest", latest_correct)):
+        row = record(name, correct=correct, max_repairs=2)
+        row.update(method=method, replicate=replicate, initial_proposal_shared=True,
+                   exhaustion_policy="execute_last", repairs=2)
+        final = deepcopy(row["trace"][0])
+        final["attempt"] = 2
+        middle = deepcopy(initial)
+        middle["attempt"] = 1
+        row["trace"] = [deepcopy(initial), middle, final]
+        rows.append(row)
+    return rows
+
+
+def test_summary_reports_observed_history_ablation_with_explicit_direction(tmp_path):
+    rows = history_pair("a") + history_pair("b", main_correct=True, latest_correct=True)
+    write_run(tmp_path, rows, methods=["jev_joint", "jev_joint_latest"], expected_records=4,
+              max_repairs=2, exhaustion_policy="execute_last")
+    summary = build_summary(tmp_path)
+    contrast = summary["history_ablation"]
+    assert summary["status"] == "complete"
+    assert contrast["method"] == "jev_joint" and contrast["baseline"] == "jev_joint_latest"
+    assert contrast["contrast"] == "JBFC minus JBFC-L"
+    assert contrast["outcome"] == "final_call_accuracy"
+    assert contrast["n_paired_ids"] == contrast["n_paired_records"] == 2
+    assert contrast["delta"] == .5
+    assert contrast["pairing"] == "example_id_and_replicate"
+    assert contrast["excluded_category"] == "live_relevance"
+    assert "jev_joint_latest" in summary["initial_candidate_diagnostics"]
+    assert summary["paired_vs_direct"]["jev_joint_latest"]["delta"] is None
+    assert json.loads((tmp_path / "summary.json").read_text())["history_ablation"] == contrast
+
+
+@pytest.mark.parametrize("fault", ["not_shared", "initial_proposal", "initial_score", "repair_limit", "dispatch_policy"])
+def test_history_contrast_rejects_unmatched_initial_or_run_conditions(tmp_path, fault):
+    rows = history_pair()
+    latest = rows[1]
+    if fault == "not_shared":
+        latest["initial_proposal_shared"] = False
+    elif fault == "initial_proposal":
+        latest["trace"][0]["proposal"]["calls"] = []
+    elif fault == "initial_score":
+        latest["trace"][0]["score"]["correct"] = True
+    elif fault == "repair_limit":
+        latest["max_repairs"] = 3
+    else:
+        latest["exhaustion_policy"] = "abstain"
+    write_run(tmp_path, rows, methods=["jev_joint", "jev_joint_latest"], expected_records=2,
+              max_repairs=2, exhaustion_policy="execute_last")
+    with pytest.raises(ValueError, match="History ablation requires"):
+        build_summary(tmp_path)
+    assert not (tmp_path / "summary.json").exists()
+
+
+def test_partial_history_report_does_not_invent_unobserved_pairs(tmp_path):
+    rows = history_pair()[:1]
+    write_run(tmp_path, rows, methods=["jev_joint", "jev_joint_latest"], expected_records=2,
+              max_repairs=2, exhaustion_policy="execute_last")
+    summary = build_summary(tmp_path)
+    assert summary["status"] == "partial"
+    assert summary["history_ablation"]["n_paired_records"] == 0
+    assert summary["history_ablation"]["delta"] is None
+    assert summary["history_ablation"]["ci95"] is None
+
+
 def test_budget_replay_uses_prefix_and_preserves_final_dispatch_policy(tmp_path):
     source = tmp_path / "source"
     source.mkdir()
@@ -216,6 +315,32 @@ def test_replay_accepts_larger_limits_and_development_sources(tmp_path):
     assert full["methods"]["jev_joint"]["coverage"] == 1
     assert full["manifest"]["repair_budget_selection"] == {"retained": "metadata"}
     assert (source / "records.jsonl").read_bytes() == before
+
+
+def test_replay_keeps_only_actual_cumulative_jbfc_trajectories(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    main, latest = long_record(), long_record()
+    latest["method"] = "jev_joint_latest"
+    latest["trace"][0]["score"]["correct"] = True
+    write_run(source, [main, latest], methods=["jev_joint", "jev_joint_latest"], expected_records=2,
+              max_repairs=5)
+    summary = derive_policy_run(source, tmp_path / "prefix", max_repairs=0)
+    assert summary["manifest"]["methods"] == ["jev_joint"]
+    assert set(summary["methods"]) == {"jev_joint"}
+    assert summary["methods"]["jev_joint"]["accuracy"] == 0
+    assert summary["history_ablation"] is None
+
+
+def test_latest_only_run_cannot_supply_a_cumulative_jbfc_replay(tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    latest = long_record()
+    latest["method"] = "jev_joint_latest"
+    write_run(source, [latest], methods=["jev_joint_latest"], max_repairs=5)
+    with pytest.raises(ValueError, match="complete empirical joint run"):
+        derive_policy_run(source, tmp_path / "prefix", max_repairs=0)
+    assert not (tmp_path / "prefix").exists()
 
 
 @pytest.mark.parametrize("limit", [-1, True, False, 2.5, "2", 6])
@@ -327,6 +452,7 @@ def test_main_table_does_not_invent_a_selected_limit():
     table = latex_table()
     assert "chosen on development data" in table
     assert "$r=" not in table
+    assert r"\textbf{JBFC-L} & -- & -- & -- & -- & --" in table
 
 
 def test_raw_test_manifest_without_selection_cannot_match_paper():
@@ -362,6 +488,8 @@ def test_valid_selection_fills_dev_table_without_using_dev_accuracy_as_test_resu
     _, selection, manifest = selected_development_run
     assert selection["selected_max_repairs"] == 2
     assert paper_protocol_matches(manifest)
+    old_six_methods = {**manifest, "methods": [m for m in manifest["methods"] if m != "jev_joint_latest"]}
+    assert not paper_protocol_matches(old_six_methods)
     paper = tmp_path / "paper.tex"
     paper_template(paper)
     summary = {"status": "complete", "manifest": manifest,
@@ -466,6 +594,9 @@ def test_manuscript_rejects_different_reasoning_setting(tmp_path):
 
 def test_table_separates_call_function_and_conditional_argument_accuracy():
     table = latex_table({"methods": {"jev_joint": {"accuracy": .6, "function_accuracy": .8,
-                                                   "arguments_accuracy_conditional": .75}}})
+                                                   "arguments_accuracy_conditional": .75},
+                                     "jev_joint_latest": {"accuracy": .5, "function_accuracy": .7,
+                                                          "arguments_accuracy_conditional": .65}}})
     assert r"\textbf{JBFC} & 60.0 & 80.0 & 75.0" in table
+    assert r"\textbf{JBFC-L} & 50.0 & 70.0 & 65.0" in table
     assert "Argument accuracy" in table and "correct function and argument labels" in table

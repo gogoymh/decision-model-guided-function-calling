@@ -278,13 +278,14 @@ def test_saved_artifact_validation_and_compatible_test_config(dev_run):
     path = directory / "repair_budget_selection.json"
     _write_json(path, selection)
     config = make_test_config(manifest, selection, test)
-    assert config["methods"] == list(METHODS) and len(METHODS) == 6
-    assert config["expected_records"] == 2748 * manifest["replicates"] * 6
+    assert config["methods"] == list(METHODS) and len(METHODS) == 7
+    assert "jev_joint_latest" in config["methods"]
+    assert config["expected_records"] == 2748 * manifest["replicates"] * 7
     assert load_repair_budget_selection(path, test_config=config) == selection
     assert validate_repair_budget_selection(selection) == selection
 
 
-@pytest.mark.parametrize("method", [None, "schema_only", "self_refine"])
+@pytest.mark.parametrize("method", [None, "schema_only", "self_refine", "jev_joint_latest"])
 def test_selection_must_explicitly_use_jbfc_before_source_read(method):
     selection = {"kind": "repair_budget_selection", "selection_method": method,
                  "source_dir": "/nonexistent-source-must-not-be-read"}

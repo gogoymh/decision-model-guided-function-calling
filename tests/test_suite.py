@@ -101,9 +101,9 @@ def test_default_suite_selects_on_dev_before_all_test_methods_and_paper(suite_ru
     assert option(development, "--max-repairs") == "5"
     assert "--limit" not in development
     assert option(test, "--methods").split(",") == list(METHODS)
-    assert len(METHODS) == 6
+    assert len(METHODS) == 7 and "jev_joint_latest" in METHODS
     assert 303 * int(option(development, "--replicates")) == 909
-    assert 2748 * int(option(test, "--replicates")) * len(METHODS) == 49464
+    assert 2748 * int(option(test, "--replicates")) * len(METHODS) == 57708
     assert int(option(test, "--max-repairs")) == selection["selected_max_repairs"]
     assert Path(option(development, "--output")).parts[-3:] == ("results", "tuned", "dev_budget")
     assert Path(option(test, "--output")).name == "test_selected"
@@ -194,7 +194,7 @@ def test_invalid_selection_stops_before_any_test_request(suite_run, monkeypatch)
     assert len(observed["commands"]) == 1
 
 
-@pytest.mark.parametrize("selection_method", [None, "schema_only"])
+@pytest.mark.parametrize("selection_method", [None, "schema_only", "jev_joint_latest"])
 def test_suite_requires_jbfc_development_source(suite_run, selection_method):
     _, selection, observed, _ = suite_run
     selection["selection_method"] = selection_method

@@ -5,7 +5,8 @@ describe smaller stopping caps; they never choose the budget. No keys are
 embedded here. --resume requires matching code, data, models and configuration.
 Alternative configurations save reports without replacing manuscript tables.
 The development search uses JBFC only. Its chosen limit is shared by all test
-repair methods. All six methods share their initial LLM proposal.
+repair methods. All seven methods share their initial LLM proposal. JBFC-L runs
+its own repairs with only the latest feedback; it is never replayed from JBFC.
 """
 
 import argparse
@@ -82,6 +83,7 @@ def main(argv=None):
                              "--output", str(test), "--max-repairs", str(selected_budget),
                              "--repair-budget-selection", str(selection_path)], cwd=root, check=True)
     if not args.main_only:
+        # These stopping-cap diagnostics use only recorded cumulative JBFC runs.
         for repairs in args.repair_grid:
             if repairs < selected_budget:
                 derive_policy_run(test, results / "test_prefix_diagnostics" / f"budget_{repairs}",

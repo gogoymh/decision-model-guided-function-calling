@@ -188,7 +188,7 @@ class FunctionCallingLLM:
     def _payload(self, example, history):
         messages = [{"role": m["role"], "content": deepcopy(m["content"])} for m in example["messages"]]
         if history:
-            accumulated = [{"round": index + 1, "calls": deepcopy(item["calls"]),
+            accumulated = [{"round": item.get("round", index + 1), "calls": deepcopy(item["calls"]),
                             "feedback": deepcopy(item["feedback"])} for index, item in enumerate(history)]
             messages.insert(0, {
                 "role": "user",

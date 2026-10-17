@@ -79,17 +79,18 @@ def test_three_repairs_means_four_proposals_then_one_execution(example):
     assert result["logical_latency_s"] == 10
 
 
-def test_joint_gate_must_pass_on_same_candidate(example):
+@pytest.mark.parametrize("method", ["jev_joint", "jev_joint_latest"])
+def test_joint_gate_must_pass_on_same_candidate(example, method):
     generator = Generator([proposal("Paris"), proposal("London"), proposal("Seoul")])
     verifier = Verifier([(True, False), (False, True), (True, True)])
-    result = run_example(example, generator, verifier)
+    result = run_example(example, generator, verifier, method=method)
     assert result["repairs"] == 2
     assert [step["gate_pass"] for step in result["trace"]] == [False, False, True]
     assert result["accepted"] is True
     assert result["exhausted"] is False
 
 
-@pytest.mark.parametrize("method", ["jev_function", "jev_arguments", "jev_joint"])
+@pytest.mark.parametrize("method", ["jev_function", "jev_arguments", "jev_joint", "jev_joint_latest"])
 @pytest.mark.parametrize("function_pass", [True, False])
 def test_no_call_skips_argument_gate_without_changing_ablation_meaning(example, method, function_pass):
     result = run_example(example, Generator([{"calls": [], "latency_s": 2}]),
@@ -121,7 +122,7 @@ def test_repair_to_no_call_accepts_without_a_fictional_argument_pass(example):
     assert result["trace"][-1]["verification"]["arguments_pass"] is None
 
 
-@pytest.mark.parametrize("method", ["jev_function", "jev_arguments", "jev_joint"])
+@pytest.mark.parametrize("method", ["jev_function", "jev_arguments", "jev_joint", "jev_joint_latest"])
 def test_empty_argument_object_is_not_an_empty_call_collection(example, method):
     candidate = {"calls": [{"name": "weather", "arguments": {}}]}
     result = run_example(example, Generator([candidate]), Verifier([(True, True)]),
@@ -187,7 +188,7 @@ def test_verifier_api_failure_never_turns_into_execution(example):
     assert executed == []
 
 
-@pytest.mark.parametrize("method", ["jev_function", "jev_arguments", "jev_joint"])
+@pytest.mark.parametrize("method", ["jev_function", "jev_arguments", "jev_joint", "jev_joint_latest"])
 def test_semantic_ablations_share_structural_floor(example, method):
     result = run_example(example, Generator([proposal(42)]), Verifier([(True, True)]),
                          method=method, max_repairs=0, exhaustion_policy="abstain")
@@ -231,3 +232,29 @@ def test_invalid_budget_is_rejected_before_generation(example, budget):
     with pytest.raises(ValueError, match="nonnegative integer"):
         run_example(example, generator, Verifier([]), max_repairs=budget)
     assert generator.seen == []
+
+
+@pytest.mark.parametrize("method", ["jev_joint", "jev_joint_latest"])
+@pytest.mark.parametrize("policy", ["execute_last", "abstain"])
+def test_latest_history_limits_prompt_only_and_keeps_shared_initial_full_trace_and_policy(example, method, policy):
+    initial = proposal("Paris")
+    before = deepcopy(initial)
+    generator = Generator([proposal("London"), proposal("Seoul")])
+    executions = []
+    verifier = Verifier([(True, False), (False, True), (True, False)], executions)
+    result = run_example(example, generator, verifier, method=method, initial_proposal=initial,
+                         max_repairs=2, exhaustion_policy=policy, executor=executions.append)
+    assert result["initial_proposal_shared"] is True and initial == before
+    assert len(generator.seen) == 2 and len(verifier.seen) == len(result["trace"]) == 3
+    assert result["repairs"] == 2 and result["exhausted"] and not result["accepted"]
+    assert result["dispatched"] is (policy == "execute_last")
+    assert executions == ([result["calls"]] if policy == "execute_last" else [])
+    assert [step["attempt"] for step in result["trace"]] == [0, 1, 2]
+    assert result["logical_latency_s"] == 7.5
+    for attempt, (public, history) in enumerate(generator.seen, 1):
+        assert public["messages"] == example["messages"] and public["tools"] == example["tools"]
+        expected = [{"calls": result["trace"][i]["proposal"]["calls"],
+                     "feedback": result["trace"][i]["feedback"]} for i in range(attempt)]
+        if method == "jev_joint_latest":
+            expected = [{**expected[-1], "round": attempt}]
+        assert history == expected

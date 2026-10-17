@@ -66,7 +66,7 @@ def test_cli_default_budget_is_explicitly_exploratory_and_selection_option_is_pa
     assert observed[-1].repair_budget_selection is None
     assert observed[-1].output == "results/exploratory"
     assert observed[-1].methods.split(",") == list(METHODS)
-    assert len(METHODS) == 6
+    assert len(METHODS) == 7 and "jev_joint_latest" in METHODS
     monkeypatch.setattr("sys.argv", ["jev-fc", "run", "--max-repairs", "5",
                                     "--repair-budget-selection", "selection.json"])
     assert cli.main() == 0

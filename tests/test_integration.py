@@ -51,6 +51,7 @@ def offline_run(tmp_path, monkeypatch, request):
     data_path.write_text("".join(json.dumps(row) + "\n" for row in selected))
     observed = {"llm": [], "jev": [], "histories": [], "fail_next_jev": False, "fail_next_llm": False,
                 "api_style": api_style, "gateway": gateway,
+                "repairs_until_correct": 1,
                 "subscription_key": "integration-subscription-before-rotation", "auth_providers": set()}
 
     def check_wire(body):
@@ -91,13 +92,15 @@ def offline_run(tmp_path, monkeypatch, request):
             context = user_messages[0]["content"]
             assert context.startswith("Accumulated revision history (oldest first; proposals NOT executed):\n")
             history, _ = json.JSONDecoder().raw_decode(context.split("\n", 1)[1])
-            assert [step["round"] for step in history] == list(range(1, len(history) + 1))
+            rounds = [step["round"] for step in history]
+            assert rounds == list(range(rounds[0], rounds[0] + len(history)))
+            assert rounds[0] >= 1
             assert all(set(step) == {"round", "calls", "feedback"} for step in history)
         observed["histories"].append((example_id, deepcopy(history)))
         calls = deepcopy(oracle_calls[example_id])
         if style != "anthropic_messages":
             assert body["tool_choice"] == "auto"
-        if not history:
+        if not history or history[-1]["round"] < observed["repairs_until_correct"]:
             # The initial proposal has valid JSON but missing required arguments.
             for call in calls:
                 call["arguments"] = {}
@@ -220,6 +223,36 @@ def test_cli_run_resume_and_report_use_saved_pairs_without_new_requests(offline_
     assert cli.main() == 0
     assert (directory / "summary.csv").exists()
     assert json.loads((directory / "summary.json").read_text())["status"] == "complete"
+
+
+@pytest.mark.parametrize("offline_run", ["chat_completions", "responses", "anthropic_messages"], indirect=True)
+def test_latest_and_cumulative_use_same_initial_but_different_second_repair_context(offline_run):
+    args, observed, _ = offline_run
+    args.methods = "jev_joint,jev_joint_latest"
+    args.max_repairs = observed["repairs_until_correct"] = 2
+    cli.run(args)
+    directory = Path(args.output)
+    rows = read_jsonl(directory / "records.jsonl")
+    assert len(rows) == 6 and len(read_jsonl(directory / "initial.jsonl")) == 3
+    assert len(observed["llm"]) == 11 and len(observed["jev"]) == 14
+    for example_id in ("simple_python_0", "multiple_0", "irrelevance_0"):
+        pair = {row["method"]: row for row in rows if row["id"] == example_id}
+        cumulative, latest = pair["jev_joint"], pair["jev_joint_latest"]
+        assert cumulative["trace"][0]["proposal"] == latest["trace"][0]["proposal"]
+        assert cumulative["accepted"] is latest["accepted"] is True
+        assert cumulative["score"] == latest["score"]
+        assert latest["initial_proposal_shared"] is True
+        assert latest["repairs"] == (0 if example_id == "irrelevance_0" else 2)
+        assert len(latest["trace"]) == len(cumulative["trace"]) == latest["repairs"] + 1
+        assert [step["attempt"] for step in latest["trace"]] == list(range(latest["repairs"] + 1))
+        rounds = [[record["round"] for record in history]
+                  for key, history in observed["histories"] if key == example_id]
+        assert rounds == ([[]] if example_id == "irrelevance_0" else [[], [1], [1, 2], [1], [2]])
+    before = len(observed["llm"]), len(observed["jev"])
+    args.resume = True
+    cli.run(args)
+    assert (len(observed["llm"]), len(observed["jev"])) == before
+    assert read_jsonl(directory / "records.jsonl") == rows
 
 
 def test_partial_resume_keeps_completed_method_and_shared_initial(offline_run):
@@ -414,9 +447,9 @@ def test_selected_budget_reaches_all_methods_and_manifest_but_never_model_inputs
     assert all(row["max_repairs"] == selected_budget for row in rows)
     assert all(row["repairs"] == 0 for row in rows if row["method"] == "direct")
     assert all(row["repairs"] == selected_budget for row in rows if row["method"] == "self_refine")
-    joint = [row for row in rows if row["method"] == "jev_joint"]
+    joint = [row for row in rows if row["method"] in {"jev_joint", "jev_joint_latest"}]
     assert all(row["repairs"] <= min(1, selected_budget) for row in joint)
-    assert len(METHODS) == 6
+    assert len(METHODS) == 7
     assert all(row["initial_proposal_shared"] is True for row in rows)
     assert manifest["shared_initial_methods"] == list(METHODS)
     assert max(len(history) for _, history in observed["histories"]) == selected_budget

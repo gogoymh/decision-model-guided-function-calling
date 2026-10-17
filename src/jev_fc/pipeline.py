@@ -8,7 +8,7 @@ from typing import Callable
 
 from .jev import validate_calls
 
-METHODS = ("direct", "schema_only", "self_refine", "jev_function", "jev_arguments", "jev_joint")
+METHODS = ("direct", "schema_only", "self_refine", "jev_function", "jev_arguments", "jev_joint", "jev_joint_latest")
 
 
 def run_example(
@@ -27,6 +27,8 @@ def run_example(
     self_refine control, every allowed repair is used with a generic self-review
     instruction; it is a matched maximum-generation-budget control, not equal
     measured cost. No learned critic is used for schema_only/self_refine.
+    jev_joint_latest sends only the last rejected record to the generator;
+    its complete trace and all other joint-verification rules are unchanged.
     Benchmark mode leaves executor=None and records a simulated dispatch.
     """
     if method not in METHODS:
@@ -43,7 +45,12 @@ def run_example(
     start = time.perf_counter()
     budget = 0 if method == "direct" else max_repairs
     for attempt in range(budget + 1):
-        proposal = deepcopy(initial_proposal) if attempt == 0 and initial_proposal is not None else generator.generate(public, history)
+        prompt_history = history
+        if method == "jev_joint_latest" and history:
+            # Keep the real one-based proposal round, not its index in this
+            # one-record prompt. Preserve every round in the internal trace.
+            prompt_history = [{**deepcopy(history[-1]), "round": attempt}]
+        proposal = deepcopy(initial_proposal) if attempt == 0 and initial_proposal is not None else generator.generate(public, prompt_history)
         calls = proposal["calls"]
         local = validate_calls(public, calls)
         if method.startswith("jev_"):

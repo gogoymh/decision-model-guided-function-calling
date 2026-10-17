@@ -15,7 +15,8 @@ from statistics import mean
 from .pipeline import METHODS
 
 LABELS = {"direct": "Direct", "schema_only": "Schema repair", "self_refine": "Self-refine",
-          "jev_function": "JBFC-F", "jev_arguments": "JBFC-A", "jev_joint": "JBFC"}
+          "jev_function": "JBFC-F", "jev_arguments": "JBFC-A", "jev_joint": "JBFC",
+          "jev_joint_latest": "JBFC-L"}
 
 PAPER_SETTINGS = {
     "replicates": 3, "threshold": .8,
@@ -191,24 +192,60 @@ def summarize_group(rows):
     }
 
 
-def paired_delta(rows, method, seed=1729, samples=2000):
+def paired_delta(rows, method, seed=1729, samples=2000, *, baseline="direct"):
+    """Estimate method minus baseline on matching example/replicate pairs."""
     # Cluster by example ID so repeated runs are not treated as independent examples.
     groups = defaultdict(dict)
     for row in rows:
-        if row["method"] in {"direct", method} and row["category"] != "live_relevance":
+        if (row["method"] in {baseline, method} and row["category"] != "live_relevance"
+            and row.get("score", {}).get("correct") is not None):
             key = (row["id"], row["replicate"])
             groups[key][row["method"]] = int(row["score"]["correct"])
     deltas = defaultdict(list)
     for (example_id, _), pair in groups.items():
-        if "direct" in pair and method in pair:
-            deltas[example_id].append(pair[method] - pair["direct"])
+        if baseline in pair and method in pair:
+            deltas[example_id].append(pair[method] - pair[baseline])
     values = [mean(v) for v in deltas.values()]
+    paired_records = sum(len(v) for v in deltas.values())
     if not values:
-        return {"n_paired_ids": 0, "delta": None, "ci95": None}
+        return {"n_paired_ids": 0, "n_paired_records": 0, "delta": None, "ci95": None}
     rng = random.Random(seed)
     boot = [mean(rng.choices(values, k=len(values))) for _ in range(samples)]
-    return {"n_paired_ids": len(values), "delta": mean(values),
+    return {"n_paired_ids": len(values), "n_paired_records": paired_records, "delta": mean(values),
             "ci95": [percentile(boot, .025), percentile(boot, .975)]}
+
+
+def _history_ablation(rows, manifest):
+    """Compare observed cumulative/latest runs, never synthesize one from the other."""
+    method, baseline = "jev_joint", "jev_joint_latest"
+    if not {method, baseline}.issubset(manifest["methods"]):
+        return None
+    pairs = defaultdict(dict)
+    for row in rows:
+        if row["method"] in {method, baseline}:
+            pairs[(row["id"], row["replicate"])][row["method"]] = row
+    for pair in pairs.values():
+        if not {method, baseline}.issubset(pair):
+            continue  # Partial reports use only observed pairs.
+        main, latest = pair[method], pair[baseline]
+        if (main.get("initial_proposal_shared") is not True
+            or latest.get("initial_proposal_shared") is not True
+            or not main.get("trace") or not latest.get("trace")
+            or main["trace"][0].get("proposal") != latest["trace"][0].get("proposal")
+            or main["trace"][0].get("score") != latest["trace"][0].get("score")):
+            raise ValueError("History ablation requires the same shared initial proposal and score.")
+        cap, policy = manifest.get("max_repairs"), manifest.get("exhaustion_policy")
+        if (isinstance(cap, bool) or not isinstance(cap, int) or cap < 0
+            or policy not in {"execute_last", "abstain"}
+            or any(row.get("max_repairs") != cap or row.get("exhaustion_policy") != policy
+                   for row in (main, latest))):
+            raise ValueError("History ablation requires the same repair limit and dispatch policy.")
+    return {
+        "method": method, "baseline": baseline, "contrast": "JBFC minus JBFC-L",
+        "outcome": "final_call_accuracy", "pairing": "example_id_and_replicate",
+        "excluded_category": "live_relevance",
+        **paired_delta(rows, method, baseline=baseline),
+    }
 
 
 def build_summary(run_dir: str | Path) -> dict:
@@ -256,6 +293,7 @@ def build_summary(run_dir: str | Path) -> dict:
             for m in manifest["methods"] if m.startswith("jev_")
         },
         "paired_vs_direct": {m: paired_delta(rows, m) for m in methods if m != "direct"},
+        "history_ablation": _history_ablation(rows, manifest),
     }
     (directory / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     if methods:
@@ -272,7 +310,8 @@ def derive_policy_run(source_dir, output_dir, max_repairs=None, exhaustion_polic
 
     This is valid because no benchmark tool executes before termination and the
     cap is never sent to either model. It must not be used to replay new prompts,
-    thresholds, models, or repair feedback.
+    thresholds, models, or repair feedback. In particular, a cumulative JBFC
+    trajectory cannot stand in for the latest-feedback-only JBFC-L method.
     """
     if (max_repairs is not None and (isinstance(max_repairs, bool)
                                     or not isinstance(max_repairs, int) or max_repairs < 0)
