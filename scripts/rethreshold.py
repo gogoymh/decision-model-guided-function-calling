@@ -1,9 +1,10 @@
-"""Run JBFC again with another Jev threshold, from the first proposals of a finished run.
+"""Run a Jev method again with another Jev threshold, from the first proposals of a finished run.
 
 Every example keeps the first proposal it had in the source run (its Direct row), so
-Direct is unchanged and each new JBFC row pairs with the source's JBFC row: the only
-difference is the threshold of both Jev checks, which decides acceptance and appears in
-the feedback the generator sees, as in any run with that threshold. Code
+Direct is unchanged and each new row pairs with the source's row of the same method: the
+only difference is the threshold of both Jev checks, which decides acceptance and appears
+in the feedback the generator sees, as in any run with that threshold. The method is JBFC
+(jev_joint) unless --method names JBFC-F, JBFC-A or JBFC-L. Code
 (source_sha256), data, generator settings, interface, prices, repair limit and
 exhaustion policy must equal the source's; Jev's route may change on request
 (--jev-gateway or JEV_GATEWAY) and is recorded. The output is a normal run with Direct
@@ -11,8 +12,8 @@ exhaustion policy must equal the source's; Jev's route may change on request
 
 This is an exploratory run: the thresholds of the paper's tables stay at the source's.
 
-Usage: python scripts/rethreshold.py SOURCE --threshold 0.7 --output OUT [--workers 8] [--resume]
-                                     [--jev-gateway direct|apim]
+Usage: python scripts/rethreshold.py SOURCE --threshold 0.7 --output OUT [--method jev_joint] [--workers 8]
+                                     [--resume] [--jev-gateway direct|apim]
 """
 
 import argparse
@@ -42,7 +43,7 @@ from jev_fc.pipeline import run_example  # noqa: E402
 from jev_fc.reporting import build_summary, read_jsonl, token_cost  # noqa: E402
 from jev_fc.scoring import score_example  # noqa: E402
 
-METHOD = "jev_joint"
+JEV_METHODS = ("jev_function", "jev_arguments", "jev_joint", "jev_joint_latest")
 NOT_COPIED = {"config_id", "created_at", "methods", "shared_initial_methods", "expected_records", "workers",
               "extends", "reused", "added", "jev_routes", "rethreshold"}
 
@@ -51,6 +52,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("source", help="a finished run with Direct rows (its first proposals)")
     parser.add_argument("--threshold", type=float, required=True, help="Jev threshold for both checks")
+    parser.add_argument("--method", choices=JEV_METHODS, default="jev_joint", help="the Jev method to run again")
     parser.add_argument("--output", required=True)
     parser.add_argument("--data", default=str(ROOT / "data/bfcl/examples.jsonl"))
     parser.add_argument("--checker", default=str(ROOT / "data/bfcl/upstream/ast_checker.py"))
@@ -59,7 +61,7 @@ def main(argv=None):
     parser.add_argument("--jev-gateway", choices=("direct", "apim"), default=os.getenv("JEV_GATEWAY") or None)
     args = parser.parse_args(argv)
     load_dotenv(ROOT / ".env")
-    threshold = args.threshold
+    threshold, method = args.threshold, args.method
     if not math.isfinite(threshold) or not 0 < threshold <= 1:
         raise ValueError("--threshold must be in (0, 1].")
     if args.workers < 1:
@@ -91,9 +93,9 @@ def main(argv=None):
         settings = {key: value for key, value in source.items() if key not in NOT_COPIED}
         settings.update({key: current[key] for key in JEV_FIELDS})
         settings.update(
-            threshold=threshold, methods=["direct", METHOD], shared_initial_methods=["direct", METHOD],
-            workers=args.workers, expected_records=len(source["ids"]) * source["replicates"] * 2, added=[METHOD],
-            rethreshold={"method": METHOD, "from": source["threshold"], "to": threshold},
+            threshold=threshold, methods=["direct", method], shared_initial_methods=["direct", method],
+            workers=args.workers, expected_records=len(source["ids"]) * source["replicates"] * 2, added=[method],
+            rethreshold={"method": method, "from": source["threshold"], "to": threshold},
             extends={"run_dir": _relative(source_dir), "config_id": source["config_id"], "max_repairs": limit,
                      "threshold": source["threshold"], "records_sha256": _sha256(source_dir / "records.jsonl")})
         config_id = cli._fingerprint(settings)
@@ -126,10 +128,10 @@ def main(argv=None):
                 record["accounting"] = token_cost(record, prices)
                 append("records.jsonl", record)
         todo = [{"id": example_id, "replicate": replicate, "first": first}
-                for (example_id, replicate), first in shared.items() if (example_id, replicate, METHOD) not in done]
+                for (example_id, replicate), first in shared.items() if (example_id, replicate, method) not in done]
         total = len(shared)
         count = total - len(todo)
-        print(f"{count} of {total} JBFC rows are done; running {len(todo)} with threshold {threshold} "
+        print(f"{count} of {total} {method} rows are done; running {len(todo)} with threshold {threshold} "
               f"(source {source['threshold']}), r={limit}.", flush=True)
 
         def task(item):
@@ -138,7 +140,7 @@ def main(argv=None):
                 return
             try:
                 example = examples[item["id"]]
-                record = run_example(example, generator, verifier, METHOD, limit, source["exhaustion_policy"],
+                record = run_example(example, generator, verifier, method, limit, source["exhaustion_policy"],
                                      initial_proposal=deepcopy(item["first"]))
                 # Scoring is strictly after all proposal and verification work.
                 for step in record["trace"]:
@@ -149,9 +151,9 @@ def main(argv=None):
                 append("records.jsonl", record)
                 with lock:
                     count += 1
-                    print(f"[{count}/{total}] {item['id']} {METHOD} r={record['repairs']}", flush=True)
+                    print(f"[{count}/{total}] {item['id']} {method} r={record['repairs']}", flush=True)
             except Exception as exc:
-                event = {"id": item["id"], "replicate": item["replicate"], "method": METHOD,
+                event = {"id": item["id"], "replicate": item["replicate"], "method": method,
                          "error_type": type(exc).__name__, "at": datetime.now(timezone.utc).isoformat()}
                 for field in ("status_code", "request_id", "attempts", "provider_code"):
                     value = getattr(exc, field, None)

@@ -1,4 +1,4 @@
-.PHONY: setup prepare check-config test demo smoke table1 table2 table3 compare r3 repeat threshold threshold-table irrelevance-check report paper verify
+.PHONY: setup prepare check-config test demo smoke table1 table2 table3 compare r3 repeat threshold threshold-table t05 irrelevance-check report paper verify
 
 WORKERS ?= 4
 MODEL ?= gpt-5-nano
@@ -69,6 +69,11 @@ threshold:
 # Table of every threshold run on disk (docs/threshold.md); make threshold refreshes it at the end.
 threshold-table:
 	uv run python scripts/threshold_table.py
+
+# The paper's final JBFC settings (threshold 0.5, first proposal when nothing passes): the extra gpt-5-nano runs
+# Table 2 and Figure 2 need (JBFC-F, JBFC-A and JBFC-L at 0.5; JBFC at 0.5 continued to r=10).
+t05:
+	WORKERS="$(WORKERS)" bash scripts/run_t05.sh
 
 # Direct only on the 240 Irrelevance examples; compares with the Table 1 run. EFFORT=low etc. is optional.
 irrelevance-check:

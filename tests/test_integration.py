@@ -905,3 +905,26 @@ def test_rethreshold_reruns_only_jbfc_from_the_same_first_proposals(offline_run,
         rethreshold.main([str(source), "--threshold", "0.7", "--output", str(tmp_path / "code")] + common)
     assert (len(observed["llm"]), len(observed["jev"])) == after
     assert_saved_files_have_no_credentials(out)
+
+
+def test_rethreshold_reruns_another_jev_method(offline_run, monkeypatch, tmp_path):
+    args, observed, _ = offline_run
+    rethreshold = _script("rethreshold")
+    monkeypatch.setattr(rethreshold, "load_dotenv", lambda *_: None)
+    observed["valid_arguments_probability"] = .75  # right arguments pass at 0.7 but not at 0.8
+    args.methods, args.max_repairs = "direct,jev_arguments", 3
+    cli.run(args)
+    source = Path(args.output)
+    before = len(observed["llm"]), len(observed["jev"])
+    out = tmp_path / "jbfc_a_t07"
+    summary = rethreshold.main([str(source), "--method", "jev_arguments", "--threshold", "0.7", "--output", str(out),
+                                "--workers", "1", "--data", args.data, "--checker", args.checker])
+    assert summary["manifest"]["methods"] == ["direct", "jev_arguments"] and summary["manifest"]["added"] == ["jev_arguments"]
+    assert summary["manifest"]["rethreshold"] == {"method": "jev_arguments", "from": .8, "to": .7}
+    rows = {(row["id"], row["method"]): row for row in read_jsonl(out / "records.jsonl")}
+    for example_id in ("simple_python_0", "multiple_0"):
+        assert rows[(example_id, "jev_arguments")]["repairs"] == 1 and rows[(example_id, "jev_arguments")]["accepted"] is True
+    assert rows[("irrelevance_0", "jev_arguments")]["repairs"] == 0
+    assert (len(observed["llm"]) - before[0], len(observed["jev"]) - before[1]) == (2, 5)
+    with pytest.raises(SystemExit):  # only Jev methods can be run again
+        rethreshold.main([str(source), "--method", "self_refine", "--threshold", "0.7", "--output", str(tmp_path / "x")])
