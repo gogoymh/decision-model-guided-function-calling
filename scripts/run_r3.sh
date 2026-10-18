@@ -65,4 +65,6 @@ uv run python scripts/raise_limit.py "$MINI_SOURCE" --max-repairs "$LIMIT" --add
 note "5/5 fill Tables 1 and 2 in paper/main.tex"
 uv run python scripts/paper_tables.py "$NANO_OUT" --compare "$MINI_OUT" --paper paper/main.tex \
   > "results/tables_r${LIMIT}.json"
+# After make repeat, Table 1 is the mean of three runs; this keeps it so (and does nothing before).
+uv run python scripts/table1_repeat.py --if-complete --paper paper/main.tex > /dev/null
 note "done: Tables 1 and 2 are filled in paper/main.tex (rebuild the PDF next); numbers in results/tables_r${LIMIT}.json"

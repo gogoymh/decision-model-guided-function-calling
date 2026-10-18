@@ -338,3 +338,15 @@
 - 원고: Abstract·Introduction·Method의 r=2 문장을 r=3으로 고치고(승인된 수정), 4.1에 r을 같은 예제의 Figure 2를 보고 골랐다는 문장, 4.2에 실행 순서(r=2로 실행한 뒤 이어 실행)와 Jev 경로, 결과 문단 전체, "A larger generator." 문단(`gpt-5.4-mini` **JBFC** 결과와 원인), Study Limits(r 선택), Conclusion을 고쳤습니다. Table 1은 4열(두 생성기의 Direct·**JBFC**)이고 Table 2·Figure 2 캡션은 r=3 기준입니다. Abstract에는 `gpt-5.4-mini` 결과를 넣지 않았습니다(고정 절). PDF: 본문 4쪽·참고문헌 5쪽, Type 3 폰트·overfull 없음.
 - README: Results 절(연구 범위 노트, 범주 차트를 생성기별 색과 고리(Direct)→점(**JBFC**) 화살표로 다시 그림, 항목 7개, 방법 차트, 수정 한도 문단, 표 3개), FAQ(비용, 벤치마크 모델, 새 항목 "When does JBFC help?"), Limits, Reproduce(Jev 경로, `make r3` 시간·비용)를 r=3 수치로 고쳤습니다. 수정 한도 차트는 픽셀 단위로 같아 그대로 두었고, `data.json`은 Table 1·2·Figure 2와 같습니다.
 - 재현 경로: `make table1`·`make table2`가 끝에 `jev-fc report --paper`로 원고의 표를 r=2 형식으로 덮어쓰던 단계를 없앴습니다(이제 요약만 씁니다). 논문 표는 `make r3`·`make report`(`scripts/paper_tables.py`)만 채웁니다. Makefile·README·`docs/apim-gateway.md`·`docs/benchmarks.md`·`docs/repair-budget.md`·AGENTS.md의 r=2 표기를 고쳤습니다.
+
+## Table 1 3회 반복 실험 준비 (2026-10-18)
+
+- 사용자 요청: 실험 결과가 일관되지 않아 보이므로 Table 1(두 생성기의 Direct·**JBFC**, r=3)을 세 번 실행해 평균을 냅니다. 사용자 결정: 기존 r=3 실행을 1회차로 쓰고 2·3회차를 새로 실행합니다.
+- 실행 간 차이의 근거: 생성기는 temperature를 지정하지 않아(모델 기본값) 같은 요청에도 다른 제안을 낼 수 있습니다. 같은 코드·설정으로 따로 돌린 r=2 실행 두 개(`results/table1_gpt-5-nano_r2`, `results/table2_gpt-5-nano_r2`)의 정확도가 Direct 63.9 대 63.8, **JBFC** 73.1 대 73.5로 달랐습니다. 지금까지 원고의 표는 한 번씩만 실행해 이 차이를 보여 주지 못했습니다.
+- 설계: 1회차는 `results/table2_gpt-5-nano_r3`(Table 2·Figure 2와 같은 실행)와 `results/table1_gpt-5.4-mini_r3`입니다. 2·3회차는 생성기마다 `jev-fc run --methods direct`로 3,051개 전체의 첫 제안을 새로 만들고(`results/direct_<model>_run<k>`), `scripts/raise_limit.py --add jev_joint --max-repairs 3`으로 그 첫 제안에서 **JBFC**를 실행합니다(`results/table1_<model>_r3_run<k>`). 1회차 `gpt-5.4-mini`를 만든 방식과 같고, 코드 해시·데이터·API 형식·설정·가격이 1회차와 같으며 생성기의 표본만 다릅니다. Jev는 게이트웨이를 먼저 시도하고, 답이 없으면 직접 호출합니다.
+- `make repeat WORKERS=8`(`scripts/run_repeat.sh`): 두 생성기를 동시에 돌립니다(`PARALLEL=0`이면 차례로). 한 단계가 실패하면 그 생성기는 멈추고, 다시 실행하면 완료된 기록부터 이어 갑니다. 로그는 `results/repeat.log`와 `results/repeat_<model>.log`입니다.
+- `scripts/table1_repeat.py`: 1회차는 논문 프로토콜(`scripts/paper_tables.py`의 검사)로, 2·3회차는 1회차와 같은 코드·데이터·설정·가격·모델인지, **JBFC**가 새 Direct 실행에 더해졌는지, 첫 제안이 이전 실행의 복사본이 아닌지로 검사합니다. Table 1은 칸마다 세 실행의 평균, 합계의 실행 간 표준편차("Total s.d." 행), 평균 비용을 보입니다. 보고 JSON(`results/table1_repeat.json`)에는 실행별 값, 고친 것·망가뜨린 것, 첫 호출이 1회차와 같은 비율, 그리고 예제마다 세 실행을 먼저 평균한 뒤 예제를 재표집한 짝지은 차이(seed 1729, 2,000회)가 들어갑니다. 1회차 기록만으로 계산하면 기존 수치(`gpt-5-nano` +11.5 [10.1, 12.9], `gpt-5.4-mini` −1.7 [−2.7, −0.7], `gpt-5.4-mini` Direct − `gpt-5-nano` **JBFC** +6.0 [4.6, 7.5], 고친 것 399·망가뜨린 것 50)와 같습니다.
+- 모든 실행이 끝나기 전에는 Table 1을 바꾸지 않습니다(`--if-complete`). 끝난 뒤에는 `make report`와 `make r3`도 평균 표를 유지합니다. Table 2와 Figure 2는 1회차 그대로입니다.
+- 원고 레이아웃: 평균 표(Total s.d. 행 추가)로 시험 빌드하면 Acknowledgements가 5쪽으로 몇 줄 넘칩니다. 결과를 반영할 때 본문을 줄여 4쪽에 맞춥니다.
+- 예상(작업자 8개, 1회차 실측 기준): 새 비용 약 $12(`gpt-5-nano` 회당 약 $0.83, `gpt-5.4-mini` 회당 약 $5.24). 시간은 동시 실행 시 약 45분(`gpt-5-nano` 회당 약 22분이 병목), 차례로 약 80분입니다.
+- 확인: 오프라인 테스트 22개(`tests/test_table1_repeat.py`)를 더했고, 가짜 `uv`로 실행 흐름(동시·차례 실행, 실패 시 그 생성기만 멈춤, 재개 안내)을 확인했습니다. `src/jev_fc`는 바꾸지 않았습니다(코드 해시 `c167522d…`).

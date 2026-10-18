@@ -1,4 +1,4 @@
-.PHONY: setup prepare check-config test demo smoke table1 table2 table3 compare r3 irrelevance-check report paper verify
+.PHONY: setup prepare check-config test demo smoke table1 table2 table3 compare r3 repeat irrelevance-check report paper verify
 
 WORKERS ?= 4
 MODEL ?= gpt-5-nano
@@ -54,13 +54,21 @@ compare:
 r3:
 	WORKERS="$(WORKERS)" bash scripts/run_r3.sh
 
+# Table 1 over three runs (user request, 2026-10-18): runs 2 and 3 of Direct and JBFC (r=3) for both
+# generators, at the same time (PARALLEL=0: one after the other). Once every run is complete, Table 1 is the
+# mean with run 1 (make r3). Running it again resumes from the completed records.
+repeat:
+	WORKERS="$(WORKERS)" PARALLEL="$(PARALLEL)" MODELS="$(MODELS)" RUNS="$(RUNS)" bash scripts/run_repeat.sh
+
 # Direct only on the 240 Irrelevance examples; compares with the Table 1 run. EFFORT=low etc. is optional.
 irrelevance-check:
 	MODEL="$(MODEL)" WORKERS="$(WORKERS)" REPLICATES="$(CHECK_RUNS)" EFFORT="$(EFFORT)" bash scripts/run_irrelevance_check.sh
 
 # Refill Tables 1 and 2 from the r=3 runs (make r3); the gpt-5.4-mini columns stay empty until they exist.
+# Once make repeat is complete, Table 1 is the mean of the three runs.
 report:
 	uv run python scripts/paper_tables.py "$(RUN)" --compare "$(COMPARE)" --model "$(COMPARE_MODEL)" --paper paper/main.tex > /dev/null
+	uv run python scripts/table1_repeat.py --if-complete --paper paper/main.tex > /dev/null
 
 paper:
 	python3 scripts/build_paper.py
