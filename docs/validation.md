@@ -286,3 +286,13 @@
 - 결과 배지 줄(63.8%→73.5%, 25.4%→74.2%, 78.6%)을 지웠습니다. 기능 표의 "Paper-grade"·"Fast labels"를 "Open study"·"Light checks"로 바꾸고 측정값은 "in our runs"로 한정했습니다.
 - "The numbers" 절을 API 설명 뒤의 "Results" 절로 옮겼습니다. 첫머리에 연구 범위(생성기 하나, 한 번 실행, BFCL 3,051개, 조정 없음)를 적고, 굵은 수치와 "keep paying off" 같은 표현을 뺐습니다. 수락 ≠ 정답(90.6%), 이득 대부분이 도구가 필요 없는 요청에서 나온다는 점, 비용(약 4배)을 같은 목록에 두었습니다. 차트의 Δ 열은 초록 대신 본문 색으로, 수정 한도 차트 제목은 "JBFC by repair limit r"로 바꿨습니다. 수치 자체는 원고 표와 같습니다.
 - AGENTS.md에 README 첫 화면에 성능 수치를 내세우지 않는다는 규칙을 더했습니다.
+
+## Table 1 셋째 열: 더 큰 생성기의 Direct (준비, 2026-10-18)
+
+- 사용자 요청: `gpt-5-nano`보다 좋은(더 비싼) 모델로 Direct를 돌려 Table 1에 열을 더하고, 작은 생성기 + Jev(**JBFC**)와 비교합니다.
+- 모델: Azure 배포 `gpt-5.4-mini`(OpenAI 목록 가격 입력 $0.75, 캐시 입력 $0.075, 출력 $4.50 / 100만 토큰, 2026-10-18 OpenAI 모델 문서에서 확인; reasoning effort `none` 지원). 프로젝트 코드의 기본 모델이고 가격이 이미 스크립트에 있습니다. 다른 배포는 `make compare MODEL=<배포>`와 `LLM_*_PRICE`로 바꿀 수 있습니다.
+- 실행 방법: `make compare WORKERS=8`(`scripts/run_compare.sh`). 사전 점검은 생성기만 부르고(`scripts/preflight.py --generator-only`, Jev 호출 없음), `jev-fc run --split all --methods direct --max-repairs 2 --replicates 1`로 3,051개를 한 번 돌린 뒤 `scripts/table1_compare.py`가 Table 1을 다시 그립니다. 결과 폴더는 `results/direct_gpt-5.4-mini`입니다. `src/jev_fc`를 바꾸지 않았으므로 코드 해시가 Table 2 실행과 같습니다.
+- 검사(`scripts/table1_compare.py`): 비교 실행은 Direct만, 완료, 3,051개 ID와 데이터 해시, 코드 해시·API 형식·게이트웨이·최대 출력 토큰·온도·분할이 Table 2 실행과 같아야 하고, 모델은 달라야 하며, 가격이 있어야 합니다. 논문 프로토콜에서 모델·reasoning effort·Jev 항목만 다를 수 있고, effort가 `none`이 아니면 캡션에 적습니다.
+- Table 1: 머리글을 `gpt-5-nano`(Direct, **JBFC**)와 `gpt-5.4-mini`(Direct) 두 단으로 나누고, 행마다 가장 높은 정확도를 굵게, 마지막에 1,000건당 비용(USD/1k) 행을 더했습니다. 실행 전에는 셋째 열이 `--`이고 캡션에 미실행 문구가 붙습니다. `make report`도 `jev-fc report` 뒤에 이 스크립트를 실행해 열을 유지합니다.
+- 원고: 4.2에 "Direct also runs once with the larger, costlier deployment gpt-5.4-mini under the same settings"를, 4.3에 `gpt-5.4-mini` 가격을 넣었습니다. 결과 문단과 결론은 실행 뒤에 수치대로 씁니다(큰 모델이 더 높은 범주가 있으면 그대로 적습니다). 4쪽을 지키려고 Table 1·Figure 2 캡션, 4.3의 측정 목록, "Repair limits." 문단(앞 문단에 합침), 4.4 첫 문단과 "More repairs." 문장을 줄였습니다(수치는 그대로).
+- 예상 비용: Table 2 실행의 Direct 토큰 사용량에 `gpt-5.4-mini` 가격을 적용하면 1,000건당 약 $0.74, 전체 약 $2.3입니다(실제 출력 길이에 따라 달라짐). 작업자 8개로 약 10분 예상. 작업 환경에서는 게이트웨이에 접속할 수 없어 사용자가 실행해야 합니다.

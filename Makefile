@@ -1,9 +1,11 @@
-.PHONY: setup prepare check-config test demo smoke table1 table2 table3 irrelevance-check report paper verify
+.PHONY: setup prepare check-config test demo smoke table1 table2 table3 compare irrelevance-check report paper verify
 
 WORKERS ?= 4
 MODEL ?= gpt-5-nano
 RUN ?= results/table2_$(MODEL)_r2
 CHECK_RUNS ?= 1
+COMPARE_MODEL ?= gpt-5.4-mini
+COMPARE ?= results/direct_$(COMPARE_MODEL)
 EFFORT ?=
 
 setup:
@@ -40,13 +42,20 @@ table2:
 table3:
 	MODEL="$(MODEL)" WORKERS="$(WORKERS)" bash scripts/run_table3.sh
 
+# Table 1, third column: Direct with a larger generator (default gpt-5.4-mini; MODEL=... for another
+# deployment) on all examples, without Jev. Redraws Table 1 next to the Table 2 run's gpt-5-nano columns.
+compare:
+	MODEL="$(if $(filter command line,$(origin MODEL)),$(MODEL),$(COMPARE_MODEL))" WORKERS="$(WORKERS)" bash scripts/run_compare.sh
+
 # Direct only on the 240 Irrelevance examples; compares with the Table 1 run. EFFORT=low etc. is optional.
 irrelevance-check:
 	MODEL="$(MODEL)" WORKERS="$(WORKERS)" REPLICATES="$(CHECK_RUNS)" EFFORT="$(EFFORT)" bash scripts/run_irrelevance_check.sh
 
-# Refill the paper's tables from a finished run (default: the Table 2 run).
+# Refill the paper's tables from a finished run (default: the Table 2 run), then Table 1's third
+# column from the comparison run (empty until make compare has run).
 report:
 	uv run jev-fc report "$(RUN)" --paper paper/main.tex
+	uv run python scripts/table1_compare.py "$(RUN)" --compare "$(COMPARE)" --model "$(COMPARE_MODEL)" --paper paper/main.tex > /dev/null
 
 paper:
 	python3 scripts/build_paper.py

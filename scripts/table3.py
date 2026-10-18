@@ -159,7 +159,7 @@ def latex_repairs_figure(summaries=None):
         r"  axis x line*=bottom, axis y line*=left, ymajorgrids, grid style={black!12},",
         r"  tick label style={font=\scriptsize}, label style={font=\scriptsize}, tick align=outside,",
         r"  major tick length=2pt, ylabel style={yshift=-3pt}]",
-        r"\nextgroupplot[height=2.2cm, ymin=70, ymax=91, ytick={70,75,80,85,90}, ylabel={Accuracy (\%)},",
+        r"\nextgroupplot[height=2.0cm, ymin=70, ymax=91, ytick={70,75,80,85,90}, ylabel={Accuracy (\%)},",
         r"  legend style={font=\scriptsize, draw=none, fill=none, at={(0.99,0.03)}, anchor=south east,",
         r"  legend columns=2, /tikz/every even column/.append style={column sep=6pt}}]",
     ]
@@ -169,7 +169,7 @@ def latex_repairs_figure(summaries=None):
         lines += _labels(call, lambda v: f"{v:.1f}", above=True) + _labels(function, lambda v: f"{v:.1f}", above=True)
     else:
         lines.append(r"\node[font=\scriptsize] at (rel axis cs:0.5,0.5) {not yet run};")
-    lines.append(r"\nextgroupplot[height=0.95cm, ymin=0, ymax=0.9, ytick={0,0.4,0.8}, ylabel={USD/1k}, "
+    lines.append(r"\nextgroupplot[height=0.85cm, ymin=0, ymax=0.9, ytick={0,0.4,0.8}, ylabel={USD/1k}, "
                  r"xlabel={Repair limit $r$}]")
     if cost:
         lines.append(_plot(cost, "cost", "triangle*"))
@@ -185,7 +185,7 @@ def latex_repairs_figure(summaries=None):
         notes += " Limits without points are unrun."
     lines += [r"\caption{\textbf{JBFC} by repair limit $r$, extending the run of "
               rf"Table~\ref{{tab:main}} to $r={max(LIMITS)}$ ($r=2$ matches it). Top: call and function "
-              r"accuracy (\%, excluding live relevance); bottom: USD per 1,000 requests." + notes + "}",
+              r"accuracy (\%); bottom: USD per 1,000 requests." + notes + "}",
               r"\label{fig:repairs}", r"\end{figure}"]
     return "\n".join(lines)
 

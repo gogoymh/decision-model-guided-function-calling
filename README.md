@@ -17,7 +17,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-eab308?style=flat-square"></a>
-  <img alt="574 offline tests" src="https://img.shields.io/badge/tests-574%20passing-16a34a?style=flat-square">
+  <img alt="590 offline tests" src="https://img.shields.io/badge/tests-590%20passing-16a34a?style=flat-square">
   <img alt="Dependencies: httpx and jsonschema" src="https://img.shields.io/badge/deps-httpx%20%2B%20jsonschema-6b7280?style=flat-square">
   <a href="paper/main.pdf"><img alt="Paper (PDF)" src="https://img.shields.io/badge/paper-PDF-b31b1b?style=flat-square&logo=latex&logoColor=white"></a>
 </p>
@@ -356,6 +356,7 @@ make check-config  # show the configured routes, models and keys, without API ca
 make table1        # Direct vs JBFC (6,102 records)
 make table2        # all seven methods (21,357 records); also fills Table 1
 make table3        # Figure 2: JBFC at repair limits 1, 2, 3, 5, 7, 10, extending the Table 2 run
+make compare       # Table 1's third column: Direct with gpt-5.4-mini on all examples (no Jev)
 python scripts/analyze_results.py results/table2_gpt-5-nano_r2   # the numbers quoted in Results
 ```
 

@@ -4,6 +4,7 @@ Tries reasoning effort none, minimal, low, then the model default, and writes th
 first working setting to the env file given as the first argument. An optional
 second argument replaces that list (comma-separated; "default" is the model
 default). Uses the generator and Jev settings from the environment and .env.
+--generator-only skips the Jev call, for runs that never ask Jev (Direct only).
 """
 import os
 import shlex
@@ -43,7 +44,7 @@ def provider_message(response):
     return str(message or "")[:300]
 
 
-def main(env_file, efforts=("none", "minimal", "low", "")):
+def main(env_file, efforts=("none", "minimal", "low", ""), jev=True):
     row = next(e for e in load_examples("data/bfcl/examples.jsonl") if e["category"] == "simple_python")
     example = {key: row[key] for key in ("id", "category", "messages", "tools")}
     chosen = None
@@ -72,6 +73,11 @@ def main(env_file, efforts=("none", "minimal", "low", "")):
         print("STOPPED: no working generator setting. Send these lines to Claude.")
         return 2
     effort, out = chosen
+    if not jev:
+        Path(env_file).write_text(f"export LLM_REASONING_EFFORT={shlex.quote(effort)}\n")
+        print(f"preflight passed (generator only; this run does not call Jev): "
+              f"LLM_REASONING_EFFORT={effort or '(model default)'}")
+        return 0
     verifier = JevVerifier(max_retries=0, gateway=os.getenv("JEV_GATEWAY") or None)
     try:
         started = time.perf_counter()
@@ -95,11 +101,14 @@ def main(env_file, efforts=("none", "minimal", "low", "")):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) not in (2, 3):
-        sys.exit("usage: preflight.py ENV_FILE [EFFORTS]  (EFFORTS e.g. none or low,default)")
-    if len(sys.argv) == 3:
-        chosen = [item.strip() for item in sys.argv[2].split(",") if item.strip()]
+    args = sys.argv[1:]
+    use_jev = "--generator-only" not in args
+    args = [arg for arg in args if arg != "--generator-only"]
+    if len(args) not in (1, 2):
+        sys.exit("usage: preflight.py [--generator-only] ENV_FILE [EFFORTS]  (EFFORTS e.g. none or low,default)")
+    if len(args) == 2:
+        chosen = [item.strip() for item in args[1].split(",") if item.strip()]
         if not chosen or not all(item in {"none", "minimal", "low", "medium", "high", "default"} for item in chosen):
             sys.exit("EFFORTS must list none, minimal, low, medium, high or default")
-        sys.exit(main(sys.argv[1], ["" if item == "default" else item for item in chosen]))
-    sys.exit(main(sys.argv[1]))
+        sys.exit(main(args[0], ["" if item == "default" else item for item in chosen], jev=use_jev))
+    sys.exit(main(args[0], jev=use_jev))
