@@ -6,7 +6,8 @@
 # when it can, otherwise directly with TYPESAFE_API_KEY (same model), as recorded in each manifest. The two
 # generators run at the same time (PARALLEL=0: one after the other); running the script again resumes from the
 # completed records. Exploratory: the paper is not changed.
-# Results: results/jbfc_t<THRESHOLD>_<model>_run<k>; comparison: results/threshold_<THRESHOLD>.json
+# Results: results/jbfc_t<THRESHOLD>_<model>_run<k>; comparison: results/threshold_<THRESHOLD>.json; the table
+# of every threshold run so far: docs/threshold.md (scripts/threshold_table.py).
 # Usage: make threshold [THRESHOLD=0.7] [WORKERS=8] [PARALLEL=0] [MODELS="gpt-5-nano gpt-5.4-mini"] [RUNS="1 2 3"]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -90,4 +91,6 @@ fi
 note all "$LOG" "comparison with Direct and JBFC at the runs' threshold (scripts/threshold_compare.py)"
 uv run python scripts/threshold_compare.py --threshold "$THRESHOLD" --json "results/threshold_${TAG#t}.json" \
   2>&1 >/dev/null | stamp all "$LOG"
-note all "$LOG" "done: results/threshold_${TAG#t}.json (the paper is unchanged)"
+note all "$LOG" "table of every threshold run so far: docs/threshold.md (scripts/threshold_table.py)"
+uv run python scripts/threshold_table.py 2>&1 | stamp all "$LOG"
+note all "$LOG" "done: results/threshold_${TAG#t}.json and docs/threshold.md (the paper is unchanged)"

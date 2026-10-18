@@ -1,4 +1,4 @@
-.PHONY: setup prepare check-config test demo smoke table1 table2 table3 compare r3 repeat threshold irrelevance-check report paper verify
+.PHONY: setup prepare check-config test demo smoke table1 table2 table3 compare r3 repeat threshold threshold-table irrelevance-check report paper verify
 
 WORKERS ?= 4
 MODEL ?= gpt-5-nano
@@ -65,6 +65,10 @@ repeat:
 # the paper is unchanged.
 threshold:
 	THRESHOLD="$(THRESHOLD)" WORKERS="$(WORKERS)" PARALLEL="$(PARALLEL)" MODELS="$(MODELS)" RUNS="$(RUNS)" bash scripts/run_threshold.sh
+
+# Table of every threshold run on disk (docs/threshold.md); make threshold refreshes it at the end.
+threshold-table:
+	uv run python scripts/threshold_table.py
 
 # Direct only on the 240 Irrelevance examples; compares with the Table 1 run. EFFORT=low etc. is optional.
 irrelevance-check:
