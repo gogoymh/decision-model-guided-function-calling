@@ -10,6 +10,9 @@ the same code, data, interface and settings; only the generator and its prices d
 
 Usage: python scripts/paper_tables.py MAIN_RUN [--compare RUN] [--model NAME] [--paper paper/main.tex]
 Without a finished --compare run, its two columns are drawn empty for --model.
+These are the threshold-0.8 runs. The paper's tables use threshold 0.5 and the first proposal when none
+passes (user decision 2026-10-18) and come from scripts/final_tables.py (make final); --paper here would
+overwrite them with the earlier settings.
 """
 
 import argparse

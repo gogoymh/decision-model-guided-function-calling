@@ -1,6 +1,6 @@
 """Table of the Jev threshold experiments (make threshold-table): docs/threshold.md.
 
-Per generator, Direct and JBFC at the paper's threshold (0.8) come from Table 1's three
+Per generator, Direct and JBFC at the runs' original threshold (0.8) come from Table 1's three
 runs; every other threshold with reruns (scripts/rethreshold.py, results/jbfc_t<T>_<model>_run<k>)
 adds a JBFC row. Reruns start from their run's first proposals, so all rows of a generator
 are paired example by example. Columns: mean accuracy +- s.d. across runs and each run;
@@ -10,7 +10,8 @@ first check (right and wrong ones); fixes and breaks against the first proposal,
 breaks where nothing passed and the last proposal was returned; the accuracy if a
 trajectory that never passes returned its first proposal instead (same trajectories, so
 exact); repairs, limit reached, acceptance and its precision, cost and time; accuracy by
-category. Exploratory: the paper and README are not changed.
+category. The paper and README use threshold 0.5 with the first proposal kept when none passes (user
+decision 2026-10-18; make final, scripts/final_tables.py); this table records how that was chosen.
 
 Usage: python scripts/threshold_table.py [--output docs/threshold.md] [--json OUT]
 """
@@ -194,12 +195,14 @@ def _label(item, threshold, row):
 
 def markdown(report):
     lines = [
-        "# Jev 임계값 실험 (탐색용)", "",
+        "# Jev 임계값 실험", "",
         "> 자동 생성 파일입니다: `make threshold-table` (`scripts/threshold_table.py`). 직접 고치지 마세요.", "",
         "Table 1의 세 회차(생성기마다)마다 그 회차의 첫 제안을 그대로 두고 **JBFC**만 다른 임계값(함수·인자 검사 모두)으로 "
         "다시 실행했습니다(`make threshold THRESHOLD=…`, `scripts/rethreshold.py`). Direct와 임계값 0.8의 **JBFC**는 "
         "Table 1 실행 그대로이고, 수정 한도는 r=3, 종료 규칙은 한도까지 통과하지 못하면 마지막 제안을 실행하는 "
-        "`execute_last`입니다. 0.8 외의 임계값은 이 예제들의 결과를 본 뒤 고른 탐색용 값이라 논문 표에는 쓰지 않습니다.", "",
+        "`execute_last`입니다. 0.8 외의 임계값은 이 예제들의 결과를 본 뒤 고른 값입니다. 이 표를 보고 사용자가 "
+        "임계값 0.5와, 통과한 제안이 없으면 첫 제안을 내는 규칙을 논문 설정으로 정했습니다(2026-10-18; 논문 표는 "
+        "`make final`, `scripts/final_tables.py`). 아래 \"첫 제안 유지 시 정확도\" 열이 그 규칙의 값입니다.", "",
         "정확도는 live relevance를 뺀 3,035개 기준입니다. 차이는 같은 예제끼리 짝지어, 예제마다 회차 평균을 낸 뒤 "
         "예제를 2,000번 재표집한 95% 구간입니다(seed 1729).", "",
         "## 정확도", "",

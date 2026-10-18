@@ -6,8 +6,8 @@
 # settings and prices are those of run 1; only the generator's samples differ. Jev answers through the gateway
 # when it can, otherwise directly with TYPESAFE_API_KEY (same model); each manifest records the route.
 # The two generators run at the same time (PARALLEL=0: one after the other). Running the script again resumes
-# from the completed records. Once every run is complete, scripts/table1_repeat.py writes Table 1 as the mean
-# of the three runs (report: results/table1_repeat.json).
+# from the completed records. Once every run is complete, scripts/table1_repeat.py reports the mean of the three
+# runs at threshold 0.8 (results/table1_repeat.json); the paper's Table 1 comes from make final.
 # Usage: make repeat [WORKERS=8] [PARALLEL=0] [MODELS="gpt-5-nano gpt-5.4-mini"] [RUNS="2 3"]
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -81,7 +81,7 @@ if [ "$failed" != 0 ]; then
   exit 1
 fi
 
-note all "$LOG" "Table 1: mean of the three runs once all are complete (scripts/table1_repeat.py)"
-uv run python scripts/table1_repeat.py --if-complete --paper paper/main.tex --json results/table1_repeat.json \
+note all "$LOG" "mean of the three runs once all are complete (scripts/table1_repeat.py; the paper is unchanged)"
+uv run python scripts/table1_repeat.py --if-complete --json results/table1_repeat.json \
   2>&1 >/dev/null | stamp all "$LOG"
 note all "$LOG" "done"

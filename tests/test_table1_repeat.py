@@ -73,8 +73,8 @@ def test_table_shows_each_cells_mean_the_totals_spread_and_the_mean_cost():
             r"\textbf{81.3}{\scriptsize$\pm$0.3} & 79.6{\scriptsize$\pm$0.4}\\") in table
     assert "s.d. &" not in table
     assert r"USD/1k & & 0.056 & 0.273 & 0.706 & 1.718\\" in table
-    assert r"Accuracy (\%) on all BFCL examples, mean of three runs, $r=3$ (Direct makes no repairs)." in table
-    assert r"Bold: highest per row. Total: mean $\pm$ s.d. across runs. USD/1k: mean cost per 1,000 requests." in table
+    assert r"Accuracy (\%) on all BFCL examples, mean of three runs, $r=3$." in table
+    assert r"Bold: highest per row. Total: mean $\pm$ s.d. over runs. USD/1k: cost per 1,000 requests." in table
     assert r"$^\dagger$Call presence only; not in the total.}" in table
     assert r"\label{tab:categories}" in table and "one run" not in table
 

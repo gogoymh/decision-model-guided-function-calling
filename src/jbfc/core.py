@@ -29,6 +29,9 @@ METHODS = {
     "direct": "direct",               # one proposal, no checks
 }
 _PUBLIC = {internal: public for public, internal in METHODS.items()}
+# The paper's final settings: Jev's pass mark for both checks, and which proposal is final when none passes.
+DEFAULT_THRESHOLD = 0.5
+ON_EXHAUSTION = ("first", "last")
 _ROLES = {"system", "developer", "user", "assistant"}
 _HISTORY_ROLES = _ROLES | {"tool", "function"}
 _HISTORY_KEYS = ("role", "content", "name", "tool_calls", "tool_call_id")
@@ -48,6 +51,12 @@ def _method(name) -> str:
 def _repairs(value) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ValueError("max_repairs must be a nonnegative integer.")
+    return value
+
+
+def _on_exhaustion(value) -> str:
+    if value not in ON_EXHAUSTION:
+        raise ValueError(f"on_exhaustion must be one of {', '.join(map(repr, ON_EXHAUSTION))}.")
     return value
 
 
@@ -132,7 +141,10 @@ class Result:
     ``calls`` is the final proposal as ``[{"name", "arguments"}]``: ``[]`` is a decision to
     make no call, and ``None`` an unreadable proposal (cut off, filtered or refused).
     ``accepted`` says whether it passed the checks (``None`` for methods without a
-    verifier). ``trace`` keeps every proposal, verdict and feedback in order.
+    verifier). When no proposal passed within the repair limit (``exhausted``), the final
+    proposal is the first one by default (``on_exhaustion="first"``, as in the paper) or the
+    last one; ``final_attempt`` is its index in ``trace``, which keeps every proposal, verdict
+    and feedback in order.
     """
 
     calls: list[dict] | None
@@ -145,6 +157,7 @@ class Result:
     outputs: list = field(default_factory=list)
     latency_s: float = 0.0
     trace: list[dict] = field(default_factory=list, repr=False)
+    final_attempt: int | None = None
 
     @property
     def call(self) -> dict | None:
@@ -181,7 +194,8 @@ class Result:
     @property
     def probabilities(self) -> dict:
         """Jev's probabilities of yes for the final proposal (None where a check did not run)."""
-        check = (self.trace[-1].get("verification") or {}) if self.trace else {}
+        final = -1 if self.final_attempt is None else self.final_attempt
+        check = (self.trace[final].get("verification") or {}) if self.trace else {}
         return {"function": check.get("function_probability"), "arguments": check.get("arguments_probability")}
 
     @property
@@ -243,13 +257,13 @@ def verify(messages, calls, tools, *, jev: Jev | None = None, jev_api_key: str |
 
     ``messages`` is the conversation so far, including earlier tool calls and results. The
     call passes if it is well formed for the tools and Jev's function check, plus its
-    argument check when there is a call, reach the threshold (0.8 by default).
+    argument check when there is a call, reach the threshold (0.5 by default, as in the paper).
     """
     if jev is not None:
         if jev_api_key is not None or threshold is not None:
             raise ValueError("Configure the Jev instance itself (api_key, threshold).")
         return _verify(jev, messages, calls, tools)
-    with Jev(jev_api_key, threshold=0.8 if threshold is None else threshold) as owned:
+    with Jev(jev_api_key, threshold=DEFAULT_THRESHOLD if threshold is None else threshold) as owned:
         return _verify(owned, messages, calls, tools)
 
 
@@ -263,14 +277,18 @@ class JBFC:
     ``model`` is ``"provider:model"`` (openai, anthropic, gemini, xai, azure, openrouter) or a
     provider object; extra keyword options (api_key=, base_url=, ...) go to the provider.
     ``max_repairs`` bounds the repairs after the first proposal (3, as in the paper's tables).
+    ``threshold`` is Jev's pass mark for both checks (0.5, as in the paper). When no proposal
+    passes within the limit, ``on_exhaustion`` picks the final one: ``"first"`` (the paper's
+    rule: a repair replaces the model's first answer only once it passes) or ``"last"``.
     """
 
     def __init__(self, model, *, tools=None, functions: dict[str, Callable] | None = None,
                  jev: Jev | None = None, method: str = "jbfc", max_repairs: int = 3,
-                 threshold: float | None = None, execute_unverified: bool = False,
+                 threshold: float | None = None, on_exhaustion: str = "first", execute_unverified: bool = False,
                  jev_api_key: str | None = None, **model_options):
         self.method = _method(method)
         self.max_repairs = _repairs(max_repairs)
+        self.on_exhaustion = _on_exhaustion(on_exhaustion)
         self.execute_unverified = bool(execute_unverified)
         self.tools = list(tools) if isinstance(tools, (list, tuple)) else ([] if tools is None else [tools])
         self.functions = dict(functions or {})
@@ -284,7 +302,7 @@ class JBFC:
         self._owned = [self.model] if isinstance(model, str) else []
         try:
             if jev is None and (needs_jev or jev_api_key is not None):
-                jev = Jev(jev_api_key, threshold=0.8 if threshold is None else threshold)
+                jev = Jev(jev_api_key, threshold=DEFAULT_THRESHOLD if threshold is None else threshold)
                 self._owned.append(jev)
         except Exception:
             self.close()
@@ -292,19 +310,23 @@ class JBFC:
         self.jev = jev
 
     def call(self, messages, tools=None, *, functions: dict[str, Callable] | None = None,
-             max_repairs: int | None = None) -> Result:
+             max_repairs: int | None = None, on_exhaustion: str | None = None) -> Result:
         """Propose, check and repair a call. Nothing is executed."""
-        return self._solve(messages, tools, functions, max_repairs, execute=False, unverified=False)
+        return self._solve(messages, tools, functions, max_repairs, execute=False, unverified=False,
+                           on_exhaustion=on_exhaustion)
 
     def run(self, messages, tools=None, *, functions: dict[str, Callable] | None = None,
-            max_repairs: int | None = None, execute_unverified: bool | None = None) -> Result:
+            max_repairs: int | None = None, execute_unverified: bool | None = None,
+            on_exhaustion: str | None = None) -> Result:
         """``call()``, then execute the final call with its Python function if it passed the checks.
 
-        With ``execute_unverified=True`` a call that is still rejected after the last repair
-        runs too (the paper's benchmark policy). Methods without a verifier always run.
+        With ``execute_unverified=True`` the final call runs even if no proposal passed (the
+        paper's benchmark policy): the first proposal, or the last with ``on_exhaustion="last"``.
+        Methods without a verifier always run.
         """
         unverified = self.execute_unverified if execute_unverified is None else bool(execute_unverified)
-        return self._solve(messages, tools, functions, max_repairs, execute=True, unverified=unverified)
+        return self._solve(messages, tools, functions, max_repairs, execute=True, unverified=unverified,
+                           on_exhaustion=on_exhaustion)
 
     def verify(self, messages, calls, tools=None) -> Verdict:
         """Check any proposed call (dicts or SDK objects) with Jev and the schema check."""
@@ -329,7 +351,8 @@ class JBFC:
             return toolset(self.tools, {**self.functions, **(functions or {})})
         return toolset(tools, functions)
 
-    def _solve(self, messages, tools, functions, max_repairs, *, execute, unverified) -> Result:
+    def _solve(self, messages, tools, functions, max_repairs, *, execute, unverified, on_exhaustion=None) -> Result:
+        rule = self.on_exhaustion if on_exhaustion is None else _on_exhaustion(on_exhaustion)
         schemas, registry = self._toolset(tools, functions)
         example = {"messages": _messages(messages), "tools": schemas}
         outputs: list = []
@@ -348,15 +371,20 @@ class JBFC:
                 outputs.append(invoke(registry[call["name"]], deepcopy(call["arguments"])))
             return outputs
 
+        # The loop runs a passing call (or, without a verifier, its final call); nothing else runs inside it.
         record = run_example(example, self.model, self.jev, method=self.method,
                              max_repairs=self.max_repairs if max_repairs is None else _repairs(max_repairs),
-                             exhaustion_policy="execute_last" if unverified else "abstain",
-                             executor=executor if execute else None)
-        final = record["trace"][-1]["proposal"]
-        return Result(calls=deepcopy(record["calls"]), accepted=record["accepted"], exhausted=record["exhausted"],
-                      repairs=record["repairs"], method=_PUBLIC[self.method], text=final.get("content"),
-                      executed=bool(executed), outputs=outputs, latency_s=record["wall_time_s"],
-                      trace=record["trace"])
+                             exhaustion_policy="abstain", executor=executor if execute else None)
+        trace, final, calls = record["trace"], len(record["trace"]) - 1, record["calls"]
+        if record["exhausted"]:  # no proposal passed within the limit
+            if rule == "first":
+                final, calls = 0, trace[0]["proposal"]["calls"]
+            if execute and unverified:
+                executor(calls)
+        return Result(calls=deepcopy(calls), accepted=record["accepted"], exhausted=record["exhausted"],
+                      repairs=record["repairs"], method=_PUBLIC[self.method],
+                      text=trace[final]["proposal"].get("content"), executed=bool(executed), outputs=outputs,
+                      latency_s=record["wall_time_s"], trace=trace, final_attempt=final)
 
     def close(self) -> None:
         """Close the HTTP clients this object created."""
@@ -371,4 +399,4 @@ class JBFC:
 
     def __repr__(self) -> str:
         return (f"JBFC(model={self.model!r}, method={_PUBLIC[self.method]!r}, max_repairs={self.max_repairs}, "
-                f"jev={self.jev!r})")
+                f"on_exhaustion={self.on_exhaustion!r}, jev={self.jev!r})")

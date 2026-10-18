@@ -128,7 +128,7 @@ def limits(t, rows):
     height = top + plot_h + 40
     out = [f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}">']
     specs = [("Call accuracy (%)", 1, (70, 80, (70, 75, 80)), t["blue"], lambda v: f"{v:.1f}"),
-             ("Cost, USD per 1,000 requests", 2, (0, 0.8, (0, 0.2, 0.4, 0.6, 0.8)), t["orange"], lambda v: f"${v:.3f}")]
+             ("Cost, USD per 1,000 requests", 2, (0, 0.5, (0, 0.1, 0.2, 0.3, 0.4, 0.5)), t["orange"], lambda v: f"${v:.3f}")]
     for k, (label, index, (lo, hi, ticks), color, fmt) in enumerate(specs):
         ox = k * (panel + gap)
         px0, px1 = ox + 40, ox + panel - 18
@@ -174,7 +174,7 @@ def main(data_path, out_dir):
                      "gpt-5-nano · first run · same first proposal for every method · at most 3 repairs · time and cost per request at right",
                      [], methods(t, data["methods"]))))
         jobs.append((f"chart-limits-{mode}.png", page(t, "JBFC by repair limit r",
-                     "Call accuracy and cost · one run extended from r=2, so every limit shares its first attempts",
+                     "Call accuracy and cost · one run continued from r=3 to r=10 and cut at each limit, so every limit shares its first attempts",
                      [], limits(t, data["limits"]))))
     with sync_playwright() as p:
         browser = p.chromium.launch()

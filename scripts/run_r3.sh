@@ -5,7 +5,8 @@
 #     extension cut at r=3 (no new request); Direct stays; every self-refine row and the rows of the
 #     other methods that reached r=2 get one more attempt on their saved history.
 #  2. gpt-5.4-mini: add JBFC (r=3) to its Direct run, starting from the saved first proposals.
-#  3. Fill Tables 1 and 2 in paper/main.tex.
+#  3. Summarize both runs (results/tables_r3.json). The paper's tables use the final settings (threshold 0.5,
+#     first proposal when none passes) and come from make final, so this script leaves paper/main.tex alone.
 # Jev answers through the gateway when it can, otherwise directly with TYPESAFE_API_KEY (same model);
 # each run's manifest records the route. Usage: make r3 [WORKERS=8]
 set -euo pipefail
@@ -62,9 +63,6 @@ note "4/5 gpt-5.4-mini: add JBFC (r=$LIMIT) to $MINI_SOURCE from its saved first
 uv run python scripts/raise_limit.py "$MINI_SOURCE" --max-repairs "$LIMIT" --add jev_joint \
   --output "$MINI_OUT" --workers "$WORKERS" --resume 2>&1 | stamp
 
-note "5/5 fill Tables 1 and 2 in paper/main.tex"
-uv run python scripts/paper_tables.py "$NANO_OUT" --compare "$MINI_OUT" --paper paper/main.tex \
-  > "results/tables_r${LIMIT}.json"
-# After make repeat, Table 1 is the mean of three runs; this keeps it so (and does nothing before).
-uv run python scripts/table1_repeat.py --if-complete --paper paper/main.tex > /dev/null
-note "done: Tables 1 and 2 are filled in paper/main.tex (rebuild the PDF next); numbers in results/tables_r${LIMIT}.json"
+note "5/5 summarize both runs (the paper's tables come from make final)"
+uv run python scripts/paper_tables.py "$NANO_OUT" --compare "$MINI_OUT" > "results/tables_r${LIMIT}.json"
+note "done: numbers in results/tables_r${LIMIT}.json; paper/main.tex is unchanged (make final fills it)"

@@ -15,6 +15,8 @@ runs first, then examples are resampled (seed 1729, 2,000 times, as in the paper
 Usage: python scripts/table1_repeat.py [--small RUN RUN RUN] [--large RUN RUN RUN]
                                        [--paper paper/main.tex] [--json OUT] [--if-complete]
 --if-complete leaves the paper and OUT unchanged while a run is missing or unfinished.
+These are the threshold-0.8 runs; the paper's Table 1 comes from scripts/final_tables.py (make final), which
+reuses latex_table1 and the paired statistics below on the final runs. --paper would overwrite it.
 """
 
 import argparse
@@ -143,8 +145,9 @@ def column_spreads(small, large, key, category=None):
             for runs, method in columns(small, large)]
 
 
-def latex_table1(small, large):
-    """Table 1: mean accuracy over the runs by category, the total's run-to-run spread and the mean cost."""
+def latex_table1(small, large, costs=None):
+    """Table 1: mean accuracy over the runs by category, the total's run-to-run spread and the mean cost.
+    costs, if given, replaces each column's mean cost (USD per request; scripts/final_tables.py)."""
     small_model, large_model = small[0]["manifest"]["llm_model"], large[0]["manifest"]["llm_model"]
     limit, count = small[0]["manifest"]["max_repairs"], len(small)
     # Footnote size keeps the one-line "mean +- s.d." totals within the column.
@@ -166,7 +169,9 @@ def latex_table1(small, large):
     bolded = bolded or bold
     # The total's standard deviation across runs sits next to its mean, in the same row.
     total = [rf"{cell}{{\scriptsize$\pm${paper_tables._cell(item['sd'])}}}" for cell, item in zip(total, totals)]
-    cost = [paper_tables._cell(item["mean"], 1000, 3) for item in column_spreads(small, large, "mean_cost_usd")]
+    if costs is None:
+        costs = [item["mean"] for item in column_spreads(small, large, "mean_cost_usd")]
+    cost = [paper_tables._cell(value, 1000, 3) for value in costs]
     effort = large[0]["manifest"].get("reasoning_effort")
     effort_note = "" if effort in (None, "none") else \
         rf" \texttt{{{_tex_escape(large_model)}}} uses reasoning effort \texttt{{{_tex_escape(effort)}}}."
@@ -174,9 +179,9 @@ def latex_table1(small, large):
               "USD/1k & & " + " & ".join(cost) + r"\\",
               r"\bottomrule", r"\end{tabular}",
               rf"\caption{{Accuracy (\%) on all BFCL examples, mean of {NUMBER_WORDS.get(count, count)} runs, "
-              rf"$r={limit}$ (Direct makes no repairs)." + effort_note
+              rf"$r={limit}$." + effort_note
               + (" Bold: highest per row." if bolded else "")
-              + r" Total: mean $\pm$ s.d. across runs. USD/1k: mean cost per 1,000 requests."
+              + r" Total: mean $\pm$ s.d. over runs. USD/1k: cost per 1,000 requests."
               + r" $^\dagger$Call presence only; not in the total.}",
               r"\label{tab:categories}", r"\end{table}"]
     return "\n".join(lines)

@@ -15,7 +15,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-eab308?style=flat-square"></a>
-  <img alt="599 offline tests" src="https://img.shields.io/badge/tests-599%20passing-16a34a?style=flat-square">
+  <img alt="649 offline tests" src="https://img.shields.io/badge/tests-649%20passing-16a34a?style=flat-square">
   <img alt="Dependencies: httpx and jsonschema" src="https://img.shields.io/badge/deps-httpx%20%2B%20jsonschema-6b7280?style=flat-square">
   <a href="paper/main.pdf"><img alt="Paper (PDF)" src="https://img.shields.io/badge/paper-PDF-b31b1b?style=flat-square&logo=latex&logoColor=white"></a>
 </p>
@@ -48,15 +48,15 @@ agent.run("Is it jacket weather in Seoul tonight?")  # runs the call only if Jev
 
 ![JBFC: the model proposes a call, Jev checks it, and rejected calls return to the model as a growing feedback history](docs/assets/jbfc-framework.png)
 
-**(a)** The LLM proposes a call $c_t$, one function with its arguments, or no call. A local schema check and Jev judge it: Jev sees the request, the available functions and the call, and answers *right function?* and, when there is a call, *right arguments?* as probabilities of yes. A check passes at 0.8 or more. A rejected call and its verdicts $d_t$ are appended to the feedback history $H_t$, and the model tries again. **(b)** The history goes *before* the original request, oldest first, and is marked as not executed, so the model sees every earlier attempt and can change the function, the arguments, or decide not to call. (The scores in (b) are illustrative.)
+**(a)** The LLM proposes a call $c_t$, one function with its arguments, or no call. A local schema check and Jev judge it: Jev sees the request, the available functions and the call, and answers *right function?* and, when there is a call, *right arguments?* as probabilities of yes. A check passes at 0.5 or more. A rejected call and its verdicts $d_t$ are appended to the feedback history $H_t$, and the model tries again. **(b)** The history goes *before* the original request, oldest first, and is marked as not executed, so the model sees every earlier attempt and can change the function, the arguments, or decide not to call. (The scores in (b) are illustrative.)
 
 Each record is a labeled example: a call the model wrote, with Jev's verdict on it. Like the demonstrations in [many-shot in-context learning](https://arxiv.org/abs/2404.11018), more of them seemed to help in our run: the full history scored slightly above the latest record alone, and accuracy rose with the repair limit (which also adds attempts). Jev makes those labels in a fraction of a second, without reference answers.
 
-The loop stops at the first proposal that passes every check, or after `max_repairs` repairs (3 by default). Nothing runs during repairs; `run()` executes only the final, accepted call.
+The loop stops at the first proposal that passes every check, or after `max_repairs` repairs (3 by default). If none passes, the result is the model's first proposal, so a repair replaces the model's answer only once Jev accepts it (`on_exhaustion="last"` returns the last repair instead). Nothing runs during repairs; `run()` executes only an accepted call.
 
 ## See it
 
-Two real traces from the paper's run (`gpt-5-nano` on BFCL, `jev-1.13.0`). Red lines were rejected; green lines passed.
+Two real traces from the paper's first run (`gpt-5-nano` on BFCL, `jev-1.13.0`, threshold 0.5). Red lines were rejected; green lines passed.
 
 **An unnecessary call, withdrawn.** The only tool is unrelated, and the model calls it anyway:
 
@@ -65,19 +65,19 @@ Two real traces from the paper's run (`gpt-5-nano` on BFCL, `jev-1.13.0`). Red l
   Tools: portfolio_returns(initial_investment, ending_value, period)
 
 - gpt-5-nano   portfolio_returns(ending_value=1, initial_investment=1)
-- Jev          right function? p=0.04                              → rejected
-+ gpt-5-nano   (no call) "A pound is exactly 0.45359237 kilograms."
+- Jev          right function? p=0.03                              → rejected
++ gpt-5-nano   (no call) "A pound (lb) is defined as 0.45359237 kilograms (exact in the modern definition)."
 + Jev          right to make no call? p=0.97                       → accepted
 ```
 
-**An invented argument, removed.** The user asked for a patio; the model added three amenities nobody asked for:
+**An invented argument, removed.** The user asked for a patio; the model added three amenities nobody asked for, and repeated the call once before removing them:
 
 ```diff
   User:  Find the closest sushi restaurant with a patio in Boston.
 
 - gpt-5-nano   restaurant_search_find_closest(cuisine="Sushi", location="Boston",
 -                  amenities=["Patio", "Wi-Fi", "Happy Hour", "Wheelchair Accessible"])
-- Jev          right function? p=0.95   right arguments? p=0.17   → rejected
+- Jev          right function? p=0.95   right arguments? p=0.16   → rejected (twice)
 + gpt-5-nano   restaurant_search_find_closest(cuisine="Sushi", location="Boston", amenities=["Patio"])
 + Jev          right function? p=0.97   right arguments? p=0.89   → accepted
 ```
@@ -88,7 +88,7 @@ Two real traces from the paper's run (`gpt-5-nano` on BFCL, `jev-1.13.0`). Red l
   <tr>
     <td width="33%" valign="top"><b>🎯 Checks what schemas cannot</b><br>Wrong function, invented values, a call that should not happen at all. Jev judges meaning; a local schema check covers format.</td>
     <td width="33%" valign="top"><b>🔁 Repairs instead of failing</b><br>Rejected calls go back to the model with every earlier attempt and verdict. Nothing runs until a call passes.</td>
-    <td width="33%" valign="top"><b>⚡ Light checks</b><br>A Jev verdict took about 0.3 s per call in our runs, less time than the model took to propose the call, and about $0.06 per 1,000 checks.</td>
+    <td width="33%" valign="top"><b>⚡ Light checks</b><br>A Jev verdict took about 0.2 s per call in our runs, less time than the model took to propose the call, and about $0.06 per 1,000 checks.</td>
   </tr>
   <tr>
     <td valign="top"><b>🔌 Any model</b><br>OpenAI, Anthropic, Gemini, xAI Grok, Azure OpenAI, OpenRouter, or any OpenAI-compatible server. Plain HTTP, no vendor SDKs.</td>
@@ -222,14 +222,16 @@ jbfc.JBFC(
     "openai:gpt-5-nano",
     tools=[...],
     max_repairs=3,             # repairs after the first proposal
-    threshold=0.8,             # Jev threshold for both checks
+    threshold=0.5,             # Jev threshold for both checks
+    on_exhaustion="first",     # if nothing passes: return the first proposal ("last": the last repair)
     method="jbfc",             # or a baseline: "direct", "schema", "self-refine",
                                # "jev-function", "jev-arguments", "jbfc-latest"
-    execute_unverified=False,  # run() also executes a call still rejected at the limit
+    execute_unverified=False,  # run() also executes the final call when nothing passed
 )
 ```
 
-- `jbfc.Jev(api_key, threshold=0.8, function_threshold=None, arguments_threshold=None, model="jev-1.13.0")` configures the verifier; pass it as `jev=`.
+- The defaults are the paper's final settings: at most three repairs, threshold 0.5, and the first proposal when nothing passes. `call()` and `run()` also take `max_repairs=` and `on_exhaustion=` per request.
+- `jbfc.Jev(api_key, threshold=0.5, function_threshold=None, arguments_threshold=None, model="jev-1.13.0")` configures the verifier; pass it as `jev=`.
 - `acall`, `arun` and `averify` run the same steps in a worker thread for async code.
 - `jbfc.SYSTEM_PROMPT` is the generator prompt used in the paper; replace it with `system_prompt=` on a provider.
 
@@ -238,11 +240,12 @@ jbfc.JBFC(
 
 | Field | Meaning |
 |---|---|
-| `calls` | final proposal: `[{"name", "arguments"}]`, `[]` for no call, `None` if unreadable |
+| `calls` | final proposal: `[{"name", "arguments"}]`, `[]` for no call, `None` if unreadable; the first proposal when nothing passed (`on_exhaustion="first"`) |
 | `call` | the first call, or `None` |
 | `accepted` | passed every check (`None` for methods without a verifier) |
 | `exhausted` | hit the repair limit without passing |
 | `repairs` | repairs used |
+| `final_attempt` | which proposal in `trace` is final (0: the first) |
 | `text` | the model's text, e.g. its answer when it made no call |
 | `executed`, `output` | whether `run()` executed the call, and what it returned |
 | `attempts` | every proposal with its Jev probabilities and schema errors |
@@ -254,34 +257,35 @@ jbfc.JBFC(
 ## Results
 
 > [!NOTE]
-> A small study, not a benchmark claim: two generators (`gpt-5-nano` and the larger `gpt-5.4-mini`, reasoning effort `none`) and one verifier (`jev-1.13.0`) on 3,051 single-turn examples from seven BFCL categories, at most three repairs. Direct and JBFC ran three times per generator and the category numbers are their means; the method comparison and the repair-limit curve come from the first run. The repair limit was chosen after seeing that curve on the same examples; nothing else was tuned. Within a run, the methods of one generator share each example's first proposal. Intervals and caveats are in the [paper](paper/main.pdf).
+> A small study, not a benchmark claim: two generators (`gpt-5-nano` and the larger `gpt-5.4-mini`, reasoning effort `none`) and one verifier (`jev-1.13.0`) on 3,051 single-turn examples from seven BFCL categories, at most three repairs, Jev threshold 0.5, and the first proposal kept when none passes. Direct and JBFC ran three times per generator and the category numbers are their means; the method comparison and the repair-limit curve come from the first run. The repair limit, the threshold and the rule for a loop without a passing proposal were chosen after seeing results on these same examples (thresholds 0.8, 0.7 and 0.5; the first or the last proposal); nothing else was tuned. Within a run, the methods of one generator share each example's first proposal. Intervals and caveats are in the [paper](paper/main.pdf).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-categories-dark.png">
-  <img alt="Accuracy by BFCL category, mean of three runs, Direct then JBFC, for gpt-5-nano and gpt-5.4-mini: Simple Python 90.8 to 91.0 and 90.5 to 91.2; Multiple 91.0 to 91.5 and 93.3 to 93.3; Irrelevance 27.2 to 81.7 and 87.1 to 81.1; Live simple 74.3 to 75.1 and 77.1 to 79.1; Live multiple 67.6 to 70.4 and 75.2 to 76.4; Live irrelevance 48.8 to 67.7 and 80.7 to 74.4; total 64.1 to 75.0 and 81.1 to 79.5." src="docs/assets/chart-categories-light.png" width="100%">
+  <img alt="Accuracy by BFCL category, mean of three runs, Direct then JBFC, for gpt-5-nano and gpt-5.4-mini: Simple Python 90.8 to 91.3 and 90.5 to 91.8; Multiple 91.0 to 91.5 and 93.3 to 95.0; Irrelevance 27.2 to 78.2 and 87.1 to 87.9; Live simple 74.3 to 77.8 and 77.1 to 79.8; Live multiple 67.6 to 71.4 and 75.2 to 77.4; Live irrelevance 48.8 to 65.7 and 80.7 to 79.4; total 64.1 to 74.8 and 81.1 to 82.1." src="docs/assets/chart-categories-light.png" width="100%">
 </picture>
 
-- With `gpt-5-nano`, JBFC raised call accuracy from 64.1% to 75.0% on average (paired bootstrap 95% CI for the difference 9.8–12.1 points; +11.5, +10.6 and +10.6 in the three runs), mostly on requests where no tool applies (Irrelevance: 27.2% → 81.7%). Where a call is needed, the gains are small (Simple Python 90.8% → 91.0%, Multiple 91.0% → 91.5%): a yes/no verdict says *that* a call is wrong, not *which* call is right.
-- With `gpt-5.4-mini`, JBFC lowered accuracy in every run, from 81.1% to 79.5% on average (95% CI for the difference −2.4 to −0.9). It still fixed more calls than it broke where a call was needed, but this model already skips most unrelated tools, Jev separated its remaining mistakes poorly, and Jev's rejections turned 102–110 correct no-calls into calls per run.
-- A larger model alone beat the small model with JBFC: Direct with `gpt-5.4-mini` reached 81.1%, 6.1 points above JBFC with `gpt-5-nano` (95% CI 4.9–7.4), at 2.6 times the cost ($0.70 instead of $0.27 per 1,000 requests) and in about a third of the time.
-- The three runs agree: each total moved by at most 0.6 points between runs (standard deviation 0.2–0.3), although about 30% of `gpt-5-nano`'s first calls (13% of `gpt-5.4-mini`'s) changed from run to run.
-- In the first run with `gpt-5-nano`, every repair method scored above Direct. Generic self-review spends four proposals on every request and trailed every Jev-based method, which averaged 1.7 to 2.1.
-- In the same run, keeping the whole history scored 1.6 points above showing only the latest rejection (95% CI 0.8–2.5).
-- Accepted is not the same as correct: with `gpt-5-nano`, calls that passed every check (69% of examples in each run) were 91% correct.
-- With `gpt-5-nano`, JBFC cost about five times Direct ($0.27 instead of $0.056 per 1,000 requests) and took 2.1 more API seconds.
+- With `gpt-5-nano`, JBFC raised call accuracy from 64.1% to 74.8% on average (paired bootstrap 95% CI for the difference 9.7–11.6 points; +10.8, +10.7 and +10.4 in the three runs), mostly on requests where no tool applies (Irrelevance: 27.2% → 78.2%). Where a call is needed, the gains are small (Simple Python 90.8% → 91.3%, Multiple 91.0% → 91.5%): a yes/no verdict says *that* a call is wrong, not *which* call is right.
+- With `gpt-5.4-mini`, JBFC raised accuracy in every run, from 81.1% to 82.1% on average (95% CI for the difference 0.5–1.5 points). It fixed 55–66 calls per run and broke 27–39, mostly correct no-calls that became calls Jev accepted after rejecting the no-call.
+- Which proposal to return when none passes mattered for the larger model. Returning the last repair instead of the first would have put `gpt-5.4-mini` at 80.7%, below Direct: those unverified changes fixed 10–14 calls per run and broke 53–55, mostly correct no-calls. For `gpt-5-nano`, the last repair would have scored 0.4 points higher (75.1%; 95% CI 0.03–0.68). Both rules make the same requests.
+- A larger model alone beat the small model with JBFC: Direct with `gpt-5.4-mini` reached 81.1%, 6.4 points above JBFC with `gpt-5-nano` (95% CI 5.1–7.7), at 3.3 times the cost ($0.70 instead of $0.21 per 1,000 requests) and in under half the time.
+- The three runs agree: each total moved by at most 0.6 points between runs (standard deviation 0.1–0.3), although about 30% of `gpt-5-nano`'s first calls (13% of `gpt-5.4-mini`'s) changed from run to run.
+- In the first run with `gpt-5-nano`, every repair method scored above Direct. Generic self-review spends four proposals on every request and trailed every Jev-based method, which averaged 1.4 to 1.6.
+- In the same run, keeping the whole history scored 1.1 points above showing only the latest rejection (95% CI 0.4–1.7).
+- Accepted is not the same as correct: with `gpt-5-nano`, calls that passed every check (84–85% of examples in each run) were 84–85% correct.
+- With `gpt-5-nano`, JBFC cost about four times Direct ($0.21 instead of $0.056 per 1,000 requests) and took 1.3 more API seconds.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-methods-dark.png">
-  <img alt="Call accuracy by method with gpt-5-nano, first run, at most three repairs: JBFC 75.3, JBFC-A 73.7, JBFC-L 73.6, JBFC-F 73.6, Self-refine 70.0, Schema repair 65.8, Direct 63.8, with API seconds and USD per 1,000 requests." src="docs/assets/chart-methods-light.png" width="100%">
+  <img alt="Call accuracy by method with gpt-5-nano, first run, at most three repairs: JBFC 74.6, JBFC-L 73.5, JBFC-F 73.2, JBFC-A 72.5, Self-refine 70.0, Schema repair 65.8, Direct 63.8, with API seconds and USD per 1,000 requests." src="docs/assets/chart-methods-light.png" width="100%">
 </picture>
 
 <a id="more-repairs"></a>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-limits-dark.png">
-  <img alt="JBFC by repair limit: call accuracy 72.6% at r=1, 73.5% at r=2, 75.3% at r=3 (default), 76.2% at r=5, 77.0% at r=7 and 78.6% at r=10; cost per 1,000 requests $0.172, $0.221, $0.273, $0.378, $0.483 and $0.669." src="docs/assets/chart-limits-light.png" width="100%">
+  <img alt="JBFC by repair limit: call accuracy 72.0% at r=1, 73.4% at r=2, 74.6% at r=3 (default), 75.8% at r=5, 76.4% at r=7 and 76.7% at r=10; cost per 1,000 requests $0.155, $0.183, $0.211, $0.265, $0.319 and $0.399." src="docs/assets/chart-limits-light.png" width="100%">
 </picture>
 
-Continuing the first `gpt-5-nano` run raised call accuracy from 75.3% at three repairs (the default) to 78.6% at ten, at 2.4 times the cost; most newly correct answers (128 of 148) were again cases where no tool applies. Even at ten repairs, at a cost similar to Direct with `gpt-5.4-mini`, JBFC stayed below it (78.6% against 81.1% on average). Three repairs is the default because each further point costs about four times as much; it was chosen after seeing this curve, and three repairs gave 74.9% in both later runs.
+Continuing the first `gpt-5-nano` run raised call accuracy from 74.6% at three repairs (the default) to 76.7% at ten, at 1.9 times the cost. Every newly correct answer came from a later proposal that passed, most of them (59 of 70) on requests where no tool applies. Even at ten repairs, JBFC stayed below Direct with `gpt-5.4-mini` (76.7% against 81.1% on average). Three repairs was chosen on the first run at threshold 0.8, where each further point cost about four times as much.
 
 <details>
 <summary><b>All numbers as tables</b></summary>
@@ -290,14 +294,21 @@ Mean of three runs per generator (the paper's Table 1; total: mean ± standard d
 
 | Category | Examples | `gpt-5-nano` Direct | `gpt-5-nano` JBFC | `gpt-5.4-mini` Direct | `gpt-5.4-mini` JBFC |
 |---|---:|---:|---:|---:|---:|
-| Simple Python | 400 | 90.8 | 91.0 | 90.5 | **91.2** |
-| Multiple | 200 | 91.0 | 91.5 | **93.3** | **93.3** |
-| Irrelevance | 240 | 27.2 | 81.7 | **87.1** | 81.1 |
-| Live simple | 258 | 74.3 | 75.1 | 77.1 | **79.1** |
-| Live multiple | 1,053 | 67.6 | 70.4 | 75.2 | **76.4** |
-| Live irrelevance | 884 | 48.8 | 67.7 | **80.7** | 74.4 |
-| **Total** (excl. 16 live relevance) | 3,035 | 64.1 ± 0.3 | 75.0 ± 0.2 | **81.1** ± 0.2 | 79.5 ± 0.2 |
-| USD / 1k requests | | 0.056 | 0.272 | 0.703 | 1.700 |
+| Simple Python | 400 | 90.8 | 91.3 | 90.5 | **91.8** |
+| Multiple | 200 | 91.0 | 91.5 | 93.3 | **95.0** |
+| Irrelevance | 240 | 27.2 | 78.2 | 87.1 | **87.9** |
+| Live simple | 258 | 74.3 | 77.8 | 77.1 | **79.8** |
+| Live multiple | 1,053 | 67.6 | 71.4 | 75.2 | **77.4** |
+| Live irrelevance | 884 | 48.8 | 65.7 | **80.7** | 79.4 |
+| **Total** (excl. 16 live relevance) | 3,035 | 64.1 ± 0.3 | 74.8 ± 0.3 | 81.1 ± 0.2 | **82.1** ± 0.1 |
+| USD / 1k requests | | 0.056 | 0.210 | 0.703 | 1.137 |
+
+When no proposal passes, JBFC returns the first one; returning the last instead (the paper's Table 3; mean of three runs, same requests):
+
+| Generator | Direct | JBFC, last proposal | JBFC, first proposal (default) | First − last (points, 95% CI) |
+|---|---:|---:|---:|---:|
+| `gpt-5-nano` | 64.1 | **75.1** | 74.8 | −0.35 (−0.68 to −0.03) |
+| `gpt-5.4-mini` | 81.1 | 80.7 | **82.1** | +1.37 (0.93 to 1.82) |
 
 First run (the paper's Table 2 and Figure 2):
 
@@ -306,32 +317,32 @@ First run (the paper's Table 2 and Figure 2):
 | Direct (no checks) | 63.8 | 74.8 | 81.2 | 1.30 | 0.056 |
 | Schema repair | 65.8 | 76.4 | 81.8 | 1.36 | 0.059 |
 | Self-refine (4 proposals, every request) | 70.0 | 80.3 | 82.2 | 5.47 | 0.265 |
-| JBFC-F (function check only) | 73.6 | 84.6 | 81.6 | 2.99 | 0.223 |
-| JBFC-A (argument check only) | 73.7 | 83.5 | 83.1 | 2.66 | 0.199 |
-| JBFC-L (latest feedback only) | 73.6 | 84.0 | 82.7 | 3.47 | 0.262 |
-| **JBFC** | **75.3** | **85.0** | **83.4** | 3.49 | 0.273 |
+| JBFC-F (function check only) | 73.2 | 84.5 | 81.4 | 2.24 | 0.172 |
+| JBFC-A (argument check only) | 72.5 | 82.6 | **82.7** | 2.21 | 0.169 |
+| JBFC-L (latest feedback only) | 73.5 | 84.3 | 82.2 | 2.60 | 0.203 |
+| **JBFC** | **74.6** | **85.3** | 82.1 | 2.61 | 0.211 |
 
 | `max_repairs` | 1 | 2 | 3 (default) | 5 | 7 | 10 |
 |---|---:|---:|---:|---:|---:|---:|
-| Call accuracy | 72.6 | 73.5 | 75.3 | 76.2 | 77.0 | 78.6 |
-| Function accuracy | 83.0 | 83.7 | 85.0 | 86.0 | 86.5 | 87.7 |
-| Mean repairs used | 0.42 | 0.75 | 1.07 | 1.69 | 2.29 | 3.17 |
-| Reached the limit without passing | 33.4% | 31.8% | 30.9% | 30.2% | 29.7% | 29.2% |
-| API seconds | 2.33 | 2.90 | 3.49 | 4.65 | 5.79 | 7.35 |
-| USD / 1k requests | 0.172 | 0.221 | 0.273 | 0.378 | 0.483 | 0.669 |
+| Call accuracy | 72.0 | 73.4 | 74.6 | 75.8 | 76.4 | 76.7 |
+| Function accuracy | 82.8 | 84.2 | 85.3 | 86.6 | 87.1 | 87.4 |
+| Mean repairs used | 0.29 | 0.47 | 0.64 | 0.94 | 1.22 | 1.62 |
+| Reached the limit without passing | 18.6% | 16.8% | 15.6% | 14.2% | 13.3% | 12.8% |
+| API seconds | 1.99 | 2.32 | 2.61 | 3.11 | 3.59 | 4.29 |
+| USD / 1k requests | 0.155 | 0.183 | 0.211 | 0.265 | 0.319 | 0.399 |
 
 </details>
 
 ## FAQ
 
 **Is Jev just another LLM-as-a-judge?**
-Jev is TypeSafe's decision model. It does not write explanations: it answers each yes/no question with a probability, in 0.30 s on average in the paper's run. JBFC asks two fixed questions (right function, right arguments) and also runs a local schema check.
+Jev is TypeSafe's decision model. It does not write explanations: it answers each yes/no question with a probability, in 0.19 s on average in the paper's first run. JBFC asks two fixed questions (right function, right arguments) and also runs a local schema check.
 
 **What does it cost?**
-Each Jev check reads about 1,400 tokens, roughly $0.06 per 1,000 checks at $0.042 per million input tokens. With `gpt-5-nano`, JBFC cost $0.27 per 1,000 requests on average, against $0.056 for a bare call; a bare call to `gpt-5.4-mini` cost $0.70 and was more accurate.
+Each Jev check reads about 1,400 tokens, roughly $0.06 per 1,000 checks at $0.042 per million input tokens. With `gpt-5-nano`, JBFC cost $0.21 per 1,000 requests on average, against $0.056 for a bare call; a bare call to `gpt-5.4-mini` cost $0.70 and was more accurate.
 
 **Does anything run while JBFC repairs a call?**
-No. Proposals are marked as not executed, and `run()` executes only the final call after it passes (or, with `execute_unverified=True`, the last one).
+No. Proposals are marked as not executed, and `run()` executes only the final call after it passes (or, with `execute_unverified=True`, the final proposal even if none passed: the first one by default).
 
 **Can I use it with LangChain, the OpenAI Agents SDK, or my own loop?**
 Yes. Call `jbfc.verify(...)` on the tool calls your framework produces, or let `JBFC.call()` make the decision for one step of your loop.
@@ -340,21 +351,21 @@ Yes. Call `jbfc.verify(...)` on the tool calls your framework produces, or let `
 Not yet. JBFC decides one step at a time: a single call or no call, the setting it was evaluated on.
 
 **Which models have been benchmarked?**
-`gpt-5-nano` and `gpt-5.4-mini` (Azure OpenAI), each with and without Jev, three runs each. JBFC helped the first and lowered the second's accuracy in every run; see [Results](#results). The other adapters follow each provider's documented API and are covered by offline tests.
+`gpt-5-nano` and `gpt-5.4-mini` (Azure OpenAI), each with and without Jev, three runs each. JBFC raised both models' accuracy in every run, the small model's by much more; see [Results](#results). The other adapters follow each provider's documented API and are covered by offline tests.
 
 **When does JBFC help?**
-When the model's mistakes are ones Jev can tell apart. In our runs that meant a small model calling tools that do not apply: Jev flagged those calls clearly and the model withdrew them. A stronger model made fewer such mistakes, Jev separated the rest poorly, and its rejections of correct no-calls cost more than its fixes. Measure on your own traffic before using it with a strong model; `verify()` returns verdicts without changing what your agent does.
+When the model's mistakes are ones Jev can tell apart. In our runs that meant a small model calling tools that do not apply: Jev flagged those calls clearly and the model withdrew them. A stronger model made fewer such mistakes and gained one point, and only because a loop without a passing proposal keeps the model's first answer: letting the last repair replace it lowered that model's accuracy, as Jev's rejections of correct no-calls turned them into calls. Measure on your own traffic before using it with a strong model; `verify()` returns verdicts without changing what your agent does.
 
 ## Limits
 
 - **One decision per step.** JBFC decides a single call or no call. `call()` and `run()` take text messages, so give earlier tool results back to the model as text; `verify()` also accepts tool-call and tool-result messages.
-- **A verifier is a model too.** Jev can accept a wrong call or reject a right one; accepted calls were about 90% correct in the paper's runs, not 100%, and with `gpt-5.4-mini` its rejections did more harm than good.
+- **A verifier is a model too.** Jev can accept a wrong call or reject a right one; accepted calls were about 85% correct in the paper's runs, not 100%. With `gpt-5.4-mini`, letting an unverified repair replace the first answer did more harm than good, which is why the first proposal is kept by default.
 - **Cost and latency.** Each proposal costs one generator call and one Jev call; with at most three repairs, that is up to four of each.
-- **Evidence so far.** Two models and mostly English requests; three runs of Direct and JBFC, one of the other methods. JBFC helped `gpt-5-nano` and hurt `gpt-5.4-mini` in every run; the repair limit was chosen on the first run.
+- **Evidence so far.** Two models and mostly English requests; three runs of Direct and JBFC, one of the other methods. JBFC raised both models' accuracy in every run, but the threshold, the rule for a loop without a passing proposal and the repair limit were chosen after seeing results on these same examples.
 
 ## Reproduce the paper
 
-The experiment code lives in [`src/jev_fc`](src/jev_fc) and the manuscript in [`paper/main.tex`](paper/main.tex). JBFC's loop in the library *is* `jev_fc.pipeline.run_example`, and offline tests check that the library sends the same prompts as the experiments.
+The experiment code lives in [`src/jev_fc`](src/jev_fc) and the manuscript in [`paper/main.tex`](paper/main.tex). JBFC's loop in the library *is* `jev_fc.pipeline.run_example`, and offline tests check that the library sends the same prompts as the experiments. The runs started at threshold 0.8 with the last proposal returned; the paper's numbers come from rerunning the Jev methods at threshold 0.5 from the same first proposals and keeping the first proposal when none passes (`make final`).
 
 ```bash
 make setup         # uv sync and a .env from .env.example
@@ -362,16 +373,19 @@ make prepare       # download and convert the pinned BFCL revision (3,051 exampl
 make test          # offline tests and lint; no keys needed
 make check-config  # show the configured routes, models and keys, without API calls
 make table1        # optional: Direct vs JBFC at r=2 (6,102 records), not used by the tables
-make table2        # all seven methods at r=2 (21,357 records), the source run of Tables 1-2
-make table3        # Figure 2: JBFC at repair limits 1, 2, 3, 5, 7, 10, extending the Table 2 run
+make table2        # all seven methods at r=2 (21,357 records, threshold 0.8): the first run's source
+make table3        # JBFC at threshold 0.8 extended to r=10 (its r=3 rows feed make r3)
 make compare       # Direct with gpt-5.4-mini on all examples (no Jev)
-make r3            # Tables 1-2 at r=3: raise the Table 2 run, add JBFC to gpt-5.4-mini, fill both
-make repeat        # Table 1 over three runs: runs 2-3 of Direct and JBFC for both models, then the mean
-python scripts/analyze_results.py results/table2_gpt-5-nano_r3   # the first run's numbers quoted in Results
-python scripts/table1_repeat.py   # Table 1's means, run-to-run spread and paired intervals
+make r3            # r=3: raise the Table 2 run and add JBFC to gpt-5.4-mini (threshold 0.8)
+make repeat        # runs 2-3 of Direct and JBFC for both models (threshold 0.8)
+make threshold THRESHOLD=0.5   # JBFC again at threshold 0.5 from every run's first proposals (docs/threshold.md)
+make t05           # JBFC-F, JBFC-A and JBFC-L at 0.5, and JBFC at 0.5 continued to r=10 (Table 2, Figure 2)
+make final         # the paper's runs (threshold 0.5, first proposal kept; no API calls): Tables 1-3 and Figure 2
+make paper         # rebuild paper/main.pdf
+python scripts/analyze_results.py results/final/gpt-5-nano_run1   # the first run's numbers quoted in Results
 ```
 
-The paper's runs used an Azure OpenAI deployment of `gpt-5-nano` behind an Azure API Management gateway. Jev went through the same gateway until it stopped serving it; later requests (repairs 8 to 10 in Figure 2, the third repair of the other methods, JBFC with `gpt-5.4-mini`, and runs 2 and 3 of Table 1) call TypeSafe directly with `TYPESAFE_API_KEY` (same model; recorded in each run's manifest). See [`docs/apim-gateway.md`](docs/apim-gateway.md). With `WORKERS=8`, Table 2 took about two hours and $2.4 at list prices, extending it to ten repairs about 30 minutes and $1.4, the `gpt-5.4-mini` Direct run (`make compare`) about 8 minutes and $2.2, `make r3` about 26 minutes and $3.6, and `make repeat` about 47 minutes and $12. Completed records are reused when a run resumes. Run notes and checks are in [`docs/validation.md`](docs/validation.md).
+The paper's runs used an Azure OpenAI deployment of `gpt-5-nano` behind an Azure API Management gateway. Jev went through the same gateway until it stopped serving it; later requests, including every threshold-0.5 run behind the paper's tables, call TypeSafe directly with `TYPESAFE_API_KEY` (same model; recorded in each run's manifest). The final rule needs no new requests: the loop runs the same way, and `make final` only picks the first proposal of trajectories that never passed. See [`docs/apim-gateway.md`](docs/apim-gateway.md). With `WORKERS=8`, Table 2 took about two hours and $2.4 at list prices, extending it to ten repairs about 30 minutes and $1.4, the `gpt-5.4-mini` Direct run (`make compare`) about 8 minutes and $2.2, `make r3` about 26 minutes and $3.6, `make repeat` about 47 minutes and $12, `make threshold THRESHOLD=0.5` about 28 minutes and $5.4, and `make t05` about 32 minutes and $1.7. Completed records are reused when a run resumes. Run notes and checks are in [`docs/validation.md`](docs/validation.md).
 
 <details>
 <summary><b>Repository layout</b></summary>

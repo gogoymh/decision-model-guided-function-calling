@@ -8,6 +8,9 @@ chain must reproduce that run exactly, so the figure agrees with Table 2 at r=2.
 
 Usage: python scripts/table3.py EXTENDED_RUN [--paper paper/main.tex]
        python scripts/table3.py --template --paper paper/main.tex   (unrun figure)
+The paper's Figure 2 uses threshold 0.5 and the first proposal when none passes; scripts/final_tables.py
+(make final) cuts that run with derive_limits and draws it with latex_repairs_figure. --paper here would
+draw the threshold-0.8 run instead.
 """
 
 import argparse
@@ -185,7 +188,7 @@ def latex_repairs_figure(summaries=None):
         notes += " Limits without points are unrun."
     lines += [r"\caption{\textbf{JBFC} accuracy (\%) by repair limit $r$: one run continued to "
               rf"$r={max(LIMITS)}$ and cut at each limit ($r={TABLE_LIMIT}$ is Table~\ref{{tab:main}})"
-              + ("; gray: USD per 1,000 requests." if cost else ".") + notes + "}",
+              + "." + notes + "}",  # the x-axis label explains the gray costs
               r"\label{fig:repairs}", r"\end{figure}"]
     return "\n".join(lines)
 

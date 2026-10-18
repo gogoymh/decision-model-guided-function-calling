@@ -39,6 +39,6 @@ note "settings: deployment=$LLM_MODEL effort='${LLM_REASONING_EFFORT}' jev=$JEV_
 note "2/3 extend JBFC from $SOURCE to r=$MAX_R"
 uv run python scripts/extend_run.py "$SOURCE" --max-repairs "$MAX_R" --workers "$WORKERS" --output "$OUT" --resume 2>&1 | stamp
 
-note "3/3 cut at r=1,2,3,5,7,10 and draw Figure 2 in paper/main.tex"
-uv run python scripts/table3.py "$OUT" --paper paper/main.tex > "$OUT/table3.json"
-note "done: $OUT/table3.json; Figure 2 is drawn in paper/main.tex (rebuild the PDF next)"
+note "3/3 cut at r=1,2,3,5,7,10 (the paper's Figure 2 uses threshold 0.5 and comes from make t05 and make final)"
+uv run python scripts/table3.py "$OUT" > "$OUT/table3.json"
+note "done: $OUT/table3.json; paper/main.tex is unchanged"

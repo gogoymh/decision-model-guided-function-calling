@@ -29,12 +29,12 @@ def _env(*names):
 class Jev(JevVerifier):
     """The Jev verifier. Key: ``api_key=`` or TYPESAFE_API_KEY (JEV_API_KEY also works).
 
-    ``threshold`` sets both checks; ``function_threshold`` and ``arguments_threshold``
-    override one of them. ``gateway="apim"`` routes through an Azure API Management
+    ``threshold`` sets both checks (0.5, as in the paper); ``function_threshold`` and
+    ``arguments_threshold`` override one of them. ``gateway="apim"`` routes through an Azure API Management
     gateway with APIM_SUBSCRIPTION_KEY instead.
     """
 
-    def __init__(self, api_key: str | None = None, *, threshold: float = 0.8,
+    def __init__(self, api_key: str | None = None, *, threshold: float = 0.5,
                  function_threshold: float | None = None, arguments_threshold: float | None = None,
                  model: str | None = None, base_url: str | None = None, gateway: str = "direct",
                  timeout: float = 60.0, max_retries: int = 3, client: httpx.Client | None = None):

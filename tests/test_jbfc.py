@@ -385,6 +385,36 @@ def test_rejected_calls_do_not_run_unless_asked():
     assert result.repairs == 1 and result.executed and ran == ["Busan"]
 
 
+def test_without_a_passing_proposal_the_first_one_is_final():
+    ran = []
+
+    def get_weather(city: str):
+        ran.append(city)
+        return city
+
+    # A no-call is rejected, then a wrong city: nothing passes within one repair.
+    agent = jbfc.JBFC(ScriptedModel([], busan()), jev=ScriptedJev(), tools=[get_weather], max_repairs=1)
+    result = agent.run("Weather in Seoul?", execute_unverified=True)
+    assert result.exhausted and result.accepted is False and result.repairs == 1
+    assert result.no_call and result.final_attempt == 0 and not result.executed and ran == []
+    assert result.text == "No tool fits." and result.probabilities == {"function": 0.05, "arguments": None}
+    assert [step["calls"] for step in result.attempts] == [[], busan()]
+    last = jbfc.JBFC(ScriptedModel([], busan()), jev=ScriptedJev(), tools=[get_weather], max_repairs=1,
+                     on_exhaustion="last")
+    result = last.run("Weather in Seoul?", execute_unverified=True)
+    assert result.calls == busan() and result.final_attempt == 1 and result.executed and ran == ["Busan"]
+    # Per call, and only for a run that ends without a passing proposal.
+    again = jbfc.JBFC(ScriptedModel(busan(), [], busan(), seoul()), jev=ScriptedJev(), tools=[WEATHER],
+                      max_repairs=1)
+    assert again.call("Weather in Seoul?", on_exhaustion="last").calls == []
+    passed = again.call("Weather in Seoul?")
+    assert passed.calls == seoul() and passed.accepted and passed.final_attempt == 1
+    with pytest.raises(ValueError, match="on_exhaustion"):
+        jbfc.JBFC(ScriptedModel(), jev=ScriptedJev(), on_exhaustion="best")
+    with pytest.raises(ValueError, match="on_exhaustion"):
+        again.call("x", on_exhaustion="none")
+
+
 def test_unreadable_proposal_is_repaired_and_never_run():
     agent = jbfc.JBFC(ScriptedModel(None, seoul()), jev=ScriptedJev(), tools=[WEATHER],
                       functions={"get_weather": lambda city, unit="celsius": city})
@@ -435,6 +465,9 @@ def test_methods(monkeypatch):
     with jbfc.JBFC("openai:gpt-5-nano", threshold=0.9, reasoning_effort="low") as agent:
         assert isinstance(agent.model, jbfc.OpenAI) and agent.model.reasoning_effort == "low"
         assert agent.jev.function_threshold == agent.jev.arguments_threshold == 0.9
+    with jbfc.JBFC("openai:gpt-5-nano") as agent:  # the paper's final settings by default
+        assert agent.jev.function_threshold == agent.jev.arguments_threshold == 0.5
+        assert agent.on_exhaustion == "first" and agent.max_repairs == 3
 
 
 def test_per_call_overrides_and_missing_functions():
