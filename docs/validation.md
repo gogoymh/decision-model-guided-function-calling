@@ -296,3 +296,7 @@
 - Table 1: 머리글을 `gpt-5-nano`(Direct, **JBFC**)와 `gpt-5.4-mini`(Direct) 두 단으로 나누고, 행마다 가장 높은 정확도를 굵게, 마지막에 1,000건당 비용(USD/1k) 행을 더했습니다. 실행 전에는 셋째 열이 `--`이고 캡션에 미실행 문구가 붙습니다. `make report`도 `jev-fc report` 뒤에 이 스크립트를 실행해 열을 유지합니다.
 - 원고: 4.2에 "Direct also runs once with the larger, costlier deployment gpt-5.4-mini under the same settings"를, 4.3에 `gpt-5.4-mini` 가격을 넣었습니다. 결과 문단과 결론은 실행 뒤에 수치대로 씁니다(큰 모델이 더 높은 범주가 있으면 그대로 적습니다). 4쪽을 지키려고 Table 1·Figure 2 캡션, 4.3의 측정 목록, "Repair limits." 문단(앞 문단에 합침), 4.4 첫 문단과 "More repairs." 문장을 줄였습니다(수치는 그대로).
 - 예상 비용: Table 2 실행의 Direct 토큰 사용량에 `gpt-5.4-mini` 가격을 적용하면 1,000건당 약 $0.74, 전체 약 $2.3입니다(실제 출력 길이에 따라 달라짐). 작업자 8개로 약 10분 예상. 작업 환경에서는 게이트웨이에 접속할 수 없어 사용자가 실행해야 합니다.
+
+## README 히어로에 논문 제목 (2026-10-18)
+
+- 사용자 요청: README 첫 그림에 논문 제목이 드러나지 않아 어색합니다. 히어로 이미지의 큰 "JBFC" 글자 대신 논문 제목 "Jev-Backed Function Calling: Agentic In-Context Learning with Cumulative Decision Feedback"을 두 줄(제목·부제)로 크게 넣고, "JBFC"는 작은 라벨로 옮겼습니다. 바로 아래 README 한 줄 소개와 겹치던 태그라인은 이미지에서 뺐습니다. 오른쪽 예시 카드와 아래 흐름 표시는 그대로이며, 성능 수치는 여전히 없습니다. 이미지 대체 텍스트에도 제목을 넣었습니다.

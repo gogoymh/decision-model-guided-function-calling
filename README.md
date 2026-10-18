@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/jbfc-hero.png" alt="JBFC: Jev-Backed Function Calling. The LLM proposes a call, Jev checks it, a rejected call goes back to the LLM with the verdict, and only a call that passes runs." width="100%">
+  <img src="docs/assets/jbfc-hero.png" alt="Jev-Backed Function Calling: Agentic In-Context Learning with Cumulative Decision Feedback (JBFC). The LLM proposes a call, Jev checks it, a rejected call goes back to the LLM with the verdict, and only a call that passes runs." width="100%">
 </p>
 
 <h3 align="center">Your LLM's tool calls, checked before they run and sent back for repair when rejected.</h3>

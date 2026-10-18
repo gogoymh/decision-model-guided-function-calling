@@ -18,15 +18,19 @@
     background-size: 22px 22px;
     mask-image: linear-gradient(90deg, rgba(0,0,0,.9), rgba(0,0,0,.15));
   }
-  .left { position: absolute; left: 64px; top: 52px; width: 760px; }
-  .eyebrow { font: 600 15px Inter; letter-spacing: .14em; text-transform: uppercase; color: #a5b4fc; }
-  .title {
-    margin-top: 6px; font: 900 112px/1 "Inter Display"; letter-spacing: -.02em;
-    background: linear-gradient(90deg, #67e8f9 0%, #a78bfa 45%, #f472b6 80%, #fbbf24 100%);
-    -webkit-background-clip: text; background-clip: text; color: transparent;
+  .left { position: absolute; left: 64px; top: 50px; width: 770px; }
+  .top { display: flex; align-items: center; gap: 14px; }
+  .chip {
+    font: 800 15px Inter; letter-spacing: .16em; padding: 6px 13px 6px 15px; border-radius: 999px;
+    color: #0b1026; background: linear-gradient(90deg, #67e8f9 0%, #a78bfa 55%, #f472b6 100%);
   }
-  .sub { margin-top: 10px; font: 600 27px Inter; color: rgba(255,255,255,.92); }
-  .tag { margin-top: 8px; font: 400 19px Inter; color: rgba(255,255,255,.72); }
+  .eyebrow { font: 600 14px Inter; letter-spacing: .14em; text-transform: uppercase; color: #a5b4fc; }
+  .title {
+    margin-top: 20px; font: 800 50px/1.08 "Inter Display"; letter-spacing: -.015em;
+    background: linear-gradient(90deg, #67e8f9 0%, #a78bfa 45%, #f472b6 80%, #fbbf24 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent; width: fit-content;
+  }
+  .sub { margin-top: 12px; font: 600 30px/1.24 Inter; color: rgba(255,255,255,.95); letter-spacing: -.005em; }
   .flow { position: absolute; left: 64px; bottom: 46px; display: flex; align-items: center; gap: 10px; }
   .pill {
     display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px;
@@ -62,10 +66,9 @@
 <div class="hero">
   <div class="grid"></div>
   <div class="left">
-    <div class="eyebrow">Verify before you call</div>
-    <div class="title">JBFC</div>
-    <div class="sub">Jev-Backed Function Calling</div>
-    <div class="tag">Tool calls are checked before they run and sent back for repair when rejected.</div>
+    <div class="top"><span class="chip">JBFC</span><span class="eyebrow">Paper · Python library</span></div>
+    <div class="title">Jev-Backed Function Calling:</div>
+    <div class="sub">Agentic In-Context Learning with<br>Cumulative Decision Feedback</div>
   </div>
   <div class="flow">
     <div class="pill p1"><span class="e">🤖</span>LLM proposes</div>
