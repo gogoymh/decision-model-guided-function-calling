@@ -301,3 +301,4 @@
 
 - 사용자 요청: README 첫 그림에 논문 제목이 드러나지 않아 어색합니다. 히어로 이미지의 큰 "JBFC" 글자 대신 논문 제목 "Jev-Backed Function Calling: Agentic In-Context Learning with Cumulative Decision Feedback"을 두 줄(제목·부제)로 크게 넣고, "JBFC"는 작은 라벨로 옮겼습니다. 바로 아래 README 한 줄 소개와 겹치던 태그라인은 이미지에서 뺐습니다. 오른쪽 예시 카드와 아래 흐름 표시는 그대로이며, 성능 수치는 여전히 없습니다. 이미지 대체 텍스트에도 제목을 넣었습니다.
 - 같은 날 후속 요청: 히어로 아래의 일렬 표시("LLM proposes → Jev checks → Repairs with feedback → Runs")가 너무 단순해 실제 루프가 보이는 그림으로 바꿨습니다. LLM 제안 → Jev + 스키마 검사 → 통과(accepted)면 실행, 거부(rejected)면 피드백 기록이 쌓이고(거부된 호출 + 판정, 요청 앞에 배치) 수정(repair)으로 다시 LLM에게 돌아갑니다. 이미지 높이를 400에서 460픽셀로 늘렸습니다. README 첫 줄의 "Your LLM's tool calls, checked before they run and sent back for repair when rejected."는 불필요하다는 요청에 따라 지웠습니다.
+- 같은 날 후속 요청: README의 "How it works" 절(논문 Figure 1의 프레임워크 그림과 설명)을 소개 바로 다음, "See it" 앞으로 옮기고 내비게이션 순서도 맞췄습니다.

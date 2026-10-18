@@ -21,10 +21,10 @@
 </p>
 
 <p align="center">
+  <a href="#how-it-works"><b>How it works</b></a> ·
   <a href="#see-it"><b>See it</b></a> ·
   <a href="#install"><b>Install</b></a> ·
   <a href="#quickstart"><b>Quickstart</b></a> ·
-  <a href="#how-it-works"><b>How it works</b></a> ·
   <a href="#use-any-model"><b>Any model</b></a> ·
   <a href="#verify-calls-from-any-framework"><b>Verify</b></a> ·
   <a href="#results"><b>Results</b></a> ·
@@ -43,6 +43,16 @@ agent.run("Is it jacket weather in Seoul tonight?")  # runs the call only if Jev
 
 > [!TIP]
 > Already have an agent? Keep it. `jbfc.verify(messages, tool_calls, tools)` checks calls from the OpenAI, Anthropic or Google SDKs before you execute them. [Jump there](#verify-calls-from-any-framework).
+
+## How it works
+
+![JBFC: the model proposes a call, Jev checks it, and rejected calls return to the model as a growing feedback history](docs/assets/jbfc-framework.png)
+
+**(a)** The LLM proposes a call $c_t$, one function with its arguments, or no call. A local schema check and Jev judge it: Jev sees the request, the available functions and the call, and answers *right function?* and, when there is a call, *right arguments?* as probabilities of yes. A check passes at 0.8 or more. A rejected call and its verdicts $d_t$ are appended to the feedback history $H_t$, and the model tries again. **(b)** The history goes *before* the original request, oldest first, and is marked as not executed, so the model sees every earlier attempt and can change the function, the arguments, or decide not to call. (The scores in (b) are illustrative.)
+
+Each record is a labeled example: a call the model wrote, with Jev's verdict on it. Like the demonstrations in [many-shot in-context learning](https://arxiv.org/abs/2404.11018), more of them seemed to help in our run: the full history scored slightly above the latest record alone, and accuracy rose with the repair limit (which also adds attempts). Jev makes those labels in a fraction of a second, without reference answers.
+
+The loop stops at the first proposal that passes every check, or after `max_repairs` repairs (2 by default). Nothing runs during repairs; `run()` executes only the final, accepted call.
 
 ## See it
 
@@ -134,16 +144,6 @@ if result.accepted:
 elif result.no_call:
     print(result.text)                   # the model answered without a tool
 ```
-
-## How it works
-
-![JBFC: the model proposes a call, Jev checks it, and rejected calls return to the model as a growing feedback history](docs/assets/jbfc-framework.png)
-
-**(a)** The LLM proposes a call $c_t$, one function with its arguments, or no call. A local schema check and Jev judge it: Jev sees the request, the available functions and the call, and answers *right function?* and, when there is a call, *right arguments?* as probabilities of yes. A check passes at 0.8 or more. A rejected call and its verdicts $d_t$ are appended to the feedback history $H_t$, and the model tries again. **(b)** The history goes *before* the original request, oldest first, and is marked as not executed, so the model sees every earlier attempt and can change the function, the arguments, or decide not to call. (The scores in (b) are illustrative.)
-
-Each record is a labeled example: a call the model wrote, with Jev's verdict on it. Like the demonstrations in [many-shot in-context learning](https://arxiv.org/abs/2404.11018), more of them seemed to help in our run: the full history scored slightly above the latest record alone, and accuracy rose with the repair limit (which also adds attempts). Jev makes those labels in a fraction of a second, without reference answers.
-
-The loop stops at the first proposal that passes every check, or after `max_repairs` repairs (2 by default). Nothing runs during repairs; `run()` executes only the final, accepted call.
 
 ## Use any model
 
