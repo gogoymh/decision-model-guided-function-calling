@@ -361,11 +361,11 @@ make test          # offline tests and lint; no keys needed
 make check-config  # show the configured routes, models and keys, without API calls
 make table1        # Direct vs JBFC (6,102 records)
 make table2        # all seven methods (21,357 records); also fills Table 1
-make table3        # JBFC at repair limits 1, 2, 3, 5, 7, 10, extending the Table 2 run
+make table3        # Figure 2: JBFC at repair limits 1, 2, 3, 5, 7, 10, extending the Table 2 run
 python scripts/analyze_results.py results/table2_gpt-5-nano_r2   # the numbers quoted in Results
 ```
 
-The paper's runs used an Azure OpenAI deployment of `gpt-5-nano` behind an Azure API Management gateway. Jev went through the same gateway, except for repairs 8 to 10 in Table 3, which call TypeSafe directly with `TYPESAFE_API_KEY` (same model; recorded in the run's manifest). See [`docs/apim-gateway.md`](docs/apim-gateway.md). With `WORKERS=8`, Table 2 took about two hours and $2.4 at list prices, and extending it to ten repairs about 30 minutes and $1.4. Completed records are reused when a run resumes. Run notes and checks are in [`docs/validation.md`](docs/validation.md).
+The paper's runs used an Azure OpenAI deployment of `gpt-5-nano` behind an Azure API Management gateway. Jev went through the same gateway, except for repairs 8 to 10 in Figure 2, which call TypeSafe directly with `TYPESAFE_API_KEY` (same model; recorded in the run's manifest). See [`docs/apim-gateway.md`](docs/apim-gateway.md). With `WORKERS=8`, Table 2 took about two hours and $2.4 at list prices, and extending it to ten repairs about 30 minutes and $1.4. Completed records are reused when a run resumes. Run notes and checks are in [`docs/validation.md`](docs/validation.md).
 
 <details>
 <summary><b>Repository layout</b></summary>
@@ -373,7 +373,7 @@ The paper's runs used an Azure OpenAI deployment of `gpt-5-nano` behind an Azure
 ```text
 src/jbfc/      the library: JBFC, providers, Jev, tools
 src/jev_fc/    experiment code: repair loop, Jev client, BFCL data and scoring, CLI (jev-fc)
-scripts/       table runs, run extension for Table 3, analysis, paper build and checks
+scripts/       table runs, run extension for Figure 2, analysis, paper build and checks
 paper/         manuscript and PDF
 tests/         offline tests
 docs/          benchmark, gateway, literature and validation notes; README images
@@ -385,7 +385,7 @@ docs/          benchmark, gateway, literature and validation notes; README image
 
 ```bibtex
 @misc{yu2026jbfc,
-  title  = {Jev-Backed Function Calling: Iterative Repair with Cumulative Decision Feedback},
+  title  = {Jev-Backed Function Calling: Agentic In-Context Learning with Cumulative Decision Feedback},
   author = {Yu, Minhyeong},
   year   = {2026},
   note   = {Enhans}

@@ -9,6 +9,9 @@
 \usepackage{graphicx}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots}
 \usepackage[hyphens]{url}
 \usepackage[hidelinks]{hyperref}
 \setlength{\columnsep}{0.25in}
@@ -32,7 +35,7 @@
 \renewcommand{\paragraph}{\@startsection{paragraph}{4}{\z@}{2.25ex \@plus 1ex \@minus .2ex}{-1em}{\normalfont\normalsize\bfseries}}
 \renewcommand{\subsection}{\@startsection{subsection}{2}{\z@}{2.25ex \@plus 1ex \@minus .2ex}{1ex \@plus .2ex}{\normalfont\large\bfseries}}
 \makeatother
-\title{\vspace{-1.3em}\textbf{Jev-Backed Function Calling:\\Iterative Repair with Cumulative Decision Feedback}\vspace{-0.4em}}
+\title{\vspace{-1.3em}\textbf{Jev-Backed Function Calling:\\Agentic In-Context Learning with Cumulative Decision Feedback}\vspace{-0.4em}}
 \author{Minhyeong Yu\\[-1pt]{\small Enhans}\\[-1pt]{\small\href{mailto:minhyeong@enhans.ai}{\texttt{minhyeong@enhans.ai}}}}
 \date{\vspace{-2.5em}}
 
@@ -247,27 +250,52 @@ Self-refine & 69.8 & 80.0 & 82.3 & 4.01 & 0.190 \\
 % END AUTO RESULTS
 
 \paragraph{Repair limits.}
-Table~\ref{tab:repairs} varies $r$ for \textbf{JBFC}. Since neither model sees $r$ and nothing runs before the end, we continue the $r=2$ trajectories of Table~\ref{tab:main} that reach the limit up to $r=10$ and cut them at each limit.
+Figure~\ref{fig:repairs} varies $r$ for \textbf{JBFC}. Since neither model sees $r$ and nothing runs before the end, we continue the $r=2$ trajectories of Table~\ref{tab:main} that reach the limit up to $r=10$ and cut them at each limit.
 
 % BEGIN AUTO REPAIRS
-\begin{table}[t]
-\centering\small
-\setlength{\tabcolsep}{2.7pt}
-\begin{tabular}{lrrrrrr}
-\toprule
-$r$ & Call & Func. & Repairs & Exhaust. & Sec. & USD/1k \\
-\midrule
-$1$ & 72.6 & 83.0 & 0.42 & 33.4 & 2.33 & 0.172 \\
-$2$ & 73.5 & 83.7 & 0.75 & 31.8 & 2.90 & 0.221 \\
-$3$ & 75.3 & 85.0 & 1.07 & 30.9 & 3.49 & 0.273 \\
-$5$ & 76.2 & 86.0 & 1.69 & 30.2 & 4.65 & 0.378 \\
-$7$ & 77.0 & 86.5 & 2.29 & 29.7 & 5.79 & 0.483 \\
-$10$ & \textbf{78.6} & \textbf{87.7} & 3.17 & 29.2 & 7.35 & 0.669 \\
-\bottomrule
-\end{tabular}
-\caption{\textbf{JBFC} on all BFCL examples by repair limit $r$, cut from the run of Table~\ref{tab:main} extended to $r=10$, so $r=2$ matches it. Generator: \texttt{gpt-5-nano}. Repairs beyond $r=7$ call \textit{Jev} directly. Bold marks the highest accuracy in each column. Accuracy (\%) excludes live relevance; Exhaust.: examples reaching the limit without passing (\%).}
-\label{tab:repairs}
-\end{table}
+\begin{figure}[t]
+\centering
+\definecolor{repaircall}{HTML}{2A78D6}
+\definecolor{repairfunction}{HTML}{EB6834}
+\definecolor{repaircost}{HTML}{52514E}
+\begin{tikzpicture}
+\begin{groupplot}[group style={group size=1 by 2, vertical sep=5pt, xticklabels at=edge bottom},
+  scale only axis, width=0.80\columnwidth, xmin=0.3, xmax=10.7, xtick={1,2,3,5,7,10},
+  axis x line*=bottom, axis y line*=left, ymajorgrids, grid style={black!12},
+  tick label style={font=\scriptsize}, label style={font=\scriptsize}, tick align=outside,
+  major tick length=2pt, ylabel style={yshift=-3pt}]
+\nextgroupplot[height=2.2cm, ymin=70, ymax=91, ytick={70,75,80,85,90}, ylabel={Accuracy (\%)},
+  legend style={font=\scriptsize, draw=none, fill=none, at={(0.99,0.03)}, anchor=south east,
+  legend columns=2, /tikz/every even column/.append style={column sep=6pt}}]
+\addplot[color=repaircall, mark=*, mark size=1.5pt, thick] coordinates {(1,72.5535) (2,73.4761) (3,75.2554) (5,76.2438) (7,77.0016) (10,78.5832)};
+\addlegendentry{Call}
+\addplot[color=repairfunction, mark=square*, mark size=1.5pt, thick] coordinates {(1,82.9654) (2,83.7232) (3,85.0412) (5,85.9638) (7,86.4580) (10,87.7430)};
+\addlegendentry{Function}
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:1,72.5535) {72.6};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:2,73.4761) {73.5};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:3,75.2554) {75.3};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:5,76.2438) {76.2};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:7,77.0016) {77.0};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:10,78.5832) {78.6};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:1,82.9654) {83.0};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:2,83.7232) {83.7};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:3,85.0412) {85.0};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:5,85.9638) {86.0};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:7,86.4580) {86.5};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:10,87.7430) {87.7};
+\nextgroupplot[height=0.95cm, ymin=0, ymax=0.9, ytick={0,0.4,0.8}, ylabel={USD/1k}, xlabel={Repair limit $r$}]
+\addplot[color=repaircost, mark=triangle*, mark size=1.5pt, thick] coordinates {(1,0.1718) (2,0.2211) (3,0.2733) (5,0.3779) (7,0.4834) (10,0.6691)};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:1,0.1718) {0.17};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:2,0.2211) {0.22};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:3,0.2733) {0.27};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:5,0.3779) {0.38};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:7,0.4834) {0.48};
+\node[font=\tiny, anchor=south, yshift=1.5pt, inner sep=1pt] at (axis cs:10,0.6691) {0.67};
+\end{groupplot}
+\end{tikzpicture}
+\caption{\textbf{JBFC} by repair limit $r$, extending the run of Table~\ref{tab:main} to $r=10$ ($r=2$ matches it). Top: call and function accuracy (\%, excluding live relevance); bottom: USD per 1,000 requests. Generator: \texttt{gpt-5-nano}. Repairs beyond $r=7$ call \textit{Jev} directly.}
+\label{fig:repairs}
+\end{figure}
 % END AUTO REPAIRS
 
 \subsection{Measures, Cost, and Uncertainty}
@@ -287,7 +315,7 @@ In Table~\ref{tab:main}, every repair method beats Direct (paired 95\% intervals
 Every Irrelevance example offers one unrelated function, and Direct calls it in 179 of 240 cases (25.4\% and 27.1\% in two other runs). \textit{Jev}'s function question separates these calls from the 61 correct no-calls (median probability 0.09 vs.\ 0.95). \textbf{JBFC} rejects 166 of the calls, and after the feedback the generator withholds 118; the 62 errors are 13 accepted calls, 48 calls kept after rejection, and one correct no-call turned into a call. In live irrelevance (2.3 functions on average, real requests), \textit{Jev} separates less sharply (0.53 vs.\ 0.87), the generator drops only 158 of 432 rejected calls, and 25 correct no-calls become calls. In categories with reference calls, \textbf{JBFC} rejects 334 of 463 wrong initial calls but fixes only 63 and breaks 18: a binary verdict says that a call is wrong, not which call is right, while withholding an unnecessary call is the obvious repair.
 
 \paragraph{More repairs.}
-Accuracy rises from 72.6\% at $r=1$ to 78.6\% at $r=10$ (Table~\ref{tab:repairs}); from $r=2$, time grows 2.5-fold and cost triples. Of the 194 examples that become correct between $r=2$ and $r=10$ (39 become wrong), 178 are irrelevance cases where the generator finally withholds the call, and only 52 end with a passing proposal, so exhaustion falls just from 31.8\% to 29.2\%.
+Accuracy rises from 72.6\% at $r=1$ to 78.6\% at $r=10$ (Figure~\ref{fig:repairs}); from $r=2$, time grows 2.5-fold and cost triples. Of the 194 examples that become correct between $r=2$ and $r=10$ (39 become wrong), 178 are irrelevance cases where the generator finally withholds the call, and only 52 end with a passing proposal, so exhaustion falls just from 31.8\% to 29.2\%.
 
 \paragraph{Records as in-context examples.}
 Each record pairs a generated call with \textit{Jev}'s verdict, so the history acts as labeled in-context examples, made without reference answers in 0.30 seconds per label on average (the generator takes 1.35) at about \$0.06 per 1,000. As in many-shot learning~\cite{agarwal2024manyshot}, more examples help: with the same attempts, all records beat the latest one by 0.7 points (\textbf{JBFC} minus \textbf{JBFC-L}, 95\% interval 0.1--1.4), and accuracy rises with the limit, which also adds attempts. Unlike many-shot prompts, these are failed attempts at the same request; help for other requests is untested.
@@ -295,7 +323,7 @@ Each record pairs a generated call with \textit{Jev}'s verdict, so the history a
 \subsection{Study Limits}
 The verifier can accept a wrong call or share the generator's mistake, repair can introduce errors, and the growing feedback can reinforce a mistake or distract the LLM; higher acceptance alone does not show improvement.
 
-The study uses one model pair, mostly English requests, single-turn calls, and one run per method, so run-to-run variation is unknown; public examples may overlap with training data. Ten documented annotation inconsistencies stay in the main score; in six, reference values contradict declared types, so schema-checked methods cannot accept a correct call. Thresholds and reasoning effort \texttt{none} are untuned, and one common repair limit may suit some methods better than others.
+The study uses one model pair, mostly English requests, single-turn calls, and one run per method, so run-to-run variation is unknown; public examples may overlap with training data. Ten documented annotation inconsistencies stay in the main score; in six, reference values contradict declared types, so schema-checked methods cannot accept a correct call. Thresholds and reasoning effort \texttt{none} are untuned, and one common repair limit may favor some methods.
 
 \section{Conclusion}
 \textbf{JBFC} feeds \textit{Jev}'s function and argument judgments back to the LLM as a history placed before the original request. In one run with \texttt{gpt-5-nano} and two repairs, it raised accuracy from 63.8\% to 73.5\% at about four times the cost, mostly by withholding unnecessary calls. The history, in effect \textit{Jev}-labeled in-context examples, added 0.7 points over the latest feedback alone, and ten repairs reached 78.6\% at about three times the cost of two.

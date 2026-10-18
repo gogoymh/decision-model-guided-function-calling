@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Table 3: JBFC with repair limits 1, 2, 3, 5, 7 and 10. Continues JBFC trajectories that reached their
+# Figure 2 (formerly Table 3): JBFC with repair limits 1, 2, 3, 5, 7 and 10. Continues JBFC trajectories that reached their
 # limit up to r=10, then cuts them at each limit. Only rows that reached the source limit make new requests.
 # The source is the r=7 extension when it exists, so the rows up to r=7 stay exactly as before; otherwise
 # the Table 2 run (r=2). Needs the same code and settings that produced the Table 2 run.
@@ -39,6 +39,6 @@ note "settings: deployment=$LLM_MODEL effort='${LLM_REASONING_EFFORT}' jev=$JEV_
 note "2/3 extend JBFC from $SOURCE to r=$MAX_R"
 uv run python scripts/extend_run.py "$SOURCE" --max-repairs "$MAX_R" --workers "$WORKERS" --output "$OUT" --resume 2>&1 | stamp
 
-note "3/3 cut at r=1,2,3,5,7,10 and fill Table 3 in paper/main.tex"
+note "3/3 cut at r=1,2,3,5,7,10 and draw Figure 2 in paper/main.tex"
 uv run python scripts/table3.py "$OUT" --paper paper/main.tex > "$OUT/table3.json"
-note "done: $OUT/table3.json; Table 3 is filled in paper/main.tex (rebuild the PDF next)"
+note "done: $OUT/table3.json; Figure 2 is drawn in paper/main.tex (rebuild the PDF next)"

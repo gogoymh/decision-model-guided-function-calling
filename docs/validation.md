@@ -270,3 +270,11 @@
 - 반영: 직접 만든 히어로 배너(`docs/assets/jbfc-hero.png`), 결과·공급자·메타 배지 3줄, 앵커 내비게이션, 실제 실행의 수정 예 두 개를 `diff` 색 블록으로, 기능 표(6칸), 결과 차트 3개(범주별 Direct→**JBFC**, 방법별 정확도·시간·비용, 수정 한도별 정확도·비용)를 라이트·다크 두 벌로 `<picture>`에 넣고, 약점 노트("The rows that are not green"), 표는 `<details>`, FAQ, License 절을 더했습니다. 차트 색은 검증한 범주형 팔레트(파랑·주황, 두 모드 모두 색각 이상 시뮬레이션 통과)이고, 모든 수치는 원고 표와 같습니다. 이미지 생성 코드는 `docs/assets/src`(Playwright·Chromium·Inter 필요)에 있으며 `data.json`이 원고 표와 같아야 합니다.
 - 배지는 shields.io에서 그려지는데, 작업 환경 두 곳 모두에서 shields.io에 접속할 수 없어 미리 보지 못했습니다. 로고 이름이 Simple Icons에 없으면 로고 없이 표시됩니다.
 - `LICENSE`(MIT, Copyright (c) 2026 Minhyeong Yu)를 추가하고 `pyproject.toml`에 `license = "MIT"`를 넣었습니다. wheel 메타데이터에 `License-Expression: MIT`와 라이선스 파일이 들어가고, `uv.lock`은 바뀌지 않습니다. BFCL 데이터는 저장소에 없고 `make prepare`가 받아 옵니다.
+
+## Figure 2: 수정 한도 그래프, 제목 변경 (2026-10-18)
+
+- 사용자 요청: 효과가 더 잘 보이도록 Table 3을 그래프로 바꿉니다. `scripts/table3.py`가 이제 pgfplots 그림(Figure 2)을 `REPAIRS` 블록에 씁니다. 위 패널은 Call·Function 정확도(%), 아래 패널은 1,000건당 USD이고, x축은 `r=1,2,3,5,7,10`(실제 간격), 모든 점에 값을 적었습니다. 두 척도를 한 축에 겹치지 않으려고 패널을 나눴습니다. 색은 README 차트와 같은 검증된 파랑·주황, 비용은 회색입니다.
+- 수치와 검사는 그대로입니다(확장 사슬 `r10 → r7 → Table 2`, `r=2`·`r=7`로 자른 기록의 일치, 논문 프로토콜). 이미 있는 실행 폴더와 명령을 깨지 않도록 파일·명령 이름(`make table3`, `scripts/table3.py`, `results/table3_*`)은 유지하고, 주석·README·AGENTS.md의 표기를 Figure 2로 바꿨습니다.
+- 4쪽 유지: 그림이 표보다 높아 Acknowledgements가 5쪽으로 넘쳤습니다. 범례를 그림 안으로 옮기고 패널 높이와 캡션을 줄였으며, Study Limits의 "may suit some methods better than others"를 "may favor some methods"로 줄였습니다.
+- 제목: 사용자 요청으로 부제를 "Agentic In-Context Learning with Cumulative Decision Feedback"로 바꿨습니다(원고, README 인용).
+- PDF: 본문 4쪽·참고문헌 5쪽, Type 3 폰트 없음, overfull 없음을 확인했습니다.

@@ -50,7 +50,7 @@ LLM_OUTPUT_PRICE=<출력 단가>
 
 `make table1`·`make table2`는 다른 배포(`MODEL=...`)로도 실험과 요약까지 완료합니다. 원고는 `gpt-5-nano`·Azure Chat Completions·`r=2`·전체 예제·1회 실행을 기술하므로 다른 설정의 결과는 논문 표에 자동 삽입하지 않습니다. 별도로 논문의 실험 조건을 바꾼 뒤 반영해야 합니다.
 
-## Jev만 직접 호출하기 (Table 3, 2026-10-18)
+## Jev만 직접 호출하기 (Figure 2, 구 Table 3, 2026-10-18)
 
 - 게이트웨이 뒤의 TypeSafe 계정이 HTTP 402(Payment Required)를 반환해, Table 3의 `r=10` 확장에서는 Jev만 TypeSafe API로 직접 호출했습니다. 생성기는 계속 게이트웨이를 씁니다.
 - `JEV_GATEWAY=direct`(또는 `scripts/extend_run.py --jev-gateway direct`)이면 Jev 요청은 `TYPESAFE_API_KEY`와 `TYPESAFE_BASE_URL`(비우면 `https://api.typesafe.ai`)을 씁니다. 이 키는 TypeSafe로만 가고, 게이트웨이 키는 생성기에만 쓰입니다. `make table3`은 기본값으로 `direct`를 씁니다. 비우면 `API_GATEWAY`를 따릅니다.

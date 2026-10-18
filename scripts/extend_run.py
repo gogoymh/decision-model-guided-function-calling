@@ -1,4 +1,4 @@
-"""Extend the JBFC trajectories of a finished run to a higher repair limit (Table 3).
+"""Extend the JBFC trajectories of a finished run to a higher repair limit (Figure 2).
 
 Neither model sees the repair limit and no function runs before the end, so the
 trajectory for a limit r is the first r+1 attempts of a trajectory for any larger

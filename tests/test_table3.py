@@ -1,4 +1,4 @@
-"""Table 3 tooling: extending JBFC trajectories to a larger repair limit and the table."""
+"""Repair-limit tooling: extending JBFC trajectories to a larger limit and the paper figure (formerly Table 3)."""
 
 import hashlib
 import importlib.util
@@ -83,22 +83,24 @@ def summary(accuracy, model="gpt-5-nano"):
         "mean_latency_s": 3.0, "mean_cost_usd": 2e-4}}}
 
 
-def test_unrun_table3_lists_the_six_limits():
-    table = table3.latex_table3()
-    assert table3.LIMITS == (1, 2, 3, 5, 7, 10)
-    for r in table3.LIMITS:
-        assert f"${r}$ & -- & -- & -- & -- & -- & -- \\\\" in table
-    assert "Bold" not in table and "-- means unrun." in table and r"\label{tab:repairs}" in table
-    assert "extended to $r=10$, so $r=2$ matches it." in table
+def test_unrun_figure_draws_empty_axes_for_the_six_limits():
+    figure = table3.latex_repairs_figure()
+    assert table3.LIMITS == (1, 2, 3, 5, 7, 10) and "xtick={1,2,3,5,7,10}" in figure
+    assert "not yet run" in figure and r"\addplot" not in figure and "Limits without points are unrun." in figure
+    assert r"\label{fig:repairs}" in figure and r"\begin{figure}[t]" in figure
+    assert "to $r=10$ ($r=2$ matches it)." in figure and "legend columns=2" in figure
 
 
-def test_filled_table3_bolds_the_best_accuracy_and_drops_the_unrun_note():
-    table = table3.latex_table3({1: summary(.70), 2: summary(.73), 3: summary(.74), 5: summary(.74), 7: summary(.72),
-                                 10: summary(.71)})
-    assert r"$3$ & \textbf{74.0} & \textbf{80.0} & 0.70 & 30.0 & 3.00 & 0.200 \\" in table
-    assert r"$5$ & \textbf{74.0} &" in table and r"$7$ & 72.0 &" in table and r"$10$ & 71.0 &" in table
-    assert r"Generator: \texttt{gpt-5-nano}." in table and "Bold marks the highest accuracy" in table
-    assert "--" not in table
+def test_filled_figure_plots_and_labels_every_limit():
+    figure = table3.latex_repairs_figure({1: summary(.70), 2: summary(.73), 3: summary(.74), 5: summary(.74),
+                                          7: summary(.72), 10: summary(.71)})
+    call, function, cost = [line for line in figure.splitlines() if line.startswith(r"\addplot")]
+    assert "(1,70.0000) (2,73.0000) (3,74.0000) (5,74.0000) (7,72.0000) (10,71.0000)" in call
+    assert "(10,80.0000)" in function and "mark=square*" in function
+    assert "(10,0.2000)" in cost and "mark=triangle*" in cost
+    assert r"at (axis cs:10,71.0000) {71.0}" in figure and r"at (axis cs:2,0.2000) {0.20}" in figure
+    assert r"Generator: \texttt{gpt-5-nano}." in figure
+    assert "not yet run" not in figure and "unrun" not in figure
 
 
 def test_table3_paper_check_follows_the_paper_protocol_except_the_limit():
@@ -149,7 +151,7 @@ def test_table3_template_fills_only_its_block(tmp_path):
     paper.write_text("% BEGIN AUTO RESULTS\nold\n% END AUTO RESULTS\n% BEGIN AUTO REPAIRS\nold\n% END AUTO REPAIRS\n")
     table3.main(["--template", "--paper", str(paper)])
     source = paper.read_text()
-    assert "% BEGIN AUTO RESULTS\nold\n% END AUTO RESULTS" in source and r"\label{tab:repairs}" in source
+    assert "% BEGIN AUTO RESULTS\nold\n% END AUTO RESULTS" in source and r"\label{fig:repairs}" in source
 
 
 APIM = {"jev_gateway": "apim", "jev_base_url": "https://gw.example/llm/typesafe",
@@ -198,6 +200,6 @@ def test_table3_accepts_a_recorded_jev_route_and_states_it_in_the_caption():
     with pytest.raises(ValueError):  # a different Jev model is never a route change
         table3.check_paper_protocol({"manifest": {**manifest, "jev_model": "jev-2"}}, root)
     final = {**summary(.77), "manifest": {"llm_model": "gpt-5-nano", "jev_routes": routes}}
-    table = table3.latex_table3({r: summary(.7) for r in (1, 2, 3, 5, 7)} | {10: final})
+    table = table3.latex_repairs_figure({r: summary(.7) for r in (1, 2, 3, 5, 7)} | {10: final})
     assert r"Repairs beyond $r=7$ call \textit{Jev} directly." in table
-    assert "call \\textit{Jev}" not in table3.latex_table3({r: summary(.7) for r in table3.LIMITS})
+    assert "call \\textit{Jev}" not in table3.latex_repairs_figure({r: summary(.7) for r in table3.LIMITS})
