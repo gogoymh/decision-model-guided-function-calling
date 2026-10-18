@@ -94,3 +94,9 @@ def test_markdown_lists_every_threshold_with_signed_intervals(tmp_path):
 @pytest.mark.parametrize("value, text", [(.0004, "0.0"), (-.0004, "0.0"), (.109, "+10.9"), (-.016, "−1.6")])
 def test_signed_points(value, text):
     assert threshold_table._signed(value) == text
+
+
+def test_unknown_cost_of_a_run_is_left_out_and_marked():
+    assert threshold_table._known_mean({"runs": [2e-4, None]}, 1000) == "0.200*"
+    assert threshold_table._known_mean({"runs": [2e-4, 4e-4]}, 1000) == "0.300"
+    assert threshold_table._known_mean({"runs": [None]}, 1000) == "–"

@@ -171,8 +171,25 @@ def _mean_sd(item):
     return f"{100 * item['mean']:.1f} ± {100 * item['sd']:.1f}" if item["sd"] is not None else f"{100 * item['mean']:.1f}"
 
 
+def _known_mean(item, scale=1, digits=3):
+    """Mean over runs whose value is known; '*' marks a mean that leaves out runs with unknown cost or time
+    (a request blocked by the provider's content filter has no usage, so its run's mean cost is unknown)."""
+    known = [value for value in item["runs"] if value is not None]
+    if not known:
+        return "–"
+    text = f"{scale * statistics.fmean(known):.{digits}f}"
+    return text + "*" if len(known) < len(item["runs"]) else text
+
+
 def _runs(item):
     return " / ".join(f"{100 * value:.1f}" for value in item["runs"]) if item["runs"] else "–"
+
+
+def _label(item, threshold, row):
+    """The threshold, with the runs it covers when some reruns are not finished."""
+    if len(row["run_numbers"]) == len(item["runs"]):
+        return threshold
+    return f"{threshold} ({', '.join(map(str, row['run_numbers']))}회차)"
 
 
 def markdown(report):
@@ -191,8 +208,7 @@ def markdown(report):
     for model, item in report.items():
         lines.append(f"| `{model}` | Direct | – | {_mean_sd(item['direct']['accuracy'])} | {_runs(item['direct']['accuracy'])} | – | – |")
         for threshold, row in item["jbfc"].items():
-            runs = "" if len(row["run_numbers"]) == len(item["runs"]) else f" ({', '.join(map(str, row['run_numbers']))}회차)"
-            lines.append(f"| | **JBFC** | {threshold}{runs} | {_mean_sd(row['accuracy'])} | {_runs(row['accuracy'])} | "
+            lines.append(f"| | **JBFC** | {_label(item, threshold, row)} | {_mean_sd(row['accuracy'])} | {_runs(row['accuracy'])} | "
                          f"{_delta(row['vs_direct'])} | {_delta(row['vs_base'])} |")
     lines += ["", "## 동작과 비용 (회차 평균)", "",
               "첫 제안 거부는 첫 검사에서 통과하지 못한 첫 제안 수입니다(맞는 것 / 틀린 것). 망가뜨린 것 중 괄호 안은 "
@@ -204,23 +220,23 @@ def markdown(report):
     for model, item in report.items():
         direct = item["direct"]
         lines.append(f"| `{model}` | Direct | – | – | – | – | – | – | – | – | – | "
-                     f"{1000 * direct['mean_cost_usd']['mean']:.3f} | {direct['mean_latency_s']['mean']:.2f} |")
+                     f"{_known_mean(direct['mean_cost_usd'], 1000)} | {_known_mean(direct['mean_latency_s'], 1, 2)} |")
         for threshold, row in item["jbfc"].items():
             t = row["trajectories"]
             lines.append(
-                f"| | {threshold} | {t['right_rejected']:.0f} / {t['right_first']:.0f} | {t['wrong_rejected']:.0f} / "
+                f"| | {_label(item, threshold, row)} | {t['right_rejected']:.0f} / {t['right_first']:.0f} | {t['wrong_rejected']:.0f} / "
                 f"{t['wrong_first']:.0f} | {t['fixes']:.0f} | {t['breaks']:.0f} ({t['breaks_at_limit']:.0f}) | "
                 f"{_pct(t['keep_first_correct'] / t['n'])} | {row['mean_repairs']['mean']:.2f} | "
                 f"{_pct(row['exhaustion_rate']['mean'])} | {_pct(row['coverage']['mean'])} | "
-                f"{_pct(row['accepted_precision']['mean'])} | {1000 * row['mean_cost_usd']['mean']:.3f} | "
-                f"{row['mean_latency_s']['mean']:.2f} |")
+                f"{_pct(row['accepted_precision']['mean'])} | {_known_mean(row['mean_cost_usd'], 1000)} | "
+                f"{_known_mean(row['mean_latency_s'], 1, 2)} |")
     lines += ["", "## 범주별 정확도 (%, 회차 평균)", "",
               "| 생성기 | 방법 | " + " | ".join(label for _, label in CATEGORIES) + " |",
               "|---|---|" + "---|" * len(CATEGORIES)]
     for model, item in report.items():
         lines.append(f"| `{model}` | Direct | " + " | ".join(_pct(item["direct"]["categories"][c]["mean"]) for c, _ in CATEGORIES) + " |")
         for threshold, row in item["jbfc"].items():
-            lines.append(f"| | **JBFC** {threshold} | " + " | ".join(_pct(row["categories"][c]["mean"]) for c, _ in CATEGORIES) + " |")
+            lines.append(f"| | **JBFC** {_label(item, threshold, row)} | " + " | ".join(_pct(row["categories"][c]["mean"]) for c, _ in CATEGORIES) + " |")
     notes = []
     for model, item in report.items():
         for threshold, row in item["jbfc"].items():
@@ -232,6 +248,8 @@ def markdown(report):
     lines += ["", "## 참고", "",
               "- 다시 실행하면 Jev에 같은 첫 제안을 다시 묻습니다. Jev의 답은 호출마다 조금씩 다릅니다: "
               + ("; ".join(notes) or "–") + ".",
+              "- `*`: 공급자의 콘텐츠 필터에 막혀 사용량이 기록되지 않은 요청이 있는 회차는 그 회차의 평균 비용·시간을 알 수 "
+              "없어, 나머지 회차로 평균했습니다(정확도에는 영향 없음; 막힌 제안은 틀린 것으로 셉니다).",
               "- 실행: " + "; ".join(f"`{model}` " + ", ".join(f"`{run}`" for run in item["runs"]) for model, item in report.items())
               + "; 재실행은 `results/jbfc_t<임계값>_<생성기>_run<회차>`.", ""]
     return "\n".join(lines)
