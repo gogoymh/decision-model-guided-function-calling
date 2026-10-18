@@ -1,8 +1,8 @@
 # Research repository instructions
 
-Keep paper/main.tex and the implementation consistent. Table 1 reports one completed
-run (gpt-5-nano, all 3,051 examples, r=2); Table 2 is unrun. Do not claim more than
-the filled tables show.
+Keep paper/main.tex and the implementation consistent. Tables 1 and 2 report one completed
+seven-method run (results/table2_gpt-5-nano_r2: gpt-5-nano, all 3,051 examples, r=2); Table 3
+extends it. Do not claim more than the filled tables show.
 
 - The user froze the current Abstract, Introduction, Related Work, and Method on 2026-10-17. Preserve their wording, equations, Figure 1, and Algorithm 1 unless the user explicitly asks to revise them. Experiment updates and automatic result-table generation must not modify these frozen sections. Layout changes must preserve their content. On 2026-10-18 the user asked to correct only the sentences the protocol change made false (Abstract: repair limit, example count and results; Introduction: repair limit; Method: r in experiments); everything else stays frozen.
 
@@ -23,6 +23,7 @@ the filled tables show.
 - Generator responses cut off at the output limit, refused, or blocked by the provider's content filter (including HTTP 400 content_filter) are unreadable proposals: calls=None with the reason in proposal.incomplete, scored wrong, repaired with local feedback, and counted in summaries. Other API errors still stop the run and record a sanitized provider error code.
 - Only the final dispatch boundary can invoke an application callback. Benchmark runs do not execute tools.
 - The manuscript uses execute_last: return the first passing proposal, or the last proposal at the repair limit even if rejected, and score it without running functions. Keep Section 3.3 focused on this final proposal rule; omit storage inventories, manifests, callbacks, and optional abstention policies from the manuscript. Shared initial proposals and their costs belong in Experiments.
+- src/jbfc is the public library (`import jbfc`, documented in the English README). It reuses jev_fc's repair loop (run_example), Jev client and generator prompt read-only, so its defaults reproduce the experiments; tests/test_jbfc.py checks prompt parity with jev_fc. Library work must not change src/jev_fc while a run or its extension depends on the source hash. Keep README numbers equal to the filled paper tables (scripts/analyze_results.py prints the Results numbers).
 - Never print, commit or package API keys or .env. Keep credential fields in .env.example blank. APIM uses only the project subscription key in api-key; do not forward provider credentials. Preserve API format/routing in run fingerprints and keep unknown pricing unavailable.
 - Run appropriate offline tests after code changes. Use the native LaTeX editor for the standalone manuscript,
   and verify the exported PDF has four body pages with references beginning on page five (six pages maximum).

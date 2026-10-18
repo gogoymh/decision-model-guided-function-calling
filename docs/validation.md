@@ -191,3 +191,53 @@
 - 테스트: 이어 돌린 경로가 처음부터 큰 한도로 돌린 경로와 같은지, 기록과 다른 재생은 거부하는지, 한도에 걸린 기록만 새 요청을 보내는지, `r=1`로 자른 결과가 원본과 같은지, 재개 시 새 요청이 없는지, 다른 코드·설정은 요청 전에 거부하는지, 표 생성과 논문 설정 검사를 확인했습니다. 오프라인 테스트 530개와 Ruff가 통과했습니다.
 - 예상 비용: Table 1 실행 기준 `r=2`에서 한도에 걸린 **JBFC**는 약 1,000개(32.7%)이고, 시도당 약 $0.00018(이력이 늘어난 생성 + Jev)입니다. 최대 5회를 더 시도하므로 약 $0.6–0.9, `WORKERS=8`이면 약 25분입니다.
 
+
+## Table 2 결과: 일곱 방법, 전체 3,051개, r=2 (2026-10-18)
+
+- 실행: `make table2 WORKERS=8`, 10:23–12:28 KST(약 2시간 5분). 설정은 Table 1과 같습니다(`gpt-5-nano`, effort `none`, 4,096 토큰, `jev-1.13.0`, 임계값 0.8, `execute_last`). 결과 폴더 `results/table2_gpt-5-nano_r2`(`source_sha256` `c167522df5f566dc…`, `config_id` `c157682e06845086…`)입니다.
+- 21,357개 기록(3,051개 × 7방법)이 모두 완료됐고 API 오류 0건, 잘리거나 필터된 응답 0건입니다. 마지막 단계의 `jev-fc report`가 같은 실행으로 Table 1과 Table 2를 채웠습니다. 따라서 Table 1은 이전 Table 1 실행(63.9→73.1)이 아니라 이 실행의 Direct·**JBFC** 값(63.8→73.5)입니다.
+
+| 방법 | Call | Func. | Args. | 초 | USD/1k | Direct 대비(%p, 95% 구간) |
+|---|---:|---:|---:|---:|---:|---|
+| Direct | 63.8 | 74.8 | 81.2 | 1.30 | 0.056 | – |
+| Schema repair | 65.7 | 76.4 | 81.8 | 1.36 | 0.059 | +2.0 (1.5–2.5) |
+| Self-refine | 69.8 | 80.0 | 82.3 | 4.01 | 0.190 | +6.1 (4.8–7.4) |
+| **JBFC-F** | 72.6 | 83.5 | 81.8 | 2.61 | 0.190 | +8.8 (7.7–10.0) |
+| **JBFC-A** | 72.9 | 82.8 | 83.0 | 2.40 | 0.175 | +9.2 (8.1–10.2) |
+| **JBFC-L** | 72.8 | 83.1 | 82.6 | 2.92 | 0.217 | +9.0 (7.9–10.2) |
+| **JBFC** | 73.5 | 83.7 | 82.8 | 2.90 | 0.221 | +9.7 (8.5–11.0) |
+
+- **JBFC** − **JBFC-L**(누적 이력의 효과): +0.7%p(95% 구간 0.1–1.4, 3,035개 짝). 구간이 0을 겨우 넘습니다.
+- 원고 표 검증: `summary.json`이 아니라 `records.jsonl`에서 직접 다시 계산한 Table 1의 카테고리 7개·합계와 Table 2의 Call 열(일곱 방법, 예: **JBFC** 2,230/3,035 = 73.5%, **JBFC-L** 2,208/3,035 = 72.8%)이 원고와 모두 일치합니다.
+- 카테고리별 Call 정확도(Direct / Schema / Self-refine / JBFC-F / JBFC-A / JBFC / JBFC-L): Simple Python 90.8/91.0/90.8/91.0/91.2/91.5/91.5, Multiple 91.0/91.0/90.5/91.0/92.0/91.5/92.5, Irrelevance 25.4/31.2/59.6/70.0/66.7/74.2/65.0, Live simple 73.6/74.0/72.9/74.8/73.6/75.2/74.4, Live multiple 67.7/68.2/66.8/71.0/68.9/71.2/71.3, Live irrelevance 48.2/52.6/61.2/62.0/66.5/63.2/63.1.
+- **JBFC** 진단: 평균 수정 0.75회(수정 없이 수락 1,767개, 1회 266개, 2회 1,018개), 한도 소진 31.8%. 최종 제안이 모든 검사를 통과한 비율 68.4%, 그 정확도 90.6%. 최초 제안 기준 수락률 58.0%, 수락 정밀도 90.5%, 오수락률 15.3%, 오거절률 17.7%, Brier 함수 0.089·인자 0.113. 수정/퇴행은 Irrelevance 118/1, Live irrelevance 158/25, Live multiple 48/11, Live simple 9/5, Simple Python 4/1, Multiple 2/1, 합계 339/44입니다. 평균 API 지연 p95는 Direct 2.14초, **JBFC** 6.11초입니다.
+- 원고: 4.4 Results의 수치를 이 실행 기준으로 다시 계산했습니다(`scripts/analyze_results.py`를 추가했습니다. 이전 Table 1 실행에서 원고의 기존 수치를 모두 똑같이 재현해 정의를 확인한 뒤 이 실행에 적용했습니다). 방법 비교 문단("Comparison of methods.")을 넣었고, Irrelevance 문단은 바뀐 수치(거부 166/179, 호출 철회 118, 오답 62 = 수락된 호출 13 + 계속 호출 48 + 오거부 뒤 호출로 바뀐 no-call 1)에 맞췄습니다. 이번 실행에서는 최초 no-call 하나를 잃었으므로 "No initial no-call is lost" 문장을 고쳤습니다. 4.3의 "Table 2 미실행" 문장을 Table 3만 미실행으로 고쳤습니다.
+- 고정 절은 틀린 문장만 고쳤습니다. Abstract의 63.9→73.1을 63.8→73.5로, "The other comparisons remain to be run…" 문장을 결과 문장(일곱 방법 중 최고 Call 정확도, 누적 피드백 +0.7점)으로 바꿨습니다. Conclusion도 같은 결과로 고쳤습니다.
+- 4쪽을 지키려고 Table 2와 겹치는 문장(최고 정확도 설명), Conclusion과 겹치는 Study Limits의 마지막 문장, Conclusion의 코드 설명 문장을 뺐습니다. PDF는 본문 4쪽·참고문헌 5쪽, Type 3 폰트 없음, overfull 없음을 확인했습니다.
+
+## `jbfc` 라이브러리와 영어 README (2026-10-18)
+
+- 사용자 요청: `import jbfc`로 쓰는 범용 라이브러리로 만들고, Jev·OpenAI·Anthropic·Gemini·Grok·Azure 등 원하는 키를 넣어 쓸 수 있게 하며, README를 영어로 바꿉니다.
+- `src/jbfc`: `JBFC(model, tools=…)`의 `call()`(실행 없음), `run()`(검사를 통과한 최종 호출만 실행; `execute_unverified=True`면 한도에 걸린 호출도 실행), `verify()`(다른 SDK가 만든 호출 검사), `acall`/`arun`/`averify`를 제공합니다. 수정 루프는 논문 코드 `jev_fc.pipeline.run_example`을 그대로 부르고, Jev는 `jev_fc.jev.JevVerifier`, 생성 프롬프트는 `jev_fc.llm.SYSTEM_PROMPT`와 같은 이력 메시지를 씁니다. `src/jev_fc`는 바꾸지 않았습니다(Table 2·3 실행의 코드 해시 유지).
+- 공급자: `"provider:model"` 문자열 또는 객체. OpenAI(`OPENAI_API_KEY`), Anthropic(`ANTHROPIC_API_KEY`), Gemini(`GEMINI_API_KEY`/`GOOGLE_API_KEY`, `parametersJsonSchema`), xAI(`XAI_API_KEY`), Azure OpenAI(`AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`), OpenRouter, 임의의 OpenAI 호환 서버(키 선택). 모두 httpx로 직접 호출하며 키는 오류·repr·결과에 남기지 않습니다. 잘림·필터·거절은 논문과 같이 읽을 수 없는 제안(`calls=None`)으로 수정 대상이 됩니다. Jev 키는 `TYPESAFE_API_KEY`(또는 `JEV_API_KEY`)이고 기본 연결은 direct, `gateway="apim"`도 됩니다.
+- 도구: 파이썬 함수의 타입 힌트(`Literal`, `Enum`, `Optional`, `TypedDict`, `Annotated` 등)와 Google·NumPy·Sphinx docstring으로 스키마를 만들고, `@jbfc.tool`로 덮어쓸 수 있습니다. OpenAI·Anthropic·Gemini 형식의 JSON Schema도 받습니다. `verify()`는 OpenAI·Anthropic·Google SDK의 tool-call 객체를 그대로 받습니다.
+- 테스트 `tests/test_jbfc.py`(41개, 키 불필요): 공급자별 요청 URL·헤더·본문과 응답 해석, 재시도·오류 정제, 환경 변수 키, 수정 루프(누적 이력, 실행 조건, 읽을 수 없는 제안, no-call), 일곱 방법 이름, 도구 스키마 추론, SDK 호출 형식 정규화. 특히 `jbfc.OpenAI`·`AzureOpenAI`·`Anthropic`의 요청 본문이 이력 유무와 관계없이 `jev_fc.llm.FunctionCallingLLM`과 같고, Azure URL이 논문 실행과 같음을 확인합니다. 전체 오프라인 테스트 571개와 Ruff가 통과했습니다.
+- 다른 공급자 어댑터는 각 API 문서의 형식을 따르고 오프라인 테스트로만 확인했습니다. 실제 벤치마크 수치는 논문의 Azure `gpt-5-nano` 실행뿐이라 README의 Limits에 적었습니다.
+- README를 영어로 새로 썼습니다. 논문 Figure 1(프레임워크와 누적 프롬프트 예)을 같은 TikZ 코드로 따로 렌더링해 `docs/assets/jbfc-framework.png`로 넣었고, Table 1·2 수치, 실제 실행의 수정 예 두 개(`irrelevance_75`, `simple_python_363`), 설치·공급자·도구·검증·옵션·논문 재현 방법을 담았습니다. 수치는 모두 논문 표와 `scripts/analyze_results.py` 출력에서 가져왔습니다.
+
+## Table 3 결과: JBFC 수정 한도 1·2·3·5·7 (2026-10-18)
+
+- 실행: `make table3 WORKERS=8`, 12:37–12:56 KST(약 19분). `results/table3_gpt-5-nano_r7`이 Table 2 실행(`config_id` `c157682e06845086…`)을 같은 코드 해시(`c167522df5f566dc…`)로 `r=7`까지 이었습니다. 3,051개 완료, API 오류 0건. 읽을 수 없는 응답은 1건으로, `live_irrelevance_651-206-0`의 마지막 시도(7번째 수정)가 콘텐츠 필터에 막혀 오답 처리됐습니다(`r=7`에만 영향). 이어 돌린 비용은 약 $0.80입니다(`r=7` 전체 $1.48 − `r=2` $0.68).
+- `scripts/table3.py`가 1·2·3·5·7에서 자른 결과로 Table 3을 채웠고, `r=2`로 자른 기록이 Table 2의 **JBFC** 기록과 같음을 확인했습니다.
+
+| r | Call | Func. | 평균 수정 | 한도 소진 | 초 | USD/1k |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 72.6 | 83.0 | 0.42 | 33.4% | 2.33 | 0.172 |
+| 2 | 73.5 | 83.7 | 0.75 | 31.8% | 2.90 | 0.221 |
+| 3 | 75.3 | 85.0 | 1.07 | 30.9% | 3.49 | 0.273 |
+| 5 | 76.2 | 86.0 | 1.69 | 30.2% | 4.65 | 0.378 |
+| 7 | 77.0 | 86.5 | 2.29 | 29.7% | 5.79 | 0.483 |
+
+- `r=2`→`r=7`: 143개가 정답으로, 36개가 오답으로 바뀌었습니다(순증 107개, +3.5%p). 정답이 된 143개 중 132개는 Irrelevance(38)·Live irrelevance(94)로, 거부가 반복되자 생성기가 마침내 호출을 거둔 경우입니다. 이 중 Jev가 최종 수락한 것은 42개뿐이고 나머지는 `execute_last`로 반환된 거부된 최종 제안이라, 한도 소진율은 31.8%에서 29.7%로만 줄었습니다. 오답으로 바뀐 36개는 Live multiple 14, Live irrelevance 10, Simple Python 5, Live simple 5, Multiple 2입니다. `r=7`의 최종 수락률은 70.5%, 수락 정밀도 90.6%입니다.
+- 원고: 4.3의 "Table 3 미실행" 문장을 지우고, 4.4 끝에 "More repairs." 문단(위 수치)을 넣었습니다. Conclusion은 "Seven repairs reached 77.0% at about twice the cost of two"로 바꿨습니다. 4쪽을 지키려고 Conclusion을 줄였고, 4.4 첫 문단의 수락 정밀도 문장을 합쳤으며, 4.3의 수락 지표 문장과 Study Limits의 두 문장(이진 판정 설명, `r=2` 고정 문장)을 짧게 고치고, Irrelevance 문단의 `execute_last` 설명은 "More repairs." 문단으로 옮겼습니다. Abstract는 사실과 다른 문장이 없어 바꾸지 않았습니다("The repair limit is fixed at two."는 주 비교 설정이라 그대로 둠). PDF는 본문 4쪽·참고문헌 5쪽, Type 3 폰트 없음, overfull 없음을 확인했습니다.
+- README에 수정 한도별 표를 넣고 첫 요약에 "77.0% with up to seven repairs"를 더했습니다. 모든 실험이 끝났으므로 `pyproject.toml`의 wheel 패키지에 `src/jbfc`를 더하고 설명·readme·keywords를 고쳤습니다(배포 이름은 그대로라 `uv.lock`은 바뀌지 않으며 `uv lock --check`로 확인). 빌드한 wheel에 `jbfc`와 `jev_fc`가 함께 들어 있고, 새 가상환경(Python 3.11, 3.13)에 설치해 `import jbfc`와 테스트가 통과함을 확인했습니다.

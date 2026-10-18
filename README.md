@@ -1,195 +1,287 @@
-# Jev-Backed Function Calling (**JBFC**)
+# JBFC: Jev-Backed Function Calling
 
-**JBFC**는 함수 호출 LLM의 제안을 **Jev가 함수 선택과 인자 정확성으로 나누어 검사**하고, 필요한 검사를 통과할 때까지 정해진 한도 안에서 수정하는 방법입니다. no-call에서는 인자 검사를 생략합니다. **논문 실험은 수정 한도를 `r=2`로 고정하고, 준비된 3,051개 전체를 한 번 실행합니다. 개발 데이터로 설정을 고르지 않습니다.** 이 저장소에는 논문 원고와 결과표, BFCL 데이터 준비, 실행, 재개, 채점 및 표 반영 코드가 포함되어 있습니다.
+**Your LLM's tool calls, checked before they run, and repaired when they are wrong.**
 
-검사에 실패하면 **모든 이전 후보와 실제 Jev 피드백을 시간순으로 누적해 원래 사용자 요청 앞에 넣고**, 같은 LLM이 다시 제안하게 합니다. 최초 요청과 원본 대화의 내용은 유지하며, 수정 중에는 함수를 실행하지 않습니다. 함수와 인자는 LLM이 제안하고 Jev는 현재 후보의 정확성을 검사합니다.
+LLMs call the wrong function, invent argument values, and call tools when no tool applies. A JSON schema cannot catch any of that, because a wrong call can be perfectly well formed. JBFC puts a verifier between the model and your code. [Jev](https://typesafe.ai) answers two yes/no questions about every proposed call: *is this the right function?* and *are these the right arguments?* When a check fails, the same model gets the verdicts back and repairs the call. Only a call that passes runs.
 
-Table 1(Direct와 **JBFC**)은 `gpt-5-nano`로 실행해 채웠습니다. Table 2(일곱 방법)는 아직 실행하지 않았으며, 논문의 `--`는 미실행 값입니다. 로컬 테스트와 데모 결과를 모델 성능으로 사용하지 않습니다.
+```python
+import jbfc
 
-## 바로 시작하기
-
-이미 이 환경에는 의존성과 BFCL 데이터가 준비되어 있습니다. 다른 환경에서는 Python 3.11 이상과 [uv](https://docs.astral.sh/uv/)를 준비한 뒤 다음을 실행합니다.
-
-```bash
-cd /Users/minhyeong/jev-backed-function-calling
-make setup
-make prepare
+agent = jbfc.JBFC("openai:gpt-5-nano", tools=[get_weather, book_table])
+result = agent.run("Is it jacket weather in Seoul tonight?")  # runs the call only if Jev accepts it
 ```
 
-기본 설정은 제공해 주신 APIM 게이트웨이를 사용합니다. `.env`의 `APIM_SUBSCRIPTION_KEY`에 프로젝트 키 하나를 넣으면 생성기와 Jev가 같은 키로 연결됩니다. 공급자 원본 키를 넣는 항목이 아닙니다.
+- **+9.7 points** on BFCL with `gpt-5-nano`: 63.8% → 73.5% call accuracy on 3,051 examples, and 77.0% with up to seven repairs.
+- **Any model**: OpenAI, Anthropic, Gemini, xAI Grok, Azure OpenAI, OpenRouter, or any OpenAI-compatible server (vLLM, Ollama, LM Studio).
+- **Plain Python tools**: pass functions; schemas come from type hints and docstrings.
+- **Drop-in verification**: check calls produced by any SDK or agent framework with `jbfc.verify(...)`.
+- **Small**: plain HTTP via `httpx`, no vendor SDKs. It is the same loop that produced the paper's numbers.
 
-```dotenv
-API_GATEWAY=apim
-APIM_BASE_URL=https://enhans-aoai-prod-apim.azure-api.net
-APIM_SUBSCRIPTION_KEY=your_project_subscription_key
-LLM_API_STYLE=responses
-```
+## How it works
 
-기본 생성기는 `gpt-5.4-mini-2026-03-17`, Jev는 안정 버전인 `jev-1.13.0`으로 고정했습니다. APIM은 `api-key` 인증을 사용하며, OpenAI에는 `/llm/openai/v1/responses`, Jev에는 `/llm/typesafe/v1/systemone`으로 요청합니다. 해당 모델에 대한 프로젝트 접근 권한은 실제 연결 확인 단계에서 확인합니다. 논문 표를 만드는 `make table1`·`make table2`는 이 기본값 대신 Azure 배포 경로(`LLM_API_STYLE=azure_chat_completions`)와 `gpt-5-nano` 배포를 직접 지정합니다.
+![JBFC: the model proposes a call, Jev checks it, and rejected calls return to the model as a growing feedback history](docs/assets/jbfc-framework.png)
 
-`LLM_API_STYLE=anthropic_messages`로 바꾸면 `/llm/anthropic/v1/messages`를 사용합니다. 이때 `LLM_MODEL`에 사용할 Anthropic 모델 ID를 명시하고 가격 설정도 함께 지정해야 합니다. 가이드에 모델 목록은 없으므로 임의의 Claude 모델을 기본값으로 가정하지 않습니다. 공급자별 요청 형식과 응답을 자동 변환하며, BFCL의 원래 선택적 인자와 스키마는 유지합니다.
+**(a)** The LLM proposes a call $c_t$, one function with its arguments, or no call. A local schema check and Jev judge it: Jev sees the request, the available functions and the call, and answers *right function?* and, when there is a call, *right arguments?* as probabilities of yes. A check passes at 0.8 or more. A rejected call and its verdicts $d_t$ are appended to the feedback history $H_t$, and the model tries again. **(b)** The history goes *before* the original request, oldest first, and is marked as not executed, so the model sees every earlier attempt and can change the function, the arguments, or decide not to call. (The scores in (b) are illustrative.)
 
-직접 연결은 `API_GATEWAY=direct`로 선택합니다. OpenAI는 `LLM_API_STYLE=responses` 또는 `chat_completions`와 `LLM_API_KEY`, Jev는 `TYPESAFE_API_KEY`를 사용합니다. APIM 모드에서는 직접 연결용 키와 URL을 사용하지 않습니다. 자세한 설정과 변경 근거는 `docs/apim-gateway.md`에 있습니다.
+The loop stops at the first proposal that passes every check, or after `max_repairs` repairs (2 by default). Nothing runs during repairs; `run()` executes only the final, accepted call.
 
-```bash
-make check-config # API 호출 없이 경로·모델·키 설정 여부 확인
-make test       # 키 불필요: 모의 HTTP 응답, 흐름, 데이터, 공식 채점기 검증
-make demo       # 키 불필요: 인자 오류를 한 번 수정하는 합성 예제
-make smoke      # APIM 키 필요: 예제 8개, 1회 실행, 수정 한도 2로 연결 확인
-make table1     # APIM 키 필요: Direct와 JBFC, 전체 3,051개, r=2, 1회 (Table 1)
-make table2     # APIM 키 필요: 일곱 방법, 전체 3,051개, r=2, 1회 (Table 1·2)
-make table3     # APIM 키 필요: Table 2 실행의 JBFC를 r=7까지 이어 r=1,2,3,5,7 비교 (Table 3)
-make irrelevance-check # APIM 키 필요: Irrelevance 240개에서 Direct만 다시 실행해 Table 1과 비교
-```
+## Results
 
-`make table1`은 Direct와 **JBFC**로 **3,051개 × 2방법 = 6,102개 기록**을, `make table2`는 일곱 방법으로 **3,051개 × 7방법 = 21,357개 기록**을 만듭니다. 모든 수정 방법은 `r=2`를 사용하고 Direct는 수정하지 않습니다. 일곱 방법은 사례별로 같은 최초 LLM 제안 하나를 공유하고, 각 방법의 비용에는 이를 한 번씩 포함합니다. Table 2 실행을 보고하면 Table 1도 같은 실행으로 다시 채워 두 표의 Direct·**JBFC** 값이 일치합니다. 실행 시간과 비용은 토큰 길이, 통과율 및 공급자에 따라 달라집니다. 같은 설정의 완료된 기록은 재개할 때 다시 요청하지 않습니다.
+All 3,051 examples from seven BFCL categories, one run, `gpt-5-nano` (reasoning effort `none`) as the generator, `jev-1.13.0` as the verifier, at most two repairs. From the paper in [`paper/`](paper/main.pdf):
 
-## 실험 정의
+| Category | Examples | Direct | **JBFC** |
+|---|---:|---:|---:|
+| Simple Python | 400 | 90.8 | **91.5** |
+| Multiple | 200 | 91.0 | **91.5** |
+| Irrelevance | 240 | 25.4 | **74.2** |
+| Live simple | 258 | 73.6 | **75.2** |
+| Live multiple | 1,053 | 67.7 | **71.2** |
+| Live irrelevance | 884 | 48.2 | **63.2** |
+| **Total** (excl. 16 live relevance) | 3,035 | 63.8 | **73.5** |
 
-**JBFC**(`jev_joint`)는 다음 순서로 진행합니다.
+JBFC scores highest among the seven methods we compared, which share each example's first proposal:
+
+| Method | Call acc. | Function acc. | Argument acc. | API sec. | USD / 1k requests |
+|---|---:|---:|---:|---:|---:|
+| Direct (no checks) | 63.8 | 74.8 | 81.2 | 1.30 | 0.056 |
+| Schema repair | 65.7 | 76.4 | 81.8 | 1.36 | 0.059 |
+| Self-refine (3 proposals, every request) | 69.8 | 80.0 | 82.3 | 4.01 | 0.190 |
+| JBFC-F (function check only) | 72.6 | 83.5 | 81.8 | 2.61 | 0.190 |
+| JBFC-A (argument check only) | 72.9 | 82.8 | **83.0** | 2.40 | 0.175 |
+| JBFC-L (latest feedback only) | 72.8 | 83.1 | 82.6 | 2.92 | 0.217 |
+| **JBFC** | **73.5** | **83.7** | 82.8 | 2.90 | 0.221 |
+
+- Every repair method beats Direct; JBFC by 9.7 points (paired bootstrap 95% CI 8.5–11.0).
+- Generic self-review spends three proposals on every request and still trails every Jev-based method, which average 1.5 to 1.8 proposals.
+- Keeping the whole revision history adds 0.7 points over showing only the latest rejection (95% CI 0.1–1.4).
+- Calls that pass all checks are 90.6% correct (68.4% of examples), so the verdict is also a useful confidence signal.
+
+More repairs keep paying off, at a price. The same run, with JBFC's rejected trajectories continued up to seven repairs:
+
+| `max_repairs` | 1 | 2 (default) | 3 | 5 | 7 |
+|---|---:|---:|---:|---:|---:|
+| Call accuracy | 72.6 | 73.5 | 75.3 | 76.2 | **77.0** |
+| Mean repairs used | 0.42 | 0.75 | 1.07 | 1.69 | 2.29 |
+| API seconds | 2.33 | 2.90 | 3.49 | 4.65 | 5.79 |
+| USD / 1k requests | 0.172 | 0.221 | 0.273 | 0.378 | 0.483 |
+
+Most of the extra gain is the model finally withholding an unnecessary call after repeated rejections.
+
+What it costs: about four times Direct (still $0.22 per 1,000 requests with `gpt-5-nano`) and 1.6 extra API seconds on average. Most of the gain comes from requests where no tool applies, as the first trace below shows. In categories that need a call, Jev rejects most wrong calls, but a yes/no verdict says *that* a call is wrong, not *which* call is right, so fewer of them get fixed. See [Limits](#limits).
+
+### Real traces from the run
 
 ```text
-사용자 요청 + 함수 목록
-  -> 함수 호출 LLM의 최초 제안
-  -> Jev의 함수 선택 검사와, 호출이 있으면 인자 검사 (한 API 요청)
-  -> 필요한 검사와 스키마 검사가 모두 통과하면 종료
-  -> 하나라도 실패하면 이전 후보와 Jev 판정을 시간순으로 누적
-  -> 누적 기록을 원래 사용자 요청 앞에 넣음 (모든 후보는 미실행)
-  -> 같은 LLM이 수정, 새 후보에 필요한 검사를 다시 수행
-  -> 수정 한도 r(논문 실험은 2)에 도달하면 종료
-  -> 최종 후보를 오프라인 채점기에 전달
+User:  How many kilograms are in a pound?
+Tools: portfolio_returns(initial_investment, ending_value, period)
+
+gpt-5-nano  portfolio_returns(ending_value=1, initial_investment=1)
+Jev         right function? p=0.04                                  rejected
+gpt-5-nano  (no call) "A pound is exactly 0.45359237 kilograms."
+Jev         right to make no call? p=0.97                           accepted
 ```
 
-최초 생성에는 수정 피드백을 넣지 않습니다. **JBFC**의 수정 요청에서는 모든 이전 후보의 `round`, `calls`, `feedback`를 오래된 순서대로 JSON 목록에 담아 하나의 추가 사용자 메시지로 만듭니다. 이 메시지를 원본 대화 앞에 붙이며, 원래 메시지의 내용과 순서는 바꾸지 않습니다. 각 후보가 실행되지 않았다는 설명도 포함합니다.
+```text
+User:  Find the closest sushi restaurant with a patio in Boston.
 
-이전 단계의 관찰을 다음 제안에 반영한다는 점은 ReAct와 비슷합니다. 여기서 관찰은 실제 도구 실행 결과가 아니라 **실행 전 Jev 판정**이며, ReAct의 전체 에이전트 절차를 재현하는 실험은 아닙니다.
+gpt-5-nano  restaurant_search_find_closest(cuisine="Sushi", location="Boston",
+                amenities=["Patio", "Wi-Fi", "Happy Hour", "Wheelchair Accessible"])
+Jev         right function? p=0.95   right arguments? p=0.17       rejected
+gpt-5-nano  restaurant_search_find_closest(location="Boston", cuisine="Sushi", amenities=["Patio"])
+Jev         right function? p=0.97   right arguments? p=0.89       accepted
+```
 
-- 수정 한도 `r`이면 **최초 1회 + 수정 최대 r회 = 제안 최대 r+1개**입니다. 구현에는 3회라는 고정 상한이 없습니다.
-- 논문 실험은 모든 수정 방법에 같은 `r=2`를 적용하며, 개발 데이터로 한도를 고르지 않습니다. `r=0`이면 수정하지 않지만 **JBFC**의 최초 제안 검사는 수행합니다.
-- 다른 한도는 `--max-repairs`로 따로 탐색할 수 있지만 논문 표에는 반영되지 않습니다.
-- **JBFC**의 기본 수락 기준은 실제로 수행한 Noul 검사의 긍정 확률이 각각 `0.8` 이상이고 로컬 스키마 검사도 통과하는 것입니다. 함수 호출이 있으면 함수·인자 검사가 모두 필요합니다. 이 기준으로 정확도 80%를 보장하는 것은 아닙니다.
-- 로컬 스키마 검사는 논문 Method와 같이 읽을 수 있는 형식, 함수 존재, 필수 인자, JSON 타입만 확인합니다. enum·범위·길이·형식 같은 값 제약은 요청에 맞는지의 의미 판단이므로 Jev 인자 질문에 맡기며, BFCL 공식 채점기도 이를 강제하지 않습니다. 선언된 기본값과 같은 값(예: 기본값이 `null`인 문자열 인자의 `null`)은 허용하고, 스키마에 없는 인자 이름은 Python 호출처럼 거부합니다.
-- 기본 `execute_last`는 한도에 도달하면 Jev가 거부한 최종 후보도 채점합니다. 형식이 잘못된 후보는 오답으로 처리합니다.
-- `abstain`은 한도에 도달해도 거부된 후보를 보류합니다. 이 정책의 수락 정확도에는 반드시 커버리지를 함께 보고합니다.
-- Jev는 자유 형식 설명을 생성하지 않습니다. 수정 피드백은 실제 확률, 검사별 통과 여부, 임계값과 로컬 스키마 오류로 구성합니다. 이전 후보와 이 피드백을 누적하되, Jev가 하지 않은 설명이나 정답 기반 힌트를 만들지 않습니다.
-- **JBFC**는 이전 판정을 수정 문맥으로 제공하지만, 이전 검사 통과를 새 후보의 통과로 재사용하지 않습니다. 매번 현재 후보에 필요한 검사를 다시 수행합니다. 함수와 인자 모두 수정할 수 있습니다.
-- no-call(`calls=[]`)에서는 인자 질문을 보내지 않습니다. 함수 질문으로 호출하지 않는 선택이 적절한지만 판단하고 함수 확률과 스키마 기준을 적용합니다. 기록에는 `arguments_skipped=true`, 인자 판정·확률은 `null`로 남기며 생략한 검사를 실패로 세지 않습니다. 함수를 선택했지만 필수 인자를 빠뜨린 경우에는 인자 검사를 생략하지 않습니다.
-- BFCL 함수는 실행하지 않습니다. 이 실험은 **호출 선택·인자 정확성**을 평가하며 실제 외부 API의 실행 성공률을 측정하지 않습니다. 응용 시스템은 `run_example(..., executor=callback)`으로 최종 실행 경계에만 연결할 수 있습니다.
+## Install
 
-비교 방법은 다음 일곱 가지입니다.
-
-| 방법 | 실행 ID | 역할 |
-|---|---|---|
-| Direct | `direct` | 최초 LLM 제안만 사용 |
-| Schema-only | `schema_only` | 형식·타입·필수 인자 오류 수정 |
-| Self-refine | `self_refine` | 같은 LLM의 일반적인 재검토와 수정 |
-| **JBFC-F** | `jev_function` | Jev의 함수 선택 검사 사용 |
-| **JBFC-A** | `jev_arguments` | Jev의 인자 검사 사용 |
-| **JBFC** | `jev_joint` | Jev의 함수 선택·인자 검사 모두 사용 |
-| **JBFC-L** | `jev_joint_latest` | 같은 검사를 사용하되 최신 실패 후보·피드백 하나만 생성기에 제공 |
-
-**JBFC-L**은 **JBFC**와 모델, 필요한 검사, 임계값, 공유 최초 제안, 공통 `r=2`, 최종 정책이 같습니다. 차이는 수정 LLM에 보내는 기록의 범위뿐입니다. **JBFC-L**은 최신 실패 후보와 실제 피드백 하나만 원본 대화 앞에 붙이며, 원래 라운드 번호와 사용자 요청·대화는 보존합니다. 저장한 `trace`에는 두 방법 모두 모든 라운드가 남습니다. 프롬프트 차이는 두 번째 수정부터 생기므로 **`r≤1`로는 누적 피드백의 기여를 평가할 수 없고**, `r=2`에서는 두 번째 수정에서만 차이가 납니다. 서로 다른 수정 프롬프트에 대한 실제 LLM 실행이 필요하며, **JBFC** 기록에서 **JBFC-L** 결과를 합성할 수 없습니다.
-
-`summary.json`의 `history_ablation`은 **JBFC − JBFC-L**의 최종 호출 정확도 차이와 95% 구간을 담습니다. 같은 사례 ID끼리 짝지어 차이를 구하고(반복 실행이 있으면 ID별 평균을 먼저 냅니다) seed 1729로 ID를 2,000회 재표집합니다. `live_relevance`만 제외하므로 논문 실험의 분모는 **3,035개 ID**입니다. no-call은 포함하며 공유 최초 제안·점수, 수정 한도와 최종 정책의 일치도 검사합니다.
-
-Direct는 수정하지 않고, 자기 재검토는 모든 수정 예산을 사용합니다. 나머지 방법은 통과하면 일찍 종료합니다. 같은 수정 한도를 적용해도 실제 제안 수·요청 수·토큰·시간·비용은 다를 수 있습니다. **JBFC-F**와 **JBFC-A**도 호출이 있으면 두 확률을 구하지만, 선택한 의미 검사와 공통 스키마 검사만 통과 판단·피드백에 사용합니다. 피드백은 **JBFC**와 같은 형식·지시문·임계값 표기를 쓰고, 숨긴 검사 항목만 뺍니다. no-call에서는 인자 질문을 생략하므로, 인자 전용 비교인 **JBFC-A**는 스키마 검사만 적용합니다. 함수 판정을 그 방법의 통과 기준이나 피드백으로 사용하지 않습니다.
-
-## 논문 실험 (전체 예제, r=2, 1회)
-
-논문은 개발/테스트 분할 없이 준비된 3,051개 전체를 한 번 실행하고, 수정 한도를 `r=2`로 고정합니다. 생성기는 `.env`의 APIM 주소와 키로 Azure OpenAI 배포(`LLM_API_STYLE=azure_chat_completions`, 기본 `gpt-5-nano`, reasoning effort `none`)를 호출합니다. Direct와 **JBFC**의 설정은 같습니다.
+Python 3.11 or newer. From a clone of this repository:
 
 ```bash
-make table1 WORKERS=8   # Direct와 JBFC -> Table 1
-make table2 WORKERS=8   # 일곱 방법 -> Table 1·2를 같은 실행으로 채움
-make table3 WORKERS=8   # Table 2가 끝난 뒤: JBFC의 r=1,2,3,5,7 -> Table 3
-make irrelevance-check WORKERS=8   # Irrelevance에서 Direct만 다시 실행해 Table 1과 비교 (CHECK_RUNS=3으로 반복)
+pip install -e .        # or: uv sync
 ```
 
-`scripts/run_table1.sh`와 `scripts/run_table2.sh`는 먼저 생성기와 Jev를 한 번씩 호출해 연결과 reasoning effort(`none`, `minimal`, `low`, 모델 기본값 순)를 확인합니다. 이어서 `--split all --max-repairs 2 --replicates 1`로 실행하고, 완료된 실행만 `paper/main.tex`에 반영합니다. 논문 표는 모델·reasoning effort·출력 한도·API 형식·단가가 논문에 적힌 설정과 같고 3,051개 ID와 데이터 해시가 모두 일치하는 실행만 받습니다. 결과는 `results/table1_<MODEL>_r2/`, `results/table2_<MODEL>_r2/`에 저장되며, 중간에 끊겨도 같은 명령으로 이어서 실행합니다. 표를 채운 뒤에는 PDF를 다시 만듭니다. `irrelevance-check` 결과는 `results/irrelevance_direct_*`에 따로 저장되며 논문 표를 바꾸지 않습니다.
-
-Table 3은 **JBFC**의 수정 한도를 1, 2, 3, 5, 7로 바꿔 봅니다. 두 모델 모두 `r`을 모르고 끝나기 전에는 함수를 실행하지 않으므로, 작은 한도의 경로는 큰 한도 경로의 앞부분과 같습니다. 그래서 `make table3`은 Table 2 실행에서 `r=2`까지 통과하지 못한 **JBFC** 사례만 저장된 이력에서 이어 `r=7`까지 수정하고(`scripts/extend_run.py`), 각 한도에서 잘라 Table 3을 채웁니다(`scripts/table3.py`). 이어 돌리기는 Table 2와 같은 코드(`source_sha256`)·모델·API·단가일 때만 허용하며, 저장된 앞부분을 같은 파이프라인으로 다시 재생해 기록과 일치하는지 확인한 뒤 새 요청을 보냅니다. `r=2`로 자른 결과는 Table 2의 **JBFC** 기록과 정확히 같아야 표를 채웁니다. 결과는 `results/table3_<MODEL>_r7/`에 저장됩니다.
-
-## 데이터와 채점
-
-BFCL v4의 고정된 단일 턴 Python 하위 집합 3,051개를 사용합니다. `simple_python`, `multiple`, `irrelevance`, `live_simple`, `live_multiple`, `live_irrelevance`, `live_relevance`를 포함합니다. 공식 전체 리더보드 점수는 아닙니다.
-
-- 고정 버전: `6ea57973c7a6097fd7c5915698c54c17c5b1b6c8`
-- 논문 실험은 분할 없이 3,051개 전체를 사용합니다. 준비 단계는 이전 탐색용 개발/테스트 분할 파일(개발 303개, 테스트 2,748개; 카테고리별 `sha256(seed:id)` 순위, seed 1729)도 함께 만듭니다.
-- 본문 주 지표는 공식 AST 정확도와 no-call 정확도를 합친 사용자 정의 micro-average이며, `live_relevance` 16개를 제외한 3,035개가 분모입니다. AST와 no-call 지표도 별도로 저장합니다.
-- `live_relevance`는 호출 여부만 평가할 수 있으며 함수·인자 정답을 제공하지 않습니다.
-- 원본 답안의 모순 4개와, 정답 값의 타입이 선언된 인자 타입과 다른 사례 6개를 확인했습니다. 후자는 채점기가 정답 타입의 값만 인정하므로 스키마 검사를 쓰는 방법이 정답을 수락할 수 없습니다. 모두 주 평가에 그대로 유지하며 자세한 근거는 `docs/benchmarks.md`와 준비 매니페스트에 있습니다.
-- `live_irrelevance`의 함수 목록이 빈 사례 4개는 생성기 요청에 tool 설정을 넣지 않고 보냅니다.
-- 다운로드 파일과 정규화 데이터의 체크섬을 검사하고, 공식 AST 평가기의 본문을 변경하지 않는 경량 어댑터로 채점합니다.
-- 정답, 데이터 ID, 카테고리 및 정답이 포함될 수 있는 채점 오류는 **LLM/Jev 요청에 포함하지 않습니다.**
-
-준비된 데이터는 `data/bfcl/`에 있으며, 외부 원본 데이터는 Git에서 제외했습니다. `make prepare`로 같은 버전을 재구성합니다. 원본 Apache-2.0 라이선스도 함께 저장합니다.
-
-## 다른 수정 한도 탐색 (논문에서는 사용하지 않음)
-
-논문은 `r=2`를 고정하며 개발 데이터로 한도를 고르지 않습니다. 개발 데이터로 한도를 고르던 이전 도구(`scripts/run_suite.py`, `scripts/tune_repair_budget.py`, `jev_fc.tuning`)는 탐색용으로만 남아 있고 논문 표를 채우지 않습니다. 자세한 내용은 `docs/repair-budget.md`에 있습니다.
+Set the keys for Jev and for your model provider:
 
 ```bash
-# 논문 표와 별개인 탐색 실행입니다. 더 큰 한도도 가능합니다.
-uv run jev-fc run --split dev --methods jev_joint --max-repairs 7 \
-  --replicates 1 --output results/exploratory_r7 --resume
-
-# 임계값 분석도 별도입니다.
-uv run jev-fc run --split dev --methods jev_joint --max-repairs 0 \
-  --replicates 1 --output results/calibration --resume
-uv run python scripts/calibrate_threshold.py results/calibration
+export TYPESAFE_API_KEY=...   # Jev, from TypeSafe (https://typesafe.ai)
+export OPENAI_API_KEY=...     # or ANTHROPIC_API_KEY, GEMINI_API_KEY, XAI_API_KEY, ...
 ```
 
-논문 실험은 Jev 임계값을 `0.8`로 고정하며 조정하지 않습니다. 이전 기록의 앞부분만으로 다른 임계값이나 프롬프트의 결과를 재현할 수는 없습니다.
+## Quickstart
 
-실행 폴더에는 다음 파일이 생깁니다.
+```python
+import jbfc
 
-| 파일 | 내용 |
+def get_weather(city: str, unit: str = "celsius") -> dict:
+    """Current weather for a city.
+
+    Args:
+        city: City name, e.g. "Seoul".
+        unit: "celsius" or "fahrenheit".
+    """
+    return {"city": city, "temp": 12, "unit": unit}
+
+agent = jbfc.JBFC("openai:gpt-5-nano", tools=[get_weather])
+
+result = agent.run("Do I need a jacket in Seoul tonight?")
+result.call       # {"name": "get_weather", "arguments": {"city": "Seoul"}}
+result.accepted   # True: Jev and the schema check passed
+result.output     # {"city": "Seoul", "temp": 12, "unit": "celsius"}
+result.repairs    # repairs it took (0, 1 or 2)
+```
+
+`run()` executes the final call only if it passed. `call()` does everything except execute, so you decide:
+
+```python
+result = agent.call("Book a table for two at 7pm")
+if result.accepted:
+    ...                                  # run result.call yourself
+elif result.no_call:
+    print(result.text)                   # the model answered without a tool
+```
+
+## Use any model
+
+The model is a `"provider:model"` string or a provider object. Options such as `api_key=` go to the provider; `jev_api_key=` goes to Jev.
+
+```python
+jbfc.JBFC("openai:gpt-5-nano")                       # OPENAI_API_KEY
+jbfc.JBFC("anthropic:claude-sonnet-4-5")             # ANTHROPIC_API_KEY
+jbfc.JBFC("gemini:gemini-2.5-flash")                 # GEMINI_API_KEY or GOOGLE_API_KEY
+jbfc.JBFC("xai:grok-4")                              # XAI_API_KEY
+jbfc.JBFC("openrouter:meta-llama/llama-3.3-70b-instruct")   # OPENROUTER_API_KEY
+jbfc.JBFC("azure:my-deployment", endpoint="https://my-resource.openai.azure.com")  # AZURE_OPENAI_API_KEY
+
+# Local or self-hosted, OpenAI-compatible (Ollama, vLLM, LM Studio, ...)
+jbfc.JBFC(jbfc.OpenAICompatible("llama3.1", base_url="http://localhost:11434/v1"))
+
+# Keys in code instead of the environment
+jbfc.JBFC("anthropic:claude-sonnet-4-5", api_key="sk-ant-...", jev_api_key="...")
+```
+
+| Provider | Spec | Key | Class |
+|---|---|---|---|
+| OpenAI | `openai:<model>` | `OPENAI_API_KEY` | `jbfc.OpenAI` |
+| Anthropic | `anthropic:<model>` | `ANTHROPIC_API_KEY` | `jbfc.Anthropic` |
+| Google Gemini | `gemini:<model>` | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | `jbfc.Gemini` |
+| xAI Grok | `xai:<model>` | `XAI_API_KEY` | `jbfc.XAI` |
+| Azure OpenAI | `azure:<deployment>` | `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT` | `jbfc.AzureOpenAI` |
+| OpenRouter | `openrouter:<model>` | `OPENROUTER_API_KEY` | `jbfc.OpenRouter` |
+| Anything OpenAI-compatible | | optional | `jbfc.OpenAICompatible` |
+| Jev (verifier) | | `TYPESAFE_API_KEY` | `jbfc.Jev` |
+
+Provider objects take `max_output_tokens` (4,096 by default), `temperature`, `system_prompt`, `timeout`, `max_retries` and `headers`; OpenAI-style providers also take `reasoning_effort`, and Gemini takes `thinking_budget`. A truncated, filtered or refused response is treated as a failed proposal and repaired, never as "no call".
+
+## Tools
+
+Plain functions work as they are: parameter types come from type hints (`str`, `int`, `float`, `bool`, `list[...]`, `dict[...]`, `Literal`, `Enum`, `Optional`, `TypedDict`, `Annotated[..., "description"]`), descriptions from Google, NumPy or Sphinx docstrings, and defaults from the signature. Use the decorator to override anything, or pass JSON Schema definitions in OpenAI, Anthropic or Gemini format:
+
+```python
+@jbfc.tool(name="weather", description="Current weather for a city.")
+def get_weather(city: str, unit: Literal["celsius", "fahrenheit"] = "celsius") -> dict: ...
+
+schema = {"type": "function", "function": {
+    "name": "search", "description": "Search the web.",
+    "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}}
+agent = jbfc.JBFC("openai:gpt-5-nano", tools=[get_weather, schema], functions={"search": my_search})
+```
+
+`jbfc.schema_of(fn)` shows the schema JBFC sends.
+
+## Verify calls from any framework
+
+Already have an agent? Keep it, and check its calls before you execute them. `verify` takes the conversation so far (earlier tool calls and tool results included) and the proposed calls, as plain dicts or as the message and tool-call objects of the OpenAI, Anthropic and Google SDKs.
+
+```python
+from openai import OpenAI
+
+response = OpenAI().chat.completions.create(model="gpt-5-nano", messages=messages, tools=tools)
+verdict = jbfc.verify(messages, response.choices[0].message.tool_calls, tools)
+
+if verdict:                       # passed the schema check and both Jev checks
+    execute(response.choices[0].message.tool_calls)
+else:
+    print(verdict.function_probability, verdict.arguments_probability, verdict.schema_errors)
+    # verdict.feedback is the record JBFC would send back to the model for a repair
+```
+
+## The result
+
+| Field | Meaning |
 |---|---|
-| `manifest.json` | 모델, 설정, 데이터/코드 지문, 대상 ID, 단가 (탐색 도구를 쓴 경우 수정 한도 선택 자료) |
-| `initial.jsonl` | 실행한 방법들이 사례별로 공유하는 최초 LLM 제안 하나 |
-| `records.jsonl` | 모든 후보, Jev 판단, 실제 피드백, 채점, 비용/지연 기록 |
-| `errors.jsonl` | 키와 응답 내용을 제외한 오류 유형·고정 오류 문구, 시각, HTTP 상태, 제공자 오류 코드, 안전한 요청 ID와 시도 횟수 |
-| `summary.json` | 카테고리별·반복별 지표와 분모, paired bootstrap, `history_ablation`, 수락·거절 진단, 최초→최종 함수 변경·수정·퇴행, 토큰 사용량 |
-| `summary.csv` | 방법별 비교 요약 |
+| `calls` | final proposal: `[{"name", "arguments"}]`, `[]` for no call, `None` if unreadable |
+| `call` | the first call, or `None` |
+| `accepted` | passed every check (`None` for methods without a verifier) |
+| `exhausted` | hit the repair limit without passing |
+| `repairs` | repairs used |
+| `text` | the model's text, e.g. its answer when it made no call |
+| `executed`, `output` | whether `run()` executed the call, and what it returned |
+| `attempts` | every proposal with its Jev probabilities and schema errors |
+| `usage`, `latency_s` | tokens for the model and for Jev, and wall time |
+| `trace` | the full record: proposals, verdicts and feedback |
 
-코드, 모델, API 형식·경로, 작업자 수, 재시도 설정, 데이터 또는 실행 조건이 바뀌면 기존 결과에 이어 쓰지 않고 새 출력 경로를 요구합니다. 키 값은 지문에 포함하지 않으므로 같은 프로젝트 키를 갱신해도 재개할 수 있습니다. 잘못된 응답을 정답으로 간주하거나 API 오류를 no-call 예측으로 바꾸지 않습니다. 출력 한도에서 잘리거나 거절된 생성 응답, 제공자 콘텐츠 필터가 막은 응답이나 요청(HTTP 400 `content_filter`)은 완전한 제안이 없으므로 읽을 수 없는 제안(`calls=null`, 사유는 `incomplete`)으로 기록합니다. 이런 제안은 오답으로 채점하고, 실행은 멈추지 않으며, 요약의 `incomplete_proposal_n`·`incomplete_final_n`으로 셉니다. 완료된 기록의 중복과 설정 불일치도 보고 단계에서 검사합니다.
+## Options and baselines
 
-비용은 응답에 포함된 사용량과 설정된 단가로 추정합니다. Responses의 캐시 입력과 Anthropic의 캐시 읽기·5분/1시간 쓰기 토큰을 구분합니다. 필요한 단가나 사용량을 알 수 없으면 비용은 미상으로 남깁니다. 기본 단가는 공개 공급자 기준값이며 APIM 프로젝트의 가산 요금이나 실제 청구액은 아닙니다. 누락된 사용량은 0원으로 처리하지 않으며, 공급자 청구서·재시도 중 응답을 받지 못한 요청 비용까지 보장하지 않습니다.
-
-일곱 방법의 비교 비용·지연에는 공유한 최초 제안을 각각 한 번씩 포함합니다. 이후 수정과 검사의 요청도 모두 포함하며, 각 방법이 실제로 보낸 피드백의 입력 토큰을 사용량에 반영합니다. 실제 전체 실행 시간과 방법별 비교를 위한 누적 지연은 다릅니다. 지연은 재시도 전 대기를 뺀 API 시간이며, 대기 시간은 `retry_wait_s`로 따로 기록합니다.
-
-## 논문
-
-- `paper/main.tex`: 독립 실행형 영문 LaTeX, 본문 4쪽 + 참고문헌 1쪽
-- `paper/main.pdf`: 확인된 PDF
-- `paper/references.bib`: 별도 참고문헌 자료. 실제 원고는 내장 bibliography로 단일 파일 컴파일이 가능합니다.
-
-Abstract, Introduction, Related Work, Method, Experiments, Conclusion, Acknowledgements가 본문에 포함됩니다. 표는 2개입니다. Table 1은 카테고리별 Direct·**JBFC** 정확도(채움), Table 2는 일곱 방법의 정확도·시간·비용(미실행)입니다. 행마다 또는 열마다 더 높은 정확도를 굵게 표시합니다. 특정 학회의 공식 스타일로 지정하지 않은 일반 2단 숏페이퍼이며, 저자 정보는 다음 세 줄로 표시합니다.
-
-```text
-Minhyeong Yu
-Enhans
-minhyeong@enhans.ai
+```python
+jbfc.JBFC(
+    "openai:gpt-5-nano",
+    tools=[...],
+    max_repairs=2,             # repairs after the first proposal
+    threshold=0.8,             # Jev threshold for both checks
+    method="jbfc",             # or a baseline: "direct", "schema", "self-refine",
+                               # "jev-function", "jev-arguments", "jbfc-latest"
+    execute_unverified=False,  # run() also executes a call still rejected at the limit
+)
 ```
+
+- `jbfc.Jev(api_key, threshold=0.8, function_threshold=None, arguments_threshold=None, model="jev-1.13.0")` configures the verifier; pass it as `jev=`.
+- `acall`, `arun` and `averify` run the same steps in a worker thread for async code.
+- Any object with `generate(example, history)` returning `{"calls": ..., "content": ...}` can stand in for a provider.
+- `jbfc.SYSTEM_PROMPT` is the generator prompt used in the paper; replace it with `system_prompt=` on a provider.
+
+## Limits
+
+- **One decision per step.** JBFC decides a single call or no call, the BFCL setting it was evaluated on. Agents call it once per step, and parallel calls are out of scope. `call()` and `run()` take text messages, so give earlier tool results back to the model as text; `verify()` also accepts tool-call and tool-result messages.
+- **A verifier is a model too.** Jev can accept a wrong call or reject a right one; accepted calls were 90.6% correct in the paper's run, not 100%.
+- **Cost and latency.** Each proposal costs one generator call and one Jev call; with at most two repairs, that is up to three of each.
+- **Evidence so far.** The numbers come from one model (`gpt-5-nano` on Azure OpenAI), mostly English requests, and one run. The other provider adapters follow each API's documented format and are covered by offline tests, not yet by benchmark runs.
+
+## Reproduce the paper
+
+The experiment code lives in [`src/jev_fc`](src/jev_fc) and the manuscript in [`paper/main.tex`](paper/main.tex). JBFC's loop in the library *is* `jev_fc.pipeline.run_example`, and offline tests check that the library sends the same prompts as the experiments.
 
 ```bash
-make report  # 완료된 실행으로 표 다시 채우기 (기본 RUN=results/table2_gpt-5-nano_r2)
-make paper   # 설치된 pdflatex로 PDF 내보내기
-make verify  # 본문 4쪽, References 5쪽 시작, 필수 절 확인
+make setup         # uv sync and a .env from .env.example
+make prepare       # download and convert the pinned BFCL revision (3,051 examples)
+make test          # offline tests and lint; no keys needed
+make check-config  # show the configured routes, models and keys, without API calls
+make table1        # Direct vs JBFC (6,102 records)
+make table2        # all seven methods (21,357 records); also fills Table 1
+make table3        # JBFC at repair limits 1, 2, 3, 5, 7, extending the Table 2 run
+python scripts/analyze_results.py results/table2_gpt-5-nano_r2   # the numbers quoted in Results
 ```
 
-원고는 Codex의 내장 LaTeX 편집기에서도 그대로 열 수 있습니다. 실험 이후 표는 자동 반영되지만 **abstract·결론의 실증 해석은 실제 결과에 맞춰 수정해야 합니다.** 결과를 만들기 전부터 개선 효과를 주장하지 않습니다. 사용자 정의 모델·부분 데이터·다른 설정의 결과로 기본 원고를 채우려면 먼저 논문의 실험 조건을 함께 바꿔야 합니다.
+The paper's runs used an Azure OpenAI deployment of `gpt-5-nano` and Jev behind an Azure API Management gateway; direct API keys work too (see [`docs/apim-gateway.md`](docs/apim-gateway.md)). With `WORKERS=8`, Table 2 took about two hours and $2.4 at list prices, and the Table 3 extension about 20 minutes and $0.8. Completed records are reused when a run resumes. Run notes and checks are in [`docs/validation.md`](docs/validation.md).
 
-## 확인한 공식 자료
+```text
+src/jbfc/      the library: JBFC, providers, Jev, tools
+src/jev_fc/    experiment code: repair loop, Jev client, BFCL data and scoring, CLI (jev-fc)
+scripts/       table runs, run extension for Table 3, analysis, paper build and checks
+paper/         manuscript and PDF
+tests/         offline tests
+docs/          benchmark, gateway and validation notes
+```
 
-- [TypeSafe 모델 및 버전](https://docs.typesafe.ai/models)
-- [TypeSafe HTTP API](https://docs.typesafe.ai/api)
-- [TypeSafe 함수 호출 예제](https://docs.typesafe.ai/cookbooks/function_calling)
-- [TypeSafe 구조화 추출 검증 예제](https://docs.typesafe.ai/cookbooks/sde_cascade)
-- [BFCL 논문](https://proceedings.mlr.press/v267/patil25a.html)
-- [OpenAI 함수 호출 문서](https://developers.openai.com/api/docs/guides/function-calling)
-- [기본 생성기 사양과 가격](https://developers.openai.com/api/docs/models/gpt-5.4-mini)
+## Citation
 
-`docs/jev-research.md`와 `docs/literature.md`에는 조사 근거 및 ToolVerifier·ToolCritic 등 직접 관련된 선행연구와의 차이를 정리했습니다.
+```bibtex
+@misc{yu2026jbfc,
+  title  = {Jev-Backed Function Calling: Iterative Repair with Cumulative Decision Feedback},
+  author = {Yu, Minhyeong},
+  year   = {2026},
+  note   = {Enhans}
+}
+```
 
-추가로 [JEV-as-a-Judge: Accept When Confident, Escalate When Unsure (v5)](https://arxiv.org/abs/2609.26550v5)의 본문과 부록을 검토해 논문에 인용했습니다. 방법·결과·한계와 이번 실험의 차이는 `docs/jev-as-a-judge.md`에 정리했습니다.
+## Acknowledgements
+
+This work was created as part of the No-More-Slops group activities at Pseudo Lab. Jev is TypeSafe's verifier model; the benchmark is the Berkeley Function Calling Leaderboard (BFCL).
