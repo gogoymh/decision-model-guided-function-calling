@@ -70,7 +70,7 @@ def offline_run(tmp_path, monkeypatch, request):
     observed = {"llm": [], "jev": [], "histories": [], "fail_next_jev": False, "fail_next_llm": False,
                 "incomplete_next": {}, "filter_prompt": {},
                 "api_style": api_style, "gateway": gateway,
-                "repairs_until_correct": 1,
+                "repairs_until_correct": 1, "valid_arguments_probability": .99,
                 "subscription_key": "integration-subscription-before-rotation", "auth_providers": set()}
 
     def check_wire(body):
@@ -180,7 +180,8 @@ def offline_run(tmp_path, monkeypatch, request):
         valid_arguments = all(call["arguments"] for call in calls)
         answers = {"function_correct": {"type": "noul", "noul": .99}}
         if calls:
-            answers["arguments_correct"] = {"type": "noul", "noul": .99 if valid_arguments else .01}
+            answers["arguments_correct"] = {"type": "noul",
+                                            "noul": observed["valid_arguments_probability"] if valid_arguments else .01}
         return httpx.Response(200, json={
             "model": "jev-1.13.0",
             "answers": answers,
@@ -860,3 +861,47 @@ def test_raised_limit_refuses_other_settings_code_or_first_proposals(offline_run
     with pytest.raises(ValueError, match="different code"):
         raise_limit.main(argv)
     assert (len(observed["llm"]), len(observed["jev"])) == before and not (tmp_path / "x").exists()
+
+
+def test_rethreshold_reruns_only_jbfc_from_the_same_first_proposals(offline_run, monkeypatch, tmp_path):
+    args, observed, _ = offline_run
+    rethreshold = _script("rethreshold")
+    monkeypatch.setattr(rethreshold, "load_dotenv", lambda *_: None)
+    observed["valid_arguments_probability"] = .75  # right calls pass at 0.7 but not at 0.8
+    args.methods, args.max_repairs = "direct,jev_joint", 3
+    cli.run(args)  # threshold 0.8: the right call from the first repair on keeps failing, so JBFC uses every repair
+    source = Path(args.output)
+    old = {(row["id"], row["method"]): row for row in read_jsonl(source / "records.jsonl")}
+    assert old[("simple_python_0", "jev_joint")]["repairs"] == 3 and old[("simple_python_0", "jev_joint")]["accepted"] is False
+    before = len(observed["llm"]), len(observed["jev"])
+    out = tmp_path / "t07"
+    common = ["--workers", "1", "--data", args.data, "--checker", args.checker]
+    summary = rethreshold.main([str(source), "--threshold", "0.7", "--output", str(out)] + common)
+    manifest = summary["manifest"]
+    assert manifest["threshold"] == .7 and manifest["rethreshold"] == {"method": "jev_joint", "from": .8, "to": .7}
+    assert manifest["methods"] == ["direct", "jev_joint"] and manifest["extends"]["threshold"] == .8
+    new = {(row["id"], row["method"]): row for row in read_jsonl(out / "records.jsonl")}
+    assert len(new) == 6 and summary["status"] == "complete"
+    for example_id in ("simple_python_0", "multiple_0", "irrelevance_0"):
+        assert new[(example_id, "direct")]["trace"] == old[(example_id, "direct")]["trace"]
+        assert new[(example_id, "jev_joint")]["trace"][0]["proposal"] == old[(example_id, "direct")]["trace"][0]["proposal"]
+    for example_id in ("simple_python_0", "multiple_0"):  # the first repair is right and now passes
+        row = new[(example_id, "jev_joint")]
+        assert row["repairs"] == 1 and row["accepted"] is True and row["score"]["correct"] is True
+        assert row["trace"][0]["feedback"]["checks"]["arguments"]["threshold"] == .7
+    # One new generation per call example; Jev checks both attempts of each, and the no-call once.
+    assert (len(observed["llm"]) - before[0], len(observed["jev"]) - before[1]) == (2, 5)
+    after = len(observed["llm"]), len(observed["jev"])
+    rethreshold.main([str(source), "--threshold", "0.7", "--output", str(out), "--resume"] + common)
+    assert (len(observed["llm"]), len(observed["jev"])) == after  # resuming a complete rerun asks nothing
+    with pytest.raises(ValueError, match="equals"):
+        rethreshold.main([str(source), "--threshold", "0.8", "--output", str(tmp_path / "same")] + common)
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "low")
+    with pytest.raises(ValueError, match="reasoning_effort"):
+        rethreshold.main([str(source), "--threshold", "0.7", "--output", str(tmp_path / "effort")] + common)
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "none")
+    monkeypatch.setattr(cli, "_source_hash", lambda: "other-code")
+    with pytest.raises(ValueError, match="different code"):
+        rethreshold.main([str(source), "--threshold", "0.7", "--output", str(tmp_path / "code")] + common)
+    assert (len(observed["llm"]), len(observed["jev"])) == after
+    assert_saved_files_have_no_credentials(out)

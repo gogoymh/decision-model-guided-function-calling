@@ -1,4 +1,4 @@
-.PHONY: setup prepare check-config test demo smoke table1 table2 table3 compare r3 repeat irrelevance-check report paper verify
+.PHONY: setup prepare check-config test demo smoke table1 table2 table3 compare r3 repeat threshold irrelevance-check report paper verify
 
 WORKERS ?= 4
 MODEL ?= gpt-5-nano
@@ -59,6 +59,12 @@ r3:
 # mean with run 1 (make r3). Running it again resumes from the completed records.
 repeat:
 	WORKERS="$(WORKERS)" PARALLEL="$(PARALLEL)" MODELS="$(MODELS)" RUNS="$(RUNS)" bash scripts/run_repeat.sh
+
+# Exploratory (user request, 2026-10-18): JBFC again with another Jev threshold (THRESHOLD, default 0.7) on
+# Table 1's three runs per generator, from the same first proposals. Writes results/threshold_<THRESHOLD>.json;
+# the paper is unchanged.
+threshold:
+	THRESHOLD="$(THRESHOLD)" WORKERS="$(WORKERS)" PARALLEL="$(PARALLEL)" MODELS="$(MODELS)" RUNS="$(RUNS)" bash scripts/run_threshold.sh
 
 # Direct only on the 240 Irrelevance examples; compares with the Table 1 run. EFFORT=low etc. is optional.
 irrelevance-check:
