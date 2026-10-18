@@ -12,10 +12,10 @@ from playwright.sync_api import sync_playwright
 
 THEMES = {
     "light": dict(surface="#fcfcfb", ink="#0b0b0b", ink2="#52514e", muted="#898781", grid="#e1e0d9",
-                  base="#c3c2b7", blue="#2a78d6", orange="#eb6834", gray="#c9c7c0", link="#c3c2b7",
+                  base="#c3c2b7", blue="#2a78d6", orange="#eb6834", aqua="#1baf7a", gray="#c9c7c0", link="#c3c2b7",
                   border="rgba(11,11,11,0.10)"),
     "dark": dict(surface="#1a1a19", ink="#f0efec", ink2="#c3c2b7", muted="#898781", grid="#2c2c2a",
-                 base="#383835", blue="#3987e5", orange="#d95926", gray="#4b4a46", link="#4b4a46",
+                 base="#383835", blue="#3987e5", orange="#d95926", aqua="#199e70", gray="#4b4a46", link="#4b4a46",
                  border="rgba(255,255,255,0.10)"),
 }
 W = 880
@@ -42,8 +42,9 @@ def text(x, y, s, color, size=12.5, weight=400, anchor="start"):
 
 
 def categories(t, rows):
-    width, left, x0, x1 = W - 56, 0, 168, 560
-    cols = {"Direct": 640, "JBFC": 712, "Δ": 790}
+    """Dots per category: Direct and JBFC with gpt-5-nano (joined), and Direct with gpt-5.4-mini."""
+    width, left, x0, x1 = W - 56, 0, 168, 540
+    cols = {"nano": (620, t["orange"]), "JBFC": (700, t["blue"]), "mini": (780, t["aqua"])}
     row_h, top = 36, 26
     height = top + row_h * len(rows) + 30
 
@@ -54,21 +55,22 @@ def categories(t, rows):
     for v in (0, 25, 50, 75, 100):
         out.append(f'<line x1="{sx(v)}" y1="{top - 8}" x2="{sx(v)}" y2="{top + row_h * len(rows)}" stroke="{t["grid"]}" stroke-width="1"/>')
         out.append(text(sx(v), top + row_h * len(rows) + 16, f"{v}%", t["muted"], 11, anchor="middle"))
-    for name, x in cols.items():
+    for name, (x, color) in cols.items():
+        out.append(f'<circle cx="{x - len(name) * 7 - 10}" cy="{top - 14}" r="4" fill="{color}"/>')
         out.append(text(x, top - 14, name, t["muted"], 11, 500, "end"))
-    for i, (label, direct, jbfc) in enumerate(rows):
+    for i, (label, direct, jbfc, mini) in enumerate(rows):
         y = top + row_h * i + row_h / 2
         total = label == "Total"
         if total:
             out.append(f'<line x1="0" y1="{y - row_h / 2}" x2="{width}" y2="{y - row_h / 2}" stroke="{t["base"]}" stroke-width="1"/>')
         out.append(text(left, y, label, t["ink"] if total else t["ink2"], 13.5, 600 if total else 450))
         out.append(f'<line x1="{sx(direct)}" y1="{y}" x2="{sx(jbfc)}" y2="{y}" stroke="{t["link"]}" stroke-width="2" stroke-linecap="round"/>')
-        for value, color in ((direct, t["orange"]), (jbfc, t["blue"])):
+        for value, color in ((direct, t["orange"]), (jbfc, t["blue"]), (mini, t["aqua"])):
             out.append(f'<circle cx="{sx(value)}" cy="{y}" r="6.5" fill="{color}" stroke="{t["surface"]}" stroke-width="2"/>')
-        out.append(text(cols["Direct"], y, f"{direct:.1f}", t["ink2"], 13, 450, "end"))
-        out.append(text(cols["JBFC"], y, f"{jbfc:.1f}", t["ink"], 13, 650, "end"))
-        delta = jbfc - direct
-        out.append(text(cols["Δ"], y, f"+{delta:.1f}" if delta > 0.05 else "±0", t["ink2"] if delta > 0.05 else t["muted"], 13, 450, "end"))
+        best = max(direct, jbfc, mini)
+        for value, (x, _) in zip((direct, jbfc, mini), cols.values()):
+            top_value = value == best
+            out.append(text(x, y, f"{value:.1f}", t["ink"] if top_value else t["ink2"], 13, 650 if top_value else 450, "end"))
     out.append("</svg>")
     return "".join(out)
 
@@ -151,10 +153,11 @@ def main(data_path, out_dir):
     jobs = []
     for mode, t in THEMES.items():
         jobs.append((f"chart-categories-{mode}.png", page(t, "Accuracy by BFCL category",
-                     "gpt-5-nano · all 3,051 examples · one run · at most 2 repairs",
-                     [("Direct (no checks)", t["orange"]), ("JBFC", t["blue"])], categories(t, data["categories"]))))
+                     "All 3,051 examples · one run per generator · JBFC makes at most 2 repairs · bold: highest in the row",
+                     [("nano: Direct, gpt-5-nano", t["orange"]), ("JBFC: gpt-5-nano + Jev", t["blue"]),
+                      ("mini: Direct, gpt-5.4-mini", t["aqua"])], categories(t, data["categories"]))))
         jobs.append((f"chart-methods-{mode}.png", page(t, "Call accuracy by method",
-                     "Same first proposal for every method · at most 2 repairs · time and cost per request at right",
+                     "gpt-5-nano · same first proposal for every method · at most 2 repairs · time and cost per request at right",
                      [], methods(t, data["methods"]))))
         jobs.append((f"chart-limits-{mode}.png", page(t, "JBFC by repair limit r",
                      "Call accuracy and cost · one run extended from r=2, so every limit shares its first attempts",

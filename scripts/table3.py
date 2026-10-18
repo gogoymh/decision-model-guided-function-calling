@@ -23,7 +23,6 @@ from jev_fc.reporting import (  # noqa: E402
     PAPER_REPAIRS,
     _check_all_examples,
     _replace_block,
-    _tex_escape,
     build_summary,
     derive_policy_run,
     paper_protocol_matches,
@@ -145,21 +144,25 @@ def _labels(points, text, above):
 
 
 def latex_repairs_figure(summaries=None):
-    """Figure 2: JBFC accuracy (top) and cost (bottom) by repair limit, as a pgfplots figure."""
+    """Figure 2: JBFC call and function accuracy by repair limit, with each limit's cost under its tick."""
     call = _points(summaries, "accuracy", 100)
     function = _points(summaries, "function_accuracy", 100)
-    cost = _points(summaries, "mean_cost_usd", 1000)
+    cost = dict(_points(summaries, "mean_cost_usd", 1000))
     lines = [r"\begin{figure}[t]", r"\centering"]
     lines += [rf"\definecolor{{repair{name}}}{{HTML}}{{{value}}}" for name, value in COLORS.items()]
     ticks = ",".join(str(r) for r in LIMITS)
+    # Cost per 1,000 requests sits under each limit's tick, in gray, instead of on a second axis.
+    labels = ",".join("{" + str(r) + (rf"\\\color{{repaircost}}{cost[r]:.2f}" if r in cost else "") + "}"
+                      for r in LIMITS)
+    xlabel = r"Repair limit $r$" + (r" (gray: USD per 1,000 requests)" if cost else "")
     lines += [
         r"\begin{tikzpicture}",
-        r"\begin{groupplot}[group style={group size=1 by 2, vertical sep=5pt, xticklabels at=edge bottom},",
-        rf"  scale only axis, width=0.80\columnwidth, xmin=0.3, xmax={max(LIMITS) + 0.7}, xtick={{{ticks}}},",
+        rf"\begin{{axis}}[scale only axis, width=0.80\columnwidth, height=2.2cm, xmin=0.3, xmax={max(LIMITS) + 0.7},",
+        rf"  xtick={{{ticks}}}, xticklabels={{{labels}}}, xticklabel style={{align=center}},",
+        r"  ymin=70, ymax=91, ytick={70,75,80,85,90}, ylabel={Accuracy (\%)}, xlabel={" + xlabel + "},",
         r"  axis x line*=bottom, axis y line*=left, ymajorgrids, grid style={black!12},",
         r"  tick label style={font=\scriptsize}, label style={font=\scriptsize}, tick align=outside,",
-        r"  major tick length=2pt, ylabel style={yshift=-3pt}]",
-        r"\nextgroupplot[height=2.0cm, ymin=70, ymax=91, ytick={70,75,80,85,90}, ylabel={Accuracy (\%)},",
+        r"  major tick length=2pt, ylabel style={yshift=-3pt},",
         r"  legend style={font=\scriptsize, draw=none, fill=none, at={(0.99,0.03)}, anchor=south east,",
         r"  legend columns=2, /tikz/every even column/.append style={column sep=6pt}}]",
     ]
@@ -169,23 +172,19 @@ def latex_repairs_figure(summaries=None):
         lines += _labels(call, lambda v: f"{v:.1f}", above=True) + _labels(function, lambda v: f"{v:.1f}", above=True)
     else:
         lines.append(r"\node[font=\scriptsize] at (rel axis cs:0.5,0.5) {not yet run};")
-    lines.append(r"\nextgroupplot[height=0.85cm, ymin=0, ymax=0.9, ytick={0,0.4,0.8}, ylabel={USD/1k}, "
-                 r"xlabel={Repair limit $r$}]")
-    if cost:
-        lines.append(_plot(cost, "cost", "triangle*"))
-        lines += _labels(cost, lambda v: f"{v:.2f}", above=True)
-    lines += [r"\end{groupplot}", r"\end{tikzpicture}"]
+    lines += [r"\end{axis}", r"\end{tikzpicture}"]
     final = ((summaries or {}).get(max(LIMITS)) or {}).get("manifest", {})
-    model = final.get("llm_model")
-    notes = rf" Generator: \texttt{{{_tex_escape(model)}}}." if model else ""
-    for route in (final.get("jev_routes") or [])[1:]:
+    notes = ""  # the generator is Table 2's, named in its caption
+    routes = final.get("jev_routes") or []
+    for index, route in enumerate(routes[1:], start=1):
         way = "directly" if route.get("jev_gateway") == "direct" else "through the gateway"
-        notes += rf" Repairs beyond $r={route['first_attempt'] - 1}$ call \textit{{Jev}} {way}."
+        last = routes[index + 1]["first_attempt"] - 1 if index + 1 < len(routes) else max(LIMITS)
+        notes += rf" Repairs {route['first_attempt']}--{last} call \textit{{Jev}} {way}."
     if len(call) < len(LIMITS):
         notes += " Limits without points are unrun."
-    lines += [r"\caption{\textbf{JBFC} by repair limit $r$, extending the run of "
-              rf"Table~\ref{{tab:main}} to $r={max(LIMITS)}$ ($r=2$ matches it). Top: call and function "
-              r"accuracy (\%); bottom: USD per 1,000 requests." + notes + "}",
+    lines += [r"\caption{\textbf{JBFC} call and function accuracy (\%) by repair limit $r$, extending the run of "
+              rf"Table~\ref{{tab:main}} to $r={max(LIMITS)}$ ($r=2$ matches it)"
+              + ("; gray: USD per 1,000 requests." if cost else ".") + notes + "}",
               r"\label{fig:repairs}", r"\end{figure}"]
     return "\n".join(lines)
 
