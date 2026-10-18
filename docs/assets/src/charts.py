@@ -19,6 +19,7 @@ THEMES = {
                  border="rgba(255,255,255,0.10)"),
 }
 W = 880
+DEFAULT_LIMIT = 3  # the library's max_repairs and the paper's tables
 
 
 def page(t, title, subtitle, legend, svg):
@@ -136,9 +137,10 @@ def limits(t, rows):
                    f'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>')
         for (x, y), row in zip(points, rows):
             out.append(f'<circle cx="{x}" cy="{y}" r="5" fill="{color}" stroke="{t["surface"]}" stroke-width="2"/>')
-        for j in (0, 1, len(rows) - 1):  # first, default (r=2) and last; the line rises, so label below early points
+        default = next(i for i, row in enumerate(rows) if row[0] == DEFAULT_LIMIT)
+        for j in (0, default, len(rows) - 1):  # first, default and last; the line rises, so label below early points
             x, y = points[j]
-            value = fmt(rows[j][index]) + (" (default)" if rows[j][0] == 2 else "")
+            value = fmt(rows[j][index]) + (" (default)" if j == default else "")
             if j == len(rows) - 1:
                 out.append(text(x - 2, y - 16, value, t["ink"], 12.5, 600, "end"))
             else:

@@ -311,3 +311,14 @@
 - 해석: **JBFC**는 두 생성기 사이 17.5점 중 9.7점(55%)을 mini 비용의 31%로 메웁니다. mini는 더 정확하고 더 빠르며(1.17초 대 2.90초) 약 3.2배 비쌉니다. Jev가 mini에도 도움이 되는지는 실험하지 않았습니다.
 - 원고: 4.2에 스냅샷, 4.4 첫 문단에 위 비교(수치·구간·비용), Conclusion에 "ten repairs ... still below gpt-5.4-mini without Jev (81.3% at similar cost)", Study Limits에 "whether Jev also helps gpt-5.4-mini is untested"를 넣었습니다. 4쪽을 지키려고 Figure 2의 비용 패널을 눈금 아래 회색 비용 숫자로 바꾸고(같은 수치), 캡션·4.3·4.4·Study Limits·Conclusion 문장을 줄였습니다. Figure 2 캡션의 경로 문구는 "Repairs 8–10 call Jev directly."입니다. PDF: 본문 4쪽·참고문헌 5쪽, Type 3 폰트·overfull 없음.
 - README: Results의 연구 범위 노트, 범주 차트(세 번째 계열 `gpt-5.4-mini`, 검증한 팔레트 3번 aqua; 행마다 가장 높은 값을 굵게, Δ 열 제거), "A larger model alone did better" 항목, 수정 한도 문단, 표(셋째 열과 비용 행), FAQ(비용·벤치마크 모델), Limits, 실행 시간·비용을 고쳤습니다. 방법 차트 부제에 `gpt-5-nano`를 적었습니다.
+
+## 수정 한도 r=3으로 변경 준비 (2026-10-18)
+
+- 사용자 질문: r을 1~10으로 늘리면 정확도가 계속 오르므로, 시간·비용 대비 합리적인 기본값은? Figure 2 실행을 r=0~10에서 자른 정확도는 63.8(Direct), 72.6, 73.5, 75.3, 75.9, 76.2, 77.0, 77.0, 77.7, 77.8, 78.6%이고 평균 제안 수는 1.00~4.16개입니다. 추가 제안 하나당 이득은 r=1이 20.9점, r=2가 2.8점, r=3이 5.6점이고 그 뒤로는 0~2.8점(평균 약 1.6점)입니다. 비용으로 보면 r=2→3이 1k당 $0.052에 +1.8점(0.34점/$0.01), r=3 이후는 0.07~0.09점/$0.01입니다. 그래서 r=3을 추천했고 사용자가 받아들였습니다. r=3이면 r=10 이득의 77%를 비용 41%로 얻습니다.
+- 같은 3,051개 예제의 Figure 2를 보고 고른 값이므로, 원고의 "아무것도 조정하지 않았다"는 문장을 고치고 선택 과정을 밝혀야 합니다(결과 반영 때 처리).
+- 사용자 결정: 기존 기록을 재사용하고, Table 2도 r=3으로 바꿉니다. 고정 절(Abstract·Introduction·Method)의 r=2 문장은 결과 반영 때 r=3으로 고칩니다(사용자 승인).
+- `scripts/raise_limit.py`(새로 추가): 끝난 실행의 수정 한도를 올리며 이미 기록된 시도를 모두 재사용합니다. Direct는 그대로, 첫 통과에서 멈추는 방법(Schema-only, **JBFC-F**, **JBFC-A**, **JBFC**, **JBFC-L**)은 이전 한도에 닿은 행만, Self-refine은 모든 행을 이어서 실행합니다. 저장된 시도는 파이프라인으로 재생해 기록과 같은지 확인합니다(**JBFC-L**은 마지막 기록만 보내는 규칙, Self-refine은 마지막 시도의 종료 표시만 예외). `--reuse jev_joint=RUN`은 더 긴 실행을 새 한도에서 잘라 쓰고(Figure 2 실행 → Table 2와 Figure 2 일치), `--add jev_joint`는 Direct만 있는 실행에 저장된 첫 제안으로 **JBFC**를 더합니다. 오프라인 통합 테스트 3개를 더했습니다.
+- 실제 기록으로 점검(요청 없음): 코드 해시와 데이터가 두 원본 실행과 같습니다. gpt-5-nano는 5,188행에 한 번씩 새 시도가 필요합니다(Self-refine 3,051, **JBFC-F** 626, **JBFC-A** 522, **JBFC-L** 986, Schema-only 3). **JBFC**는 Figure 2 실행을 r=3에서 자른 3,051행을 그대로 쓰며 정확도 75.26%입니다. gpt-5.4-mini는 **JBFC** 3,051행을 새로 돌립니다.
+- `scripts/paper_tables.py`(`table1_compare.py`를 대체): r=3 두 실행을 검사하고 Table 1(gpt-5-nano Direct·**JBFC**, gpt-5.4-mini Direct·**JBFC**, 행마다 최고값 굵게, USD/1k 행)과 Table 2(일곱 방법, r=3)를 씁니다. `make r3`(`scripts/run_r3.sh`)가 두 실행과 표 채우기를 차례로 하고, `make report`도 이 스크립트를 씁니다. Jev는 게이트웨이가 답하면 게이트웨이, 아니면 직접 호출합니다.
+- 라이브러리 기본값 `max_repairs`를 3으로 바꾸고 README의 기본값 표기와 수정 한도 차트의 "(default)" 표시를 r=3으로 옮겼습니다. README의 결과 수치는 r=3 실행 뒤에 바꿉니다.
+- 예상 비용·시간(작업자 8개): gpt-5-nano 약 $0.6·15–20분, gpt-5.4-mini 약 $1.3–2·10–15분.

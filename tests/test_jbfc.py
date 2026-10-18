@@ -377,9 +377,9 @@ def test_rejected_calls_do_not_run_unless_asked():
     def get_weather(city: str):
         ran.append(city)
 
-    agent = jbfc.JBFC(ScriptedModel(busan(), busan(), busan()), jev=ScriptedJev(), tools=[get_weather])
-    result = agent.run("Weather in Seoul?")
-    assert result.accepted is False and result.exhausted and result.repairs == 2 and not result.executed and ran == []
+    agent = jbfc.JBFC(ScriptedModel(busan(), busan(), busan(), busan()), jev=ScriptedJev(), tools=[get_weather])
+    result = agent.run("Weather in Seoul?")  # the default limit is three repairs, as in the paper's tables
+    assert result.accepted is False and result.exhausted and result.repairs == 3 and not result.executed and ran == []
     again = jbfc.JBFC(ScriptedModel(busan(), busan()), jev=ScriptedJev(), tools=[get_weather], max_repairs=1)
     result = again.run("Weather in Seoul?", execute_unverified=True)
     assert result.repairs == 1 and result.executed and ran == ["Busan"]
@@ -412,8 +412,8 @@ def test_methods(monkeypatch):
     schema = jbfc.JBFC(ScriptedModel([{"name": "get_weather", "arguments": {}}], seoul()), method="schema",
                        tools=[WEATHER]).call("Weather in Seoul?")
     assert schema.repairs == 1 and schema.accepted
-    refine = jbfc.JBFC(ScriptedModel(busan(), seoul(), seoul()), method="self_refine", tools=[WEATHER]).call("x")
-    assert refine.repairs == 2 and refine.accepted is None
+    refine = jbfc.JBFC(ScriptedModel(busan(), seoul(), seoul(), seoul()), method="self_refine", tools=[WEATHER]).call("x")
+    assert refine.repairs == 3 and refine.accepted is None
     latest_model = ScriptedModel(busan(), [], seoul())
     jbfc.JBFC(latest_model, jev=ScriptedJev(), method="jbfc-latest", tools=[WEATHER]).call("Weather in Seoul?")
     assert [len(h) for h in latest_model.histories] == [0, 1, 1] and latest_model.histories[2][0]["round"] == 2

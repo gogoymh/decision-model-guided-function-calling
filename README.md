@@ -15,7 +15,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-eab308?style=flat-square"></a>
-  <img alt="590 offline tests" src="https://img.shields.io/badge/tests-590%20passing-16a34a?style=flat-square">
+  <img alt="599 offline tests" src="https://img.shields.io/badge/tests-599%20passing-16a34a?style=flat-square">
   <img alt="Dependencies: httpx and jsonschema" src="https://img.shields.io/badge/deps-httpx%20%2B%20jsonschema-6b7280?style=flat-square">
   <a href="paper/main.pdf"><img alt="Paper (PDF)" src="https://img.shields.io/badge/paper-PDF-b31b1b?style=flat-square&logo=latex&logoColor=white"></a>
 </p>
@@ -52,7 +52,7 @@ agent.run("Is it jacket weather in Seoul tonight?")  # runs the call only if Jev
 
 Each record is a labeled example: a call the model wrote, with Jev's verdict on it. Like the demonstrations in [many-shot in-context learning](https://arxiv.org/abs/2404.11018), more of them seemed to help in our run: the full history scored slightly above the latest record alone, and accuracy rose with the repair limit (which also adds attempts). Jev makes those labels in a fraction of a second, without reference answers.
 
-The loop stops at the first proposal that passes every check, or after `max_repairs` repairs (2 by default). Nothing runs during repairs; `run()` executes only the final, accepted call.
+The loop stops at the first proposal that passes every check, or after `max_repairs` repairs (3 by default). Nothing runs during repairs; `run()` executes only the final, accepted call.
 
 ## See it
 
@@ -132,7 +132,7 @@ result = agent.run("Do I need a jacket in Seoul tonight?")
 result.call       # {"name": "get_weather", "arguments": {"city": "Seoul"}}
 result.accepted   # True: Jev and the schema check passed
 result.output     # {"city": "Seoul", "temp": 12, "unit": "celsius"}
-result.repairs    # repairs it took (0, 1 or 2)
+result.repairs    # repairs it took (0 to 3)
 ```
 
 `run()` executes the final call only if it passed. `call()` does everything except execute, so you decide:
@@ -221,7 +221,7 @@ else:
 jbfc.JBFC(
     "openai:gpt-5-nano",
     tools=[...],
-    max_repairs=2,             # repairs after the first proposal
+    max_repairs=3,             # repairs after the first proposal
     threshold=0.8,             # Jev threshold for both checks
     method="jbfc",             # or a baseline: "direct", "schema", "self-refine",
                                # "jev-function", "jev-arguments", "jbfc-latest"
@@ -277,10 +277,10 @@ jbfc.JBFC(
 <a id="more-repairs"></a>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-limits-dark.png">
-  <img alt="JBFC by repair limit: call accuracy 72.6% at r=1, 73.5% at r=2 (default), 75.3% at r=3, 76.2% at r=5, 77.0% at r=7 and 78.6% at r=10; cost per 1,000 requests $0.172, $0.221, $0.273, $0.378, $0.483 and $0.669." src="docs/assets/chart-limits-light.png" width="100%">
+  <img alt="JBFC by repair limit: call accuracy 72.6% at r=1, 73.5% at r=2, 75.3% at r=3 (default), 76.2% at r=5, 77.0% at r=7 and 78.6% at r=10; cost per 1,000 requests $0.172, $0.221, $0.273, $0.378, $0.483 and $0.669." src="docs/assets/chart-limits-light.png" width="100%">
 </picture>
 
-Continuing the same run to higher repair limits raised call accuracy from 73.5% at two repairs to 78.6% at ten, at about three times the cost; most newly correct answers (178 of 194) were again cases where no tool applies. Even at ten repairs, at a cost similar to `gpt-5.4-mini`'s, JBFC stayed 2.7 points below it. The default stays at `max_repairs=2`.
+Continuing the same run to higher repair limits raised call accuracy from 73.5% at two repairs to 78.6% at ten, at about three times the cost; most newly correct answers (178 of 194) were again cases where no tool applies. Even at ten repairs, at a cost similar to `gpt-5.4-mini`'s, JBFC stayed 2.7 points below it. The library default is now `max_repairs=3`, the limit after which each extra point costs about four times as much.
 
 <details>
 <summary><b>All numbers as tables</b></summary>
@@ -306,7 +306,7 @@ Continuing the same run to higher repair limits raised call accuracy from 73.5% 
 | JBFC-L (latest feedback only) | 72.8 | 83.1 | 82.6 | 2.92 | 0.217 |
 | **JBFC** | **73.5** | **83.7** | 82.8 | 2.90 | 0.221 |
 
-| `max_repairs` | 1 | 2 (default) | 3 | 5 | 7 | 10 |
+| `max_repairs` | 1 | 2 | 3 (default) | 5 | 7 | 10 |
 |---|---:|---:|---:|---:|---:|---:|
 | Call accuracy | 72.6 | 73.5 | 75.3 | 76.2 | 77.0 | 78.6 |
 | Function accuracy | 83.0 | 83.7 | 85.0 | 86.0 | 86.5 | 87.7 |
@@ -341,7 +341,7 @@ JBFC itself only with `gpt-5-nano` (Azure OpenAI). For reference, `gpt-5.4-mini`
 
 - **One decision per step.** JBFC decides a single call or no call. `call()` and `run()` take text messages, so give earlier tool results back to the model as text; `verify()` also accepts tool-call and tool-result messages.
 - **A verifier is a model too.** Jev can accept a wrong call or reject a right one; accepted calls were 90.6% correct in the paper's run, not 100%.
-- **Cost and latency.** Each proposal costs one generator call and one Jev call; with at most two repairs, that is up to three of each.
+- **Cost and latency.** Each proposal costs one generator call and one Jev call; with at most three repairs, that is up to four of each.
 - **Evidence so far.** JBFC with one model, mostly English requests, one run. A larger model without Jev (`gpt-5.4-mini`) was more accurate at about three times the cost.
 
 ## Reproduce the paper
@@ -356,7 +356,8 @@ make check-config  # show the configured routes, models and keys, without API ca
 make table1        # Direct vs JBFC (6,102 records)
 make table2        # all seven methods (21,357 records); also fills Table 1
 make table3        # Figure 2: JBFC at repair limits 1, 2, 3, 5, 7, 10, extending the Table 2 run
-make compare       # Table 1's third column: Direct with gpt-5.4-mini on all examples (no Jev)
+make compare       # Direct with gpt-5.4-mini on all examples (no Jev)
+make r3            # Tables 1-2 at r=3: raise the Table 2 run, add JBFC to gpt-5.4-mini, fill both
 python scripts/analyze_results.py results/table2_gpt-5-nano_r2   # the numbers quoted in Results
 ```
 

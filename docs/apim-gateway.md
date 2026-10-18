@@ -73,3 +73,7 @@ LLM_OUTPUT_PRICE=<출력 단가>
 - [OpenAI Responses 생성 API](https://developers.openai.com/api/reference/resources/responses/methods/create)
 - [Anthropic Messages API](https://platform.claude.com/docs/en/api/messages/create)
 - [TypeSafe API](https://docs.typesafe.ai/api)
+
+## r=3 실행의 Jev 경로 (2026-10-18)
+
+- `make r3`(`scripts/run_r3.sh`)는 사전 점검에서 Jev를 먼저 게이트웨이로 불러 보고, 답하지 않으면(예: HTTP 402) `TYPESAFE_API_KEY`로 직접 부릅니다. 같은 Jev 모델·임계값·질문을 쓰며, 경로는 각 실행의 매니페스트에 남습니다(`jev_gateway`, 경로가 시도 중간에 바뀌면 `jev_routes`). 생성기는 계속 게이트웨이를 씁니다.

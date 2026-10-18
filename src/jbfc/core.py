@@ -262,11 +262,11 @@ class JBFC:
 
     ``model`` is ``"provider:model"`` (openai, anthropic, gemini, xai, azure, openrouter) or a
     provider object; extra keyword options (api_key=, base_url=, ...) go to the provider.
-    ``max_repairs`` bounds the repairs after the first proposal (2, as in the paper).
+    ``max_repairs`` bounds the repairs after the first proposal (3, as in the paper's tables).
     """
 
     def __init__(self, model, *, tools=None, functions: dict[str, Callable] | None = None,
-                 jev: Jev | None = None, method: str = "jbfc", max_repairs: int = 2,
+                 jev: Jev | None = None, method: str = "jbfc", max_repairs: int = 3,
                  threshold: float | None = None, execute_unverified: bool = False,
                  jev_api_key: str | None = None, **model_options):
         self.method = _method(method)

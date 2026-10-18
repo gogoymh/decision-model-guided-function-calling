@@ -746,3 +746,117 @@ def test_extension_refuses_other_code_or_settings_before_requests(offline_run, m
         extend_run.main([args.output, "--max-repairs", "1", "--output", str(tmp_path / "y")])
     assert (len(observed["llm"]), len(observed["jev"])) == before
     assert not (tmp_path / "x").exists()
+
+
+SEVEN = "direct,schema_only,self_refine,jev_function,jev_arguments,jev_joint,jev_joint_latest"
+
+
+def test_raised_limit_continues_each_method_by_its_own_stopping_rule(offline_run, monkeypatch, tmp_path):
+    args, observed, _ = offline_run
+    raise_limit = _script("raise_limit")
+    monkeypatch.setattr(raise_limit, "load_dotenv", lambda *_: None)
+    observed["repairs_until_correct"] = 2  # calls become right at the second repair
+    args.methods = SEVEN
+    cli.run(args)  # r=1
+    source = Path(args.output)
+    old = {(row["id"], row["method"]): row for row in read_jsonl(source / "records.jsonl")}
+    before = len(observed["llm"]), len(observed["jev"])
+    out = tmp_path / "r2"
+    argv = [str(source), "--max-repairs", "2", "--output", str(out), "--workers", "1",
+            "--data", args.data, "--checker", args.checker]
+    summary = raise_limit.main(argv)
+    assert summary["status"] == "complete" and summary["manifest"]["max_repairs"] == 2
+    assert summary["manifest"]["extends"]["max_repairs"] == 1 and summary["history_ablation"]["n_paired_ids"] == 3
+    new = {(row["id"], row["method"]): row for row in read_jsonl(out / "records.jsonl")}
+    for (example_id, method), row in new.items():
+        before_row = old[(example_id, method)]
+        assert row["max_repairs"] == 2 and row["trace"][0]["proposal"] == before_row["trace"][0]["proposal"]
+        if method == "direct" or before_row.get("accepted") is True:
+            assert row["trace"] == before_row["trace"] and row.get("extended") is False
+        else:  # exhausted at r=1 (and every self-refine row): one more attempt on the saved history
+            assert row["extended"] is True and len(row["trace"]) == 3
+            assert [s["proposal"] for s in row["trace"][:2]] == [s["proposal"] for s in before_row["trace"]]
+    for method in ("schema_only", "jev_function", "jev_arguments", "jev_joint", "jev_joint_latest", "self_refine"):
+        assert new[("simple_python_0", method)]["score"]["correct"] is True
+    # Exhausted rows: 2 calls x 5 stop-at-pass methods, plus every self-refine row (3); Jev checks only the new
+    # attempts of the three Jev methods that use them, two per row.
+    assert len(observed["llm"]) - before[0] == 2 * 5 + 3
+    assert len(observed["jev"]) - before[1] == 2 * 4
+    # Resuming the complete run makes no new requests.
+    after = len(observed["llm"]), len(observed["jev"])
+    raise_limit.main(argv + ["--resume"])
+    assert (len(observed["llm"]), len(observed["jev"])) == after
+    assert_saved_files_have_no_credentials(out)
+
+
+def test_raised_limit_reuses_jbfc_from_a_longer_run_and_adds_jbfc_to_direct(offline_run, monkeypatch, tmp_path):
+    args, observed, _ = offline_run
+    raise_limit, extend_run = _script("raise_limit"), _script("extend_run")
+    for module in (raise_limit, extend_run):
+        monkeypatch.setattr(module, "load_dotenv", lambda *_: None)
+    observed["repairs_until_correct"] = 3
+    args.methods = "direct,jev_joint,jev_joint_latest"
+    cli.run(args)  # r=1
+    source = Path(args.output)
+    common = ["--workers", "1", "--data", args.data, "--checker", args.checker]
+    long = tmp_path / "jbfc_r4"
+    extend_run.main([str(source), "--max-repairs", "4", "--output", str(long)] + common)
+    before = len(observed["llm"]), len(observed["jev"])
+    out = tmp_path / "r3"
+    summary = raise_limit.main([str(source), "--max-repairs", "3", "--output", str(out),
+                                "--reuse", f"jev_joint={long}"] + common)
+    assert summary["manifest"]["reused"]["jev_joint"]["max_repairs"] == 4
+    longer = {row["id"]: row for row in read_jsonl(long / "records.jsonl")}
+    for row in read_jsonl(out / "records.jsonl"):
+        if row["method"] == "jev_joint":  # the longer run cut at r=3: no new JBFC request
+            assert row["reused"] is True and row["trace"] == longer[row["id"]]["trace"][:4]
+    # Only JBFC-L's two exhausted rows continued, by two attempts each.
+    assert (len(observed["llm"]) - before[0], len(observed["jev"]) - before[1]) == (4, 4)
+    with pytest.raises(ValueError, match="different run"):
+        raise_limit.main([str(source), "--max-repairs", "3", "--output", str(out)] + common)
+
+    # A Direct-only run gains JBFC from its saved first proposals: no new first proposal is generated.
+    args.methods, args.output = "direct", str(tmp_path / "direct")
+    cli.run(args)
+    before = len(observed["llm"]), len(observed["jev"])
+    added = tmp_path / "direct_plus_jbfc"
+    summary = raise_limit.main([args.output, "--max-repairs", "3", "--output", str(added), "--add", "jev_joint"] + common)
+    assert summary["manifest"]["methods"] == ["direct", "jev_joint"] and summary["manifest"]["jev_model"] == "jev-1.13.0"
+    rows = {(row["id"], row["method"]): row for row in read_jsonl(added / "records.jsonl")}
+    direct = {row["id"]: row for row in read_jsonl(Path(args.output) / "records.jsonl")}
+    for example_id, row in direct.items():
+        assert rows[(example_id, "jev_joint")]["trace"][0]["proposal"] == row["trace"][0]["proposal"]
+        assert rows[(example_id, "direct")]["trace"] == row["trace"]
+    # Two exhausted-at-first calls repaired three times; the no-call is accepted at once.
+    assert len(observed["llm"]) - before[0] == 2 * 3
+    assert len(observed["jev"]) - before[1] == 2 * 4 + 1
+    with pytest.raises(ValueError, match="--add"):
+        raise_limit.main([args.output, "--max-repairs", "3", "--output", str(tmp_path / "z"), "--add", "direct"] + common)
+
+
+def test_raised_limit_refuses_other_settings_code_or_first_proposals(offline_run, monkeypatch, tmp_path):
+    args, observed, _ = offline_run
+    raise_limit = _script("raise_limit")
+    monkeypatch.setattr(raise_limit, "load_dotenv", lambda *_: None)
+    cli.run(args)
+    common = ["--workers", "1", "--data", args.data, "--checker", args.checker]
+    before = len(observed["llm"]), len(observed["jev"])
+    argv = [args.output, "--max-repairs", "2", "--output", str(tmp_path / "x")] + common
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "low")
+    with pytest.raises(ValueError, match="reasoning_effort"):
+        raise_limit.main(argv)
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "none")
+    with pytest.raises(ValueError, match="larger"):
+        raise_limit.main([args.output, "--max-repairs", "1", "--output", str(tmp_path / "y")] + common)
+    other = deepcopy(args)
+    other.output, other.max_repairs = str(tmp_path / "other"), 2
+    observed["repairs_until_correct"] = 0  # another run: different first proposals
+    assert (len(observed["llm"]), len(observed["jev"])) == before  # refused before any request
+    cli.run(other)
+    before = len(observed["llm"]), len(observed["jev"])
+    with pytest.raises(ValueError, match="first proposal"):
+        raise_limit.main(argv + ["--reuse", f"jev_joint={other.output}"])
+    monkeypatch.setattr(cli, "_source_hash", lambda: "other-code")
+    with pytest.raises(ValueError, match="different code"):
+        raise_limit.main(argv)
+    assert (len(observed["llm"]), len(observed["jev"])) == before and not (tmp_path / "x").exists()
