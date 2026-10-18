@@ -26,13 +26,15 @@ Responses 요청에는 `strict: false`를 명시합니다. 이를 생략하면 A
 ```bash
 make check-config
 make smoke
-make table1 WORKERS=8   # Table 1: Direct와 JBFC
-make table2 WORKERS=8   # Table 1·2: 일곱 방법
+make table2 WORKERS=8   # 일곱 방법, r=2 (Table 1·2의 원본 실행)
+make table3 WORKERS=8   # Figure 2: JBFC를 r=10까지 이어 실행
+make compare WORKERS=8  # gpt-5.4-mini Direct
+make r3 WORKERS=8       # r=3으로 올리고 Table 1·2 채우기
 ```
 
 `check-config`는 네트워크 요청 없이 실제 경로, API 형식, 모델, 키 설정 여부와 단가 설정만 확인합니다. 키 값은 출력하지 않습니다. 키가 없으면 경로를 보여준 뒤 종료 코드 1을 반환합니다. `smoke`부터 실제 요청과 비용이 발생합니다. 가이드는 사용 가능한 모델 목록이나 프로젝트 권한을 보장하지 않으므로 실제 계정·모델 접근은 이 단계에서 확인해야 합니다.
 
-코드 기본값은 `LLM_API_STYLE=responses`, `LLM_MODEL=gpt-5.4-mini-2026-03-17`, `TYPESAFE_MODEL=jev-1.13.0`입니다. 논문 표를 만드는 `make table1`·`make table2`는 Azure 배포 경로(`LLM_API_STYLE=azure_chat_completions`, `gpt-5-nano`, reasoning effort `none`)를 직접 지정합니다. 모델을 바꾸면 새 실행 경로를 사용하세요.
+코드 기본값은 `LLM_API_STYLE=responses`, `LLM_MODEL=gpt-5.4-mini-2026-03-17`, `TYPESAFE_MODEL=jev-1.13.0`입니다. 논문 실행 스크립트(`make table1`·`table2`·`table3`·`compare`·`r3`)는 Azure 배포 경로(`LLM_API_STYLE=azure_chat_completions`, reasoning effort `none`)와 모델(`gpt-5-nano`, 비교 열은 `gpt-5.4-mini`)을 직접 지정합니다. 모델을 바꾸면 새 실행 경로를 사용하세요.
 
 Anthropic을 사용하려면 다음을 설정합니다. 모델 ID는 프로젝트에서 사용할 수 있는 실제 값으로 지정합니다.
 
@@ -48,13 +50,14 @@ LLM_OUTPUT_PRICE=<출력 단가>
 
 캐시 쓰기가 보고되면 `LLM_CACHE_WRITE_5M_PRICE`와 `LLM_CACHE_WRITE_1H_PRICE`도 필요합니다. API 응답이 쓰기 수명이나 필요한 사용량을 제공하지 않거나 필요한 단가가 없으면 비용을 미상으로 표시합니다. 새 템플릿의 빈 단가는 기본 OpenAI 모델에만 공개 기준 단가로 해석됩니다. 다른 모델에는 GPT 단가를 자동 적용하지 않습니다. 기존 `.env`에 단가 숫자가 이미 있으면 명시적 설정으로 취급하므로 모델을 바꿀 때 함께 수정하세요.
 
-`make table1`·`make table2`는 다른 배포(`MODEL=...`)로도 실험과 요약까지 완료합니다. 원고는 `gpt-5-nano`·Azure Chat Completions·`r=2`·전체 예제·1회 실행을 기술하므로 다른 설정의 결과는 논문 표에 자동 삽입하지 않습니다. 별도로 논문의 실험 조건을 바꾼 뒤 반영해야 합니다.
+`make table1`·`make table2`는 다른 배포(`MODEL=...`)로도 실험과 요약까지 완료하며 원고를 바꾸지 않습니다. 논문 표는 `make r3`(`scripts/paper_tables.py`)만 채우고, 원고가 기술하는 조건(`gpt-5-nano`와 `gpt-5.4-mini`, Azure Chat Completions, `r=3`, 전체 예제, 1회 실행)과 다른 실행은 받지 않습니다. 다른 설정은 논문의 실험 조건을 바꾼 뒤 반영해야 합니다.
 
 ## Jev만 직접 호출하기 (Figure 2, 구 Table 3, 2026-10-18)
 
 - 게이트웨이 뒤의 TypeSafe 계정이 HTTP 402(Payment Required)를 반환해, Table 3의 `r=10` 확장에서는 Jev만 TypeSafe API로 직접 호출했습니다. 생성기는 계속 게이트웨이를 씁니다.
 - `JEV_GATEWAY=direct`(또는 `scripts/extend_run.py --jev-gateway direct`)이면 Jev 요청은 `TYPESAFE_API_KEY`와 `TYPESAFE_BASE_URL`(비우면 `https://api.typesafe.ai`)을 씁니다. 이 키는 TypeSafe로만 가고, 게이트웨이 키는 생성기에만 쓰입니다. `make table3`은 기본값으로 `direct`를 씁니다. 비우면 `API_GATEWAY`를 따릅니다.
 - 확장 실행은 원본 실행과 Jev 경로만 다를 수 있고, 경로 변경을 요청했을 때만 허용합니다. Jev 모델·임계값·질문은 같아야 합니다. 실행 매니페스트의 `jev_routes`에 시도 번호별 경로가 남습니다(Table 3: 시도 0–7 게이트웨이, 8–10 직접). Table 3 캡션에도 자동으로 적힙니다.
+- `make r3`(`scripts/run_r3.sh`)는 사전 점검에서 Jev를 게이트웨이로 먼저 부르고, 답이 없으면 직접 호출로 바꿉니다. 2026-10-18 실행에서는 게이트웨이가 HTTP 402를 반환해, `gpt-5-nano`의 세 번째 수정(시도 3)과 `gpt-5.4-mini` **JBFC** 전체가 Jev를 직접 불렀습니다(매니페스트의 `jev_routes`·`jev_gateway`). 생성기는 계속 게이트웨이를 씁니다.
 - `make table1`·`make table2`(`jev-fc run`)는 지금도 `API_GATEWAY` 하나로 생성기와 Jev를 함께 연결합니다. 이 경로를 바꾸려면 `src/jev_fc`를 고쳐야 하며, 그러면 기존 실행을 이어 돌릴 수 없으므로 Table 3 이후로 미뤘습니다.
 
 ## 기록과 오류

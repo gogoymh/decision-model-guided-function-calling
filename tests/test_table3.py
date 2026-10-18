@@ -88,7 +88,8 @@ def test_unrun_figure_draws_empty_axes_for_the_six_limits():
     assert table3.LIMITS == (1, 2, 3, 5, 7, 10) and "xtick={1,2,3,5,7,10}" in figure
     assert "not yet run" in figure and r"\addplot" not in figure and "Limits without points are unrun." in figure
     assert r"\label{fig:repairs}" in figure and r"\begin{figure}[t]" in figure
-    assert "to $r=10$ ($r=2$ matches it)." in figure and "legend columns=2" in figure and "gray" not in figure
+    assert "continued to $r=10$ and cut at each limit ($r=3$ is Table~\\ref{tab:main})." in figure
+    assert "legend columns=2" in figure and "gray" not in figure
 
 
 def test_filled_figure_plots_and_labels_every_limit():

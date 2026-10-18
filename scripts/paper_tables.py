@@ -145,11 +145,11 @@ def latex_table1(main, compare=None, model=DEFAULT_MODEL):
     lines += [r"\midrule", "Total & 3051 & " + " & ".join(total) + r"\\",
               "USD/1k & & " + " & ".join(cost) + r"\\",
               r"\bottomrule", r"\end{tabular}",
-              rf"\caption{{Accuracy (\%) on all BFCL examples, one run per generator with repair limit $r={limit}$ "
+              rf"\caption{{Accuracy (\%) on all BFCL examples, one run per generator, $r={limit}$ "
               r"(Direct makes no repairs)." + effort_note
-              + (" Bold marks the highest accuracy in each row;" if bolded else "")
-              + " USD/1k is the cost per 1,000 requests."
-              + r" $^\dagger$Call presence only; the total excludes these 16 cases."
+              + (" Bold: highest accuracy per row." if bolded else "")
+              + " USD/1k: cost per 1,000 requests."
+              + r" $^\dagger$Call presence only; excluded from the total."
               + (" -- means the experiment has not been run." if missing else "") + "}",
               r"\label{tab:categories}", r"\end{table}"]
     return "\n".join(lines)
@@ -160,9 +160,20 @@ def latex_table2(main):
     saved = reporting.PAPER_REPAIRS
     reporting.PAPER_REPAIRS = main["manifest"]["max_repairs"]
     try:
-        return reporting.latex_table(main)
+        table = reporting.latex_table(main)
     finally:
         reporting.PAPER_REPAIRS = saved
+    # A shorter caption than reporting's, with the same content.
+    model = _tex_escape(main["manifest"]["llm_model"])
+    long_form = (rf", from one run with repair limit $r={main['manifest']['max_repairs']}$. Generator: \texttt{{{model}}}.",
+                 "Bold marks the highest accuracy in each column.",
+                 r"exclude live relevance. Argument accuracy (\%) uses calls with the correct function and argument labels.")
+    short_form = (rf" (one run, $r={main['manifest']['max_repairs']}$, \texttt{{{model}}}).",
+                  "Bold: highest accuracy per column.",
+                  r"exclude live relevance; argument accuracy (\%) uses calls with the correct function.")
+    for old, new in zip(long_form, short_form):
+        table = table.replace(old, new)
+    return table
 
 
 def update_paper_tables(paper_path, main, compare=None, model=DEFAULT_MODEL):

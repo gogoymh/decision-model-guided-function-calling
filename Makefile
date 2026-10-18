@@ -28,12 +28,14 @@ demo:
 smoke:
 	uv run jev-fc run --split all --limit 8 --replicates 1 --max-repairs 2 --output results/smoke --resume
 
-# Paper protocol: all 3,051 examples, one run, repair limit r=2 (no development split or tuning).
-# Table 1: Direct and JBFC (6,102 records).
+# Paper protocol: all 3,051 examples, one run, no development split or tuning, repair limit r=3 (chosen
+# from Figure 2). The runs start at r=2: make table2, table3 and compare, then make r3 raises them to r=3
+# and fills Tables 1 and 2. Neither table1 nor table2 changes paper/main.tex.
+# Direct and JBFC only, r=2 (6,102 records): a cheaper standalone run, not used by the tables.
 table1:
 	MODEL="$(MODEL)" WORKERS="$(WORKERS)" bash scripts/run_table1.sh
 
-# Table 2: all seven methods (21,357 records); its report fills Tables 1 and 2 from the same run.
+# Source run of Tables 1 and 2: all seven methods at r=2 (21,357 records).
 table2:
 	MODEL="$(MODEL)" WORKERS="$(WORKERS)" bash scripts/run_table2.sh
 

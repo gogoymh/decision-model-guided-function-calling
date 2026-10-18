@@ -30,6 +30,7 @@ from jev_fc.reporting import (  # noqa: E402
 )
 
 LIMITS = (1, 2, 3, 5, 7, 10)
+TABLE_LIMIT = 3  # the repair limit of Tables 1 and 2 (scripts/paper_tables.py)
 METHOD = "jev_joint"
 JEV_ROUTE = ("jev_gateway", "jev_base_url", "jev_endpoint")
 
@@ -157,7 +158,7 @@ def latex_repairs_figure(summaries=None):
     xlabel = r"Repair limit $r$" + (r" (gray: USD per 1,000 requests)" if cost else "")
     lines += [
         r"\begin{tikzpicture}",
-        rf"\begin{{axis}}[scale only axis, width=0.80\columnwidth, height=2.2cm, xmin=0.3, xmax={max(LIMITS) + 0.7},",
+        rf"\begin{{axis}}[scale only axis, width=0.80\columnwidth, height=2.0cm, xmin=0.3, xmax={max(LIMITS) + 0.7},",
         rf"  xtick={{{ticks}}}, xticklabels={{{labels}}}, xticklabel style={{align=center}},",
         r"  ymin=70, ymax=91, ytick={70,75,80,85,90}, ylabel={Accuracy (\%)}, xlabel={" + xlabel + "},",
         r"  axis x line*=bottom, axis y line*=left, ymajorgrids, grid style={black!12},",
@@ -182,8 +183,8 @@ def latex_repairs_figure(summaries=None):
         notes += rf" Repairs {route['first_attempt']}--{last} call \textit{{Jev}} {way}."
     if len(call) < len(LIMITS):
         notes += " Limits without points are unrun."
-    lines += [r"\caption{\textbf{JBFC} call and function accuracy (\%) by repair limit $r$, extending the run of "
-              rf"Table~\ref{{tab:main}} to $r={max(LIMITS)}$ ($r=2$ matches it)"
+    lines += [r"\caption{\textbf{JBFC} accuracy (\%) by repair limit $r$: one run continued to "
+              rf"$r={max(LIMITS)}$ and cut at each limit ($r={TABLE_LIMIT}$ is Table~\ref{{tab:main}})"
               + ("; gray: USD per 1,000 requests." if cost else ".") + notes + "}",
               r"\label{fig:repairs}", r"\end{figure}"]
     return "\n".join(lines)

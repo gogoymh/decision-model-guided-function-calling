@@ -322,3 +322,19 @@
 - `scripts/paper_tables.py`(`table1_compare.py`를 대체): r=3 두 실행을 검사하고 Table 1(gpt-5-nano Direct·**JBFC**, gpt-5.4-mini Direct·**JBFC**, 행마다 최고값 굵게, USD/1k 행)과 Table 2(일곱 방법, r=3)를 씁니다. `make r3`(`scripts/run_r3.sh`)가 두 실행과 표 채우기를 차례로 하고, `make report`도 이 스크립트를 씁니다. Jev는 게이트웨이가 답하면 게이트웨이, 아니면 직접 호출합니다.
 - 라이브러리 기본값 `max_repairs`를 3으로 바꾸고 README의 기본값 표기와 수정 한도 차트의 "(default)" 표시를 r=3으로 옮겼습니다. README의 결과 수치는 r=3 실행 뒤에 바꿉니다.
 - 예상 비용·시간(작업자 8개): gpt-5-nano 약 $0.6·15–20분, gpt-5.4-mini 약 $1.3–2·10–15분.
+
+## r=3 결과: Table 1·2 (2026-10-18)
+
+- 실행: `make r3 WORKERS=8`(사용자), 15:55–16:22 KST(약 26분). 사전 점검에서 게이트웨이의 Jev가 HTTP 402를 반환해 Jev만 직접 호출로 바꿨습니다(`jev_gateway: direct`). 생성기는 계속 게이트웨이를 썼습니다.
+  - `results/table2_gpt-5-nano_r3`: 21,357개 기록, 약 17분. `results/table2_gpt-5-nano_r2`를 r=3으로 올렸고(Self-refine은 모든 행, 다른 방법은 r=2에 닿은 행만 새 시도 1회), **JBFC**는 Figure 2 실행(`results/table3_gpt-5-nano_r10`)을 r=3에서 자른 행을 그대로 썼습니다. 새 요청 비용 약 $0.54. Jev 경로는 시도 0–2 게이트웨이, 시도 3 직접입니다(`jev_routes`).
+  - `results/table1_gpt-5.4-mini_r3`: 6,102개 기록, 약 9분. `results/direct_gpt-5.4-mini`의 첫 제안에서 **JBFC**를 새로 실행했습니다(Jev 직접). 새 비용 약 $3.09.
+  - 두 실행 모두 완료, `errors.jsonl` 없음, 읽을 수 없는 응답 0건이고, 코드 해시(`c167522d…`)가 원본 실행과 같습니다. `scripts/paper_tables.py` 검사를 통과해 Table 1·2를 채웠습니다(`results/tables_r3.json`). `scripts/analyze_results.py`로 두 실행의 Results 수치를 다시 계산해 원고와 같음을 확인했습니다.
+- 결과(정확도 %, live relevance 제외 3,035개):
+  - `gpt-5-nano`: Direct 63.8 → **JBFC** 75.3(짝지은 차이 +11.5, 95% 구간 10.1–12.9). 고친 것 399, 망가뜨린 것 50, 평균 수정 1.07회, 한도 소진 30.9%, 모든 검사 통과 69.2%(그중 90.7% 정답). 1,000건당 $0.056 → $0.273, API 시간 1.30 → 3.49초.
+  - Table 2(r=3, Direct 대비 짝지은 차이): Schema-only +2.0, Self-refine +6.3, **JBFC-F** +9.9, **JBFC-A** +10.0, **JBFC-L** +9.9, **JBFC** +11.5(모두 95% 구간이 0보다 큼). **JBFC − JBFC-L** = +1.6(0.8–2.5).
+  - `gpt-5.4-mini`: Direct 81.3 → **JBFC** 79.6(−1.7, 95% 구간 −2.7 – −0.7). 호출이 필요한 범주에서는 고친 것 60 대 망가뜨린 것 39로 이득이지만, 불필요한 호출에 대한 Jev 함수 확률 중앙값(Irrelevance 0.72, Live irrelevance 0.81)이 맞는 no-call(0.93, 0.85)과 잘 갈리지 않았고, 거부 피드백 뒤 맞는 no-call 108개(21 + 87)가 호출로 바뀌었습니다. 전체로는 고친 것 95, 망가뜨린 것 147입니다. 1,000건당 $0.706 → $1.718(2.4배).
+  - `gpt-5.4-mini` Direct − `gpt-5-nano` **JBFC** = +6.0(95% 구간 4.6–7.5), 비용 2.6배, 시간 약 1/3.
+- 해석: 작은 생성기 + Jev가 더 큰 모델보다 낫다는 가설은 r=3에서도 지지되지 않습니다. Jev는 작은 모델의 불필요한 호출을 잘 걸러 내지만, 더 큰 모델에서는 맞는 no-call을 거부해 정확도를 낮췄습니다.
+- 원고: Abstract·Introduction·Method의 r=2 문장을 r=3으로 고치고(승인된 수정), 4.1에 r을 같은 예제의 Figure 2를 보고 골랐다는 문장, 4.2에 실행 순서(r=2로 실행한 뒤 이어 실행)와 Jev 경로, 결과 문단 전체, "A larger generator." 문단(`gpt-5.4-mini` **JBFC** 결과와 원인), Study Limits(r 선택), Conclusion을 고쳤습니다. Table 1은 4열(두 생성기의 Direct·**JBFC**)이고 Table 2·Figure 2 캡션은 r=3 기준입니다. Abstract에는 `gpt-5.4-mini` 결과를 넣지 않았습니다(고정 절). PDF: 본문 4쪽·참고문헌 5쪽, Type 3 폰트·overfull 없음.
+- README: Results 절(연구 범위 노트, 범주 차트를 생성기별 색과 고리(Direct)→점(**JBFC**) 화살표로 다시 그림, 항목 7개, 방법 차트, 수정 한도 문단, 표 3개), FAQ(비용, 벤치마크 모델, 새 항목 "When does JBFC help?"), Limits, Reproduce(Jev 경로, `make r3` 시간·비용)를 r=3 수치로 고쳤습니다. 수정 한도 차트는 픽셀 단위로 같아 그대로 두었고, `data.json`은 Table 1·2·Figure 2와 같습니다.
+- 재현 경로: `make table1`·`make table2`가 끝에 `jev-fc report --paper`로 원고의 표를 r=2 형식으로 덮어쓰던 단계를 없앴습니다(이제 요약만 씁니다). 논문 표는 `make r3`·`make report`(`scripts/paper_tables.py`)만 채웁니다. Makefile·README·`docs/apim-gateway.md`·`docs/benchmarks.md`·`docs/repair-budget.md`·AGENTS.md의 r=2 표기를 고쳤습니다.

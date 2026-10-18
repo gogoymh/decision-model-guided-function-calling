@@ -43,10 +43,11 @@ def text(x, y, s, color, size=12.5, weight=400, anchor="start"):
 
 
 def categories(t, rows):
-    """Dots per category: Direct and JBFC with gpt-5-nano (joined), and Direct with gpt-5.4-mini."""
-    width, left, x0, x1 = W - 56, 0, 168, 540
-    cols = {"nano": (620, t["orange"]), "JBFC": (700, t["blue"]), "mini": (780, t["aqua"])}
-    row_h, top = 36, 26
+    """Per category, an arrow from Direct (ring) to JBFC (dot) for each generator (colour)."""
+    width, left, x0, x1 = W - 56, 0, 168, 500
+    models = (("gpt-5-nano", t["blue"]), ("gpt-5.4-mini", t["orange"]))
+    cols = (590, 660, 750, 820)  # right edges: nano Direct, nano JBFC, mini Direct, mini JBFC
+    row_h, top = 36, 44
     height = top + row_h * len(rows) + 30
 
     def sx(v):
@@ -56,20 +57,32 @@ def categories(t, rows):
     for v in (0, 25, 50, 75, 100):
         out.append(f'<line x1="{sx(v)}" y1="{top - 8}" x2="{sx(v)}" y2="{top + row_h * len(rows)}" stroke="{t["grid"]}" stroke-width="1"/>')
         out.append(text(sx(v), top + row_h * len(rows) + 16, f"{v}%", t["muted"], 11, anchor="middle"))
-    for name, (x, color) in cols.items():
-        out.append(f'<circle cx="{x - len(name) * 7 - 10}" cy="{top - 14}" r="4" fill="{color}"/>')
-        out.append(text(x, top - 14, name, t["muted"], 11, 500, "end"))
-    for i, (label, direct, jbfc, mini) in enumerate(rows):
+    for (name, color), pair in zip(models, (cols[:2], cols[2:])):
+        center = (pair[0] + pair[1]) / 2 - 18
+        out.append(f'<circle cx="{center - len(name) * 3.4 - 9}" cy="{top - 32}" r="4" fill="{color}"/>')
+        out.append(text(center, top - 32, name, t["ink2"], 11.5, 600, "middle"))
+        for x, label in zip(pair, ("Direct", "JBFC")):
+            out.append(text(x, top - 14, label, t["muted"], 11, 500, "end"))
+    for i, (label, *values) in enumerate(rows):
         y = top + row_h * i + row_h / 2
         total = label == "Total"
         if total:
             out.append(f'<line x1="0" y1="{y - row_h / 2}" x2="{width}" y2="{y - row_h / 2}" stroke="{t["base"]}" stroke-width="1"/>')
         out.append(text(left, y, label, t["ink"] if total else t["ink2"], 13.5, 600 if total else 450))
-        out.append(f'<line x1="{sx(direct)}" y1="{y}" x2="{sx(jbfc)}" y2="{y}" stroke="{t["link"]}" stroke-width="2" stroke-linecap="round"/>')
-        for value, color in ((direct, t["orange"]), (jbfc, t["blue"]), (mini, t["aqua"])):
-            out.append(f'<circle cx="{sx(value)}" cy="{y}" r="6.5" fill="{color}" stroke="{t["surface"]}" stroke-width="2"/>')
-        best = max(direct, jbfc, mini)
-        for value, (x, _) in zip((direct, jbfc, mini), cols.values()):
+        for k, (name, color) in enumerate(models):
+            direct, jbfc = values[2 * k], values[2 * k + 1]
+            dy = -5 if k == 0 else 5  # the two generators sit just above and below the row line
+            a, b = sx(direct), sx(jbfc)
+            if abs(b - a) > 9:  # arrow from Direct to JBFC, stopping short of the dot
+                tip = b - 7 if b > a else b + 7
+                wing = -5 if b > a else 5
+                out.append(f'<line x1="{a}" y1="{y + dy}" x2="{tip}" y2="{y + dy}" stroke="{color}" stroke-width="1.6" stroke-opacity="0.55"/>')
+                out.append(f'<path d="M{tip + wing},{y + dy - 3.5} L{tip},{y + dy} L{tip + wing},{y + dy + 3.5}" fill="none" '
+                           f'stroke="{color}" stroke-width="1.6" stroke-opacity="0.7" stroke-linecap="round"/>')
+            out.append(f'<circle cx="{a}" cy="{y + dy}" r="5" fill="{t["surface"]}" stroke="{color}" stroke-width="2.2"/>')
+            out.append(f'<circle cx="{b}" cy="{y + dy}" r="5.5" fill="{color}" stroke="{t["surface"]}" stroke-width="1.5"/>')
+        best = max(values)
+        for x, value in zip(cols, values):
             top_value = value == best
             out.append(text(x, y, f"{value:.1f}", t["ink"] if top_value else t["ink2"], 13, 650 if top_value else 450, "end"))
     out.append("</svg>")
@@ -155,11 +168,10 @@ def main(data_path, out_dir):
     jobs = []
     for mode, t in THEMES.items():
         jobs.append((f"chart-categories-{mode}.png", page(t, "Accuracy by BFCL category",
-                     "All 3,051 examples · one run per generator · JBFC makes at most 2 repairs · bold: highest in the row",
-                     [("nano: Direct, gpt-5-nano", t["orange"]), ("JBFC: gpt-5-nano + Jev", t["blue"]),
-                      ("mini: Direct, gpt-5.4-mini", t["aqua"])], categories(t, data["categories"]))))
+                     "All 3,051 examples · one run per generator · arrow: Direct (ring) to JBFC with at most 3 repairs (dot) · bold: highest in the row",
+                     [("gpt-5-nano", t["blue"]), ("gpt-5.4-mini", t["orange"])], categories(t, data["categories"]))))
         jobs.append((f"chart-methods-{mode}.png", page(t, "Call accuracy by method",
-                     "gpt-5-nano · same first proposal for every method · at most 2 repairs · time and cost per request at right",
+                     "gpt-5-nano · same first proposal for every method · at most 3 repairs · time and cost per request at right",
                      [], methods(t, data["methods"]))))
         jobs.append((f"chart-limits-{mode}.png", page(t, "JBFC by repair limit r",
                      "Call accuracy and cost · one run extended from r=2, so every limit shares its first attempts",

@@ -1,6 +1,7 @@
 """Print the numbers quoted in the paper's Results section from a finished run.
 
-Usage: uv run python scripts/analyze_results.py results/table2_gpt-5-nano_r2
+Usage: uv run python scripts/analyze_results.py results/table2_gpt-5-nano_r3
+       (or results/table1_gpt-5.4-mini_r3 for the gpt-5.4-mini columns)
 
 It reads summary.json and the Direct and JBFC (jev_joint) records: accuracy and the
 paired difference, fixes and regressions against the shared initial proposal, repairs,

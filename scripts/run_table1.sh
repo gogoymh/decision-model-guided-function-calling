@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Table 1: Direct and JBFC once on all 3,051 prepared examples with repair limit r=2.
+# Direct and JBFC once on all 3,051 prepared examples with repair limit r=2: a cheaper standalone run and the
+# reference of make irrelevance-check. The paper's tables come from make table2, table3, compare and r3.
 # The generator is an Azure OpenAI deployment behind the APIM host and key in .env.
 # Usage: make table1 [MODEL=gpt-5-nano] [WORKERS=4]   (or MODEL=... bash scripts/run_table1.sh)
 set -euo pipefail
@@ -30,6 +31,6 @@ note "2/3 run: Direct and JBFC on all 3,051 examples, one run, r=2"
 uv run jev-fc run --split all --methods direct,jev_joint --max-repairs 2 --replicates 1 \
   --workers "$WORKERS" --output "$OUT" --resume 2>&1 | stamp
 
-note "3/3 fill Table 1 in paper/main.tex"
-uv run jev-fc report "$OUT" --paper paper/main.tex > "$OUT/report.json"
-note "done: $OUT/summary.json; Table 1 is filled in paper/main.tex (rebuild the PDF next)"
+note "3/3 summarize the run (paper/main.tex is not changed; make r3 fills its tables)"
+uv run jev-fc report "$OUT" > "$OUT/report.json"
+note "done: $OUT/summary.json"

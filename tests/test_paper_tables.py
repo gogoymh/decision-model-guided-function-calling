@@ -57,7 +57,7 @@ def test_unrun_comparison_leaves_two_empty_columns_named_for_the_planned_model()
     assert r"Simple Python & 400 & 60.0 & \textbf{70.0} & -- & --\\" in table
     assert r"Total & 3051 & 63.8 & \textbf{75.3} & -- & --\\" in table
     assert r"USD/1k & & 0.056 & 0.273 & -- & --\\" in table
-    assert "repair limit $r=3$" in table and "-- means the experiment has not been run." in table
+    assert "one run per generator, $r=3$" in table and "-- means the experiment has not been run." in table
 
 
 def test_filled_table_bolds_the_highest_of_four_and_shows_each_cost():
@@ -73,7 +73,8 @@ def test_filled_table_bolds_the_highest_of_four_and_shows_each_cost():
 
 def test_table2_states_the_raised_limit():
     table = paper_tables.latex_table2(main_summary())
-    assert "from one run with repair limit $r=3$" in table and r"\textbf{JBFC} & \textbf{75.3}" in table
+    assert r"Methods on all BFCL examples (one run, $r=3$, \texttt{gpt-5-nano})." in table and r"\textbf{JBFC} & \textbf{75.3}" in table
+    assert "Bold: highest accuracy per column." in table and "exclude live relevance; argument accuracy" in table
     assert "$r=2$" not in paper_tables.latex_table2(main_summary())
 
 

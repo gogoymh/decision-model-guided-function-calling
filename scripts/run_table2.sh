@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Table 2: all seven methods once on all 3,051 prepared examples with repair limit r=2
-# (3,051 x 7 = 21,357 records). The report fills Tables 1 and 2 from this same run.
+# Source run of Tables 1 and 2: all seven methods once on all 3,051 prepared examples with repair limit
+# r=2 (3,051 x 7 = 21,357 records). make table3 continues its JBFC rows to r=10, and make r3 raises the
+# run to the paper's r=3 and fills Tables 1 and 2; this script only summarizes the r=2 run.
 # The generator is an Azure OpenAI deployment behind the APIM host and key in .env.
 # Usage: make table2 [MODEL=gpt-5-nano] [WORKERS=8]   (or MODEL=... bash scripts/run_table2.sh)
 set -euo pipefail
@@ -32,6 +33,6 @@ note "2/3 run: seven methods on all 3,051 examples, one run, r=2"
 uv run jev-fc run --split all --methods "$METHODS" --max-repairs 2 --replicates 1 \
   --workers "$WORKERS" --output "$OUT" --resume 2>&1 | stamp
 
-note "3/3 fill Tables 1 and 2 in paper/main.tex from this run"
-uv run jev-fc report "$OUT" --paper paper/main.tex > "$OUT/report.json"
-note "done: $OUT/summary.json; Tables 1 and 2 are filled in paper/main.tex (rebuild the PDF next)"
+note "3/3 summarize the run (paper/main.tex is not changed; make r3 fills its tables)"
+uv run jev-fc report "$OUT" > "$OUT/report.json"
+note "done: $OUT/summary.json (next: make table3, make compare, make r3)"
