@@ -7,8 +7,8 @@ run, then JBFC added from its first proposals with scripts/raise_limit.py, the w
 of gpt-5.4-mini was made). Every run covers all 3,051 examples with the same code, data,
 interface, settings and prices; only the generator's samples differ.
 
-Table 1 shows each cell's mean over the runs, the standard deviation of the total across
-runs (the s.d. row), and the mean cost per 1,000 requests. The JSON report adds each run's values and
+Table 1 shows each cell's mean over the runs, the total as mean +- standard deviation
+across runs, and the mean cost per 1,000 requests. The JSON report adds each run's values and
 paired differences with 95% intervals: each example's difference is averaged over the
 runs first, then examples are resampled (seed 1729, 2,000 times, as in the paper).
 
@@ -147,7 +147,8 @@ def latex_table1(small, large):
     """Table 1: mean accuracy over the runs by category, the total's run-to-run spread and the mean cost."""
     small_model, large_model = small[0]["manifest"]["llm_model"], large[0]["manifest"]["llm_model"]
     limit, count = small[0]["manifest"]["max_repairs"], len(small)
-    lines = [r"\begin{table}[t]", r"\centering\small", r"\setlength{\tabcolsep}{4pt}",
+    # Footnote size keeps the one-line "mean +- s.d." totals within the column.
+    lines = [r"\begin{table}[t]", r"\centering\footnotesize", r"\setlength{\tabcolsep}{4pt}",
              r"\begin{tabular}{lrrrrr}", r"\toprule",
              rf" & & \multicolumn{{2}}{{c}}{{\texttt{{{_tex_escape(small_model)}}}}}"
              rf" & \multicolumn{{2}}{{c}}{{\texttt{{{_tex_escape(large_model)}}}}}\\",
@@ -163,19 +164,19 @@ def latex_table1(small, large):
     totals = column_spreads(small, large, "accuracy")
     total, bold = paper_tables._bold_top([paper_tables._cell(item["mean"]) for item in totals])
     bolded = bolded or bold
-    deviation = [paper_tables._cell(item["sd"]) for item in totals]
+    # The total's standard deviation across runs sits next to its mean, in the same row.
+    total = [rf"{cell}{{\scriptsize$\pm${paper_tables._cell(item['sd'])}}}" for cell, item in zip(total, totals)]
     cost = [paper_tables._cell(item["mean"], 1000, 3) for item in column_spreads(small, large, "mean_cost_usd")]
     effort = large[0]["manifest"].get("reasoning_effort")
     effort_note = "" if effort in (None, "none") else \
         rf" \texttt{{{_tex_escape(large_model)}}} uses reasoning effort \texttt{{{_tex_escape(effort)}}}."
     lines += [r"\midrule", "Total & 3051 & " + " & ".join(total) + r"\\",
-              "s.d. & & " + " & ".join(deviation) + r"\\",
               "USD/1k & & " + " & ".join(cost) + r"\\",
               r"\bottomrule", r"\end{tabular}",
               rf"\caption{{Accuracy (\%) on all BFCL examples, mean of {NUMBER_WORDS.get(count, count)} runs, "
               rf"$r={limit}$ (Direct makes no repairs)." + effort_note
               + (" Bold: highest per row." if bolded else "")
-              + " s.d.: of the total across runs. USD/1k: mean cost per 1,000 requests."
+              + r" Total: mean $\pm$ s.d. across runs. USD/1k: mean cost per 1,000 requests."
               + r" $^\dagger$Call presence only; not in the total.}",
               r"\label{tab:categories}", r"\end{table}"]
     return "\n".join(lines)

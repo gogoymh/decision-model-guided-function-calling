@@ -286,7 +286,7 @@ Continuing the first `gpt-5-nano` run raised call accuracy from 75.3% at three r
 <details>
 <summary><b>All numbers as tables</b></summary>
 
-Mean of three runs per generator (the paper's Table 1):
+Mean of three runs per generator (the paper's Table 1; total: mean ± standard deviation across runs):
 
 | Category | Examples | `gpt-5-nano` Direct | `gpt-5-nano` JBFC | `gpt-5.4-mini` Direct | `gpt-5.4-mini` JBFC |
 |---|---:|---:|---:|---:|---:|
@@ -296,8 +296,7 @@ Mean of three runs per generator (the paper's Table 1):
 | Live simple | 258 | 74.3 | 75.1 | 77.1 | **79.1** |
 | Live multiple | 1,053 | 67.6 | 70.4 | 75.2 | **76.4** |
 | Live irrelevance | 884 | 48.8 | 67.7 | **80.7** | 74.4 |
-| **Total** (excl. 16 live relevance) | 3,035 | 64.1 | 75.0 | **81.1** | 79.5 |
-| Standard deviation of the total across runs | | 0.3 | 0.2 | 0.2 | 0.2 |
+| **Total** (excl. 16 live relevance) | 3,035 | 64.1 ± 0.3 | 75.0 ± 0.2 | **81.1** ± 0.2 | 79.5 ± 0.2 |
 | USD / 1k requests | | 0.056 | 0.272 | 0.703 | 1.700 |
 
 First run (the paper's Table 2 and Figure 2):

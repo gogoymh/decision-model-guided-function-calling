@@ -198,7 +198,7 @@ We prepare 3,051 BFCL examples from seven categories at repository revision \tex
 
 % BEGIN AUTO CATEGORIES
 \begin{table}[t]
-\centering\small
+\centering\footnotesize
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{lrrrrr}
 \toprule
@@ -214,12 +214,11 @@ Live multiple & 1053 & 67.6 & 70.4 & 75.2 & \textbf{76.4}\\
 Live irrelevance & 884 & 48.8 & 67.7 & \textbf{80.7} & 74.4\\
 Live relevance$^\dagger$ & 16 & \textbf{89.6} & 87.5 & 79.2 & 85.4\\
 \midrule
-Total & 3051 & 64.1 & 75.0 & \textbf{81.1} & 79.5\\
-s.d. & & 0.3 & 0.2 & 0.2 & 0.2\\
+Total & 3051 & 64.1{\scriptsize$\pm$0.3} & 75.0{\scriptsize$\pm$0.2} & \textbf{81.1}{\scriptsize$\pm$0.2} & 79.5{\scriptsize$\pm$0.2}\\
 USD/1k & & 0.056 & 0.272 & 0.703 & 1.700\\
 \bottomrule
 \end{tabular}
-\caption{Accuracy (\%) on all BFCL examples, mean of three runs, $r=3$ (Direct makes no repairs). Bold: highest per row. s.d.: of the total across runs. USD/1k: mean cost per 1,000 requests. $^\dagger$Call presence only; not in the total.}
+\caption{Accuracy (\%) on all BFCL examples, mean of three runs, $r=3$ (Direct makes no repairs). Bold: highest per row. Total: mean $\pm$ s.d. across runs. USD/1k: mean cost per 1,000 requests. $^\dagger$Call presence only; not in the total.}
 \label{tab:categories}
 \end{table}
 % END AUTO CATEGORIES

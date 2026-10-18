@@ -69,11 +69,12 @@ def test_table_shows_each_cells_mean_the_totals_spread_and_the_mean_cost():
     table = table1_repeat.latex_table1(*runs())
     assert r"\multicolumn{2}{c}{\texttt{gpt-5-nano}} & \multicolumn{2}{c}{\texttt{gpt-5.4-mini}}" in table
     assert r"Irrelevance & 240 & 63.8 & 75.4 & \textbf{81.3} & 79.6\\" in table
-    assert r"Total & 3051 & 63.8 & 75.4 & \textbf{81.3} & 79.6\\" in table
-    assert r"s.d. & & 0.2 & 0.6 & 0.3 & 0.4\\" in table
+    assert (r"Total & 3051 & 63.8{\scriptsize$\pm$0.2} & 75.4{\scriptsize$\pm$0.6} & "
+            r"\textbf{81.3}{\scriptsize$\pm$0.3} & 79.6{\scriptsize$\pm$0.4}\\") in table
+    assert "s.d. &" not in table
     assert r"USD/1k & & 0.056 & 0.273 & 0.706 & 1.718\\" in table
     assert r"Accuracy (\%) on all BFCL examples, mean of three runs, $r=3$ (Direct makes no repairs)." in table
-    assert "Bold: highest per row. s.d.: of the total across runs. USD/1k: mean cost per 1,000 requests." in table
+    assert r"Bold: highest per row. Total: mean $\pm$ s.d. across runs. USD/1k: mean cost per 1,000 requests." in table
     assert r"$^\dagger$Call presence only; not in the total.}" in table
     assert r"\label{tab:categories}" in table and "one run" not in table
 
