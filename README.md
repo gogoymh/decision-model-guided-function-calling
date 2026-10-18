@@ -254,24 +254,25 @@ jbfc.JBFC(
 ## Results
 
 > [!NOTE]
-> A small study, not a benchmark claim: two generators (`gpt-5-nano` and the larger `gpt-5.4-mini`, reasoning effort `none`) and one verifier (`jev-1.13.0`) on 3,051 single-turn examples from seven BFCL categories, one run each, at most three repairs. The repair limit was chosen after seeing the curve below on the same examples; nothing else was tuned. Methods of one generator share each example's first proposal. Intervals and caveats are in the [paper](paper/main.pdf).
+> A small study, not a benchmark claim: two generators (`gpt-5-nano` and the larger `gpt-5.4-mini`, reasoning effort `none`) and one verifier (`jev-1.13.0`) on 3,051 single-turn examples from seven BFCL categories, at most three repairs. Direct and JBFC ran three times per generator and the category numbers are their means; the method comparison and the repair-limit curve come from the first run. The repair limit was chosen after seeing that curve on the same examples; nothing else was tuned. Within a run, the methods of one generator share each example's first proposal. Intervals and caveats are in the [paper](paper/main.pdf).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-categories-dark.png">
-  <img alt="Accuracy by BFCL category, Direct then JBFC, for gpt-5-nano and gpt-5.4-mini: Simple Python 90.8 to 91.0 and 90.8 to 92.0; Multiple 91.0 to 91.5 and 92.0 to 92.5; Irrelevance 25.4 to 82.5 and 87.1 to 81.2; Live simple 73.6 to 74.8 and 77.1 to 79.1; Live multiple 67.7 to 70.9 and 75.2 to 76.2; Live irrelevance 48.2 to 67.8 and 81.4 to 74.8; total 63.8 to 75.3 and 81.3 to 79.6." src="docs/assets/chart-categories-light.png" width="100%">
+  <img alt="Accuracy by BFCL category, mean of three runs, Direct then JBFC, for gpt-5-nano and gpt-5.4-mini: Simple Python 90.8 to 91.0 and 90.5 to 91.2; Multiple 91.0 to 91.5 and 93.3 to 93.3; Irrelevance 27.2 to 81.7 and 87.1 to 81.1; Live simple 74.3 to 75.1 and 77.1 to 79.1; Live multiple 67.6 to 70.4 and 75.2 to 76.4; Live irrelevance 48.8 to 67.7 and 80.7 to 74.4; total 64.1 to 75.0 and 81.1 to 79.5." src="docs/assets/chart-categories-light.png" width="100%">
 </picture>
 
-- With `gpt-5-nano`, JBFC raised call accuracy from 63.8% to 75.3% (paired bootstrap 95% CI for the difference 10.1–12.9 points), mostly on requests where no tool applies (Irrelevance: 25.4% → 82.5%). Where a call is needed, the gains are small (Simple Python +0.2, Multiple +0.5): a yes/no verdict says *that* a call is wrong, not *which* call is right.
-- With `gpt-5.4-mini`, JBFC lowered accuracy from 81.3% to 79.6% (95% CI for the difference −2.7 to −0.7). It still fixed more calls than it broke where a call was needed, but this model already skips most unrelated tools, Jev separated its remaining mistakes poorly, and Jev's rejections turned 108 correct no-calls into calls.
-- A larger model alone beat the small model with JBFC: Direct with `gpt-5.4-mini` reached 81.3%, 6.0 points above JBFC with `gpt-5-nano` (95% CI 4.6–7.5), at 2.6 times the cost ($0.71 instead of $0.27 per 1,000 requests) and in a third of the time.
-- With `gpt-5-nano`, every repair method scored above Direct. Generic self-review spends four proposals on every request and trailed every Jev-based method, which averaged 1.7 to 2.1.
-- Keeping the whole history scored 1.6 points above showing only the latest rejection (95% CI 0.8–2.5).
-- Accepted is not the same as correct: with `gpt-5-nano`, calls that passed every check (69.2% of examples) were 90.7% correct.
-- With `gpt-5-nano`, JBFC cost about five times Direct ($0.27 instead of $0.056 per 1,000 requests) and took 2.2 more API seconds.
+- With `gpt-5-nano`, JBFC raised call accuracy from 64.1% to 75.0% on average (paired bootstrap 95% CI for the difference 9.8–12.1 points; +11.5, +10.6 and +10.6 in the three runs), mostly on requests where no tool applies (Irrelevance: 27.2% → 81.7%). Where a call is needed, the gains are small (Simple Python 90.8% → 91.0%, Multiple 91.0% → 91.5%): a yes/no verdict says *that* a call is wrong, not *which* call is right.
+- With `gpt-5.4-mini`, JBFC lowered accuracy in every run, from 81.1% to 79.5% on average (95% CI for the difference −2.4 to −0.9). It still fixed more calls than it broke where a call was needed, but this model already skips most unrelated tools, Jev separated its remaining mistakes poorly, and Jev's rejections turned 102–110 correct no-calls into calls per run.
+- A larger model alone beat the small model with JBFC: Direct with `gpt-5.4-mini` reached 81.1%, 6.1 points above JBFC with `gpt-5-nano` (95% CI 4.9–7.4), at 2.6 times the cost ($0.70 instead of $0.27 per 1,000 requests) and in about a third of the time.
+- The three runs agree: each total moved by at most 0.6 points between runs (standard deviation 0.2–0.3), although about 30% of `gpt-5-nano`'s first calls (13% of `gpt-5.4-mini`'s) changed from run to run.
+- In the first run with `gpt-5-nano`, every repair method scored above Direct. Generic self-review spends four proposals on every request and trailed every Jev-based method, which averaged 1.7 to 2.1.
+- In the same run, keeping the whole history scored 1.6 points above showing only the latest rejection (95% CI 0.8–2.5).
+- Accepted is not the same as correct: with `gpt-5-nano`, calls that passed every check (69% of examples in each run) were 91% correct.
+- With `gpt-5-nano`, JBFC cost about five times Direct ($0.27 instead of $0.056 per 1,000 requests) and took 2.1 more API seconds.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-methods-dark.png">
-  <img alt="Call accuracy by method with gpt-5-nano and at most three repairs: JBFC 75.3, JBFC-A 73.7, JBFC-L 73.6, JBFC-F 73.6, Self-refine 70.0, Schema repair 65.8, Direct 63.8, with API seconds and USD per 1,000 requests." src="docs/assets/chart-methods-light.png" width="100%">
+  <img alt="Call accuracy by method with gpt-5-nano, first run, at most three repairs: JBFC 75.3, JBFC-A 73.7, JBFC-L 73.6, JBFC-F 73.6, Self-refine 70.0, Schema repair 65.8, Direct 63.8, with API seconds and USD per 1,000 requests." src="docs/assets/chart-methods-light.png" width="100%">
 </picture>
 
 <a id="more-repairs"></a>
@@ -280,21 +281,26 @@ jbfc.JBFC(
   <img alt="JBFC by repair limit: call accuracy 72.6% at r=1, 73.5% at r=2, 75.3% at r=3 (default), 76.2% at r=5, 77.0% at r=7 and 78.6% at r=10; cost per 1,000 requests $0.172, $0.221, $0.273, $0.378, $0.483 and $0.669." src="docs/assets/chart-limits-light.png" width="100%">
 </picture>
 
-Continuing the `gpt-5-nano` run raised call accuracy from 75.3% at three repairs (the default) to 78.6% at ten, at 2.4 times the cost; most newly correct answers (128 of 148) were again cases where no tool applies. Even at ten repairs, at a cost similar to Direct with `gpt-5.4-mini`, JBFC stayed 2.7 points below it. Three repairs is the default because each further point costs about four times as much; it was chosen after seeing this curve on the same examples.
+Continuing the first `gpt-5-nano` run raised call accuracy from 75.3% at three repairs (the default) to 78.6% at ten, at 2.4 times the cost; most newly correct answers (128 of 148) were again cases where no tool applies. Even at ten repairs, at a cost similar to Direct with `gpt-5.4-mini`, JBFC stayed below it (78.6% against 81.1% on average). Three repairs is the default because each further point costs about four times as much; it was chosen after seeing this curve, and three repairs gave 74.9% in both later runs.
 
 <details>
 <summary><b>All numbers as tables</b></summary>
 
+Mean of three runs per generator (the paper's Table 1):
+
 | Category | Examples | `gpt-5-nano` Direct | `gpt-5-nano` JBFC | `gpt-5.4-mini` Direct | `gpt-5.4-mini` JBFC |
 |---|---:|---:|---:|---:|---:|
-| Simple Python | 400 | 90.8 | 91.0 | 90.8 | **92.0** |
-| Multiple | 200 | 91.0 | 91.5 | 92.0 | **92.5** |
-| Irrelevance | 240 | 25.4 | 82.5 | **87.1** | 81.2 |
-| Live simple | 258 | 73.6 | 74.8 | 77.1 | **79.1** |
-| Live multiple | 1,053 | 67.7 | 70.9 | 75.2 | **76.2** |
-| Live irrelevance | 884 | 48.2 | 67.8 | **81.4** | 74.8 |
-| **Total** (excl. 16 live relevance) | 3,035 | 63.8 | 75.3 | **81.3** | 79.6 |
-| USD / 1k requests | | 0.056 | 0.273 | 0.706 | 1.718 |
+| Simple Python | 400 | 90.8 | 91.0 | 90.5 | **91.2** |
+| Multiple | 200 | 91.0 | 91.5 | **93.3** | **93.3** |
+| Irrelevance | 240 | 27.2 | 81.7 | **87.1** | 81.1 |
+| Live simple | 258 | 74.3 | 75.1 | 77.1 | **79.1** |
+| Live multiple | 1,053 | 67.6 | 70.4 | 75.2 | **76.4** |
+| Live irrelevance | 884 | 48.8 | 67.7 | **80.7** | 74.4 |
+| **Total** (excl. 16 live relevance) | 3,035 | 64.1 | 75.0 | **81.1** | 79.5 |
+| Standard deviation of the total across runs | | 0.3 | 0.2 | 0.2 | 0.2 |
+| USD / 1k requests | | 0.056 | 0.272 | 0.703 | 1.700 |
+
+First run (the paper's Table 2 and Figure 2):
 
 | Method (`gpt-5-nano`) | Call acc. | Function acc. | Argument acc. | API sec. | USD / 1k requests |
 |---|---:|---:|---:|---:|---:|
@@ -323,7 +329,7 @@ Continuing the `gpt-5-nano` run raised call accuracy from 75.3% at three repairs
 Jev is TypeSafe's decision model. It does not write explanations: it answers each yes/no question with a probability, in 0.30 s on average in the paper's run. JBFC asks two fixed questions (right function, right arguments) and also runs a local schema check.
 
 **What does it cost?**
-Each Jev check reads about 1,400 tokens, roughly $0.06 per 1,000 checks at $0.042 per million input tokens. With `gpt-5-nano`, JBFC cost $0.27 per 1,000 requests on average, against $0.056 for a bare call; a bare call to `gpt-5.4-mini` cost $0.71 and was more accurate.
+Each Jev check reads about 1,400 tokens, roughly $0.06 per 1,000 checks at $0.042 per million input tokens. With `gpt-5-nano`, JBFC cost $0.27 per 1,000 requests on average, against $0.056 for a bare call; a bare call to `gpt-5.4-mini` cost $0.70 and was more accurate.
 
 **Does anything run while JBFC repairs a call?**
 No. Proposals are marked as not executed, and `run()` executes only the final call after it passes (or, with `execute_unverified=True`, the last one).
@@ -335,7 +341,7 @@ Yes. Call `jbfc.verify(...)` on the tool calls your framework produces, or let `
 Not yet. JBFC decides one step at a time: a single call or no call, the setting it was evaluated on.
 
 **Which models have been benchmarked?**
-`gpt-5-nano` and `gpt-5.4-mini` (Azure OpenAI), each with and without Jev. JBFC helped the first and lowered the second's accuracy; see [Results](#results). The other adapters follow each provider's documented API and are covered by offline tests.
+`gpt-5-nano` and `gpt-5.4-mini` (Azure OpenAI), each with and without Jev, three runs each. JBFC helped the first and lowered the second's accuracy in every run; see [Results](#results). The other adapters follow each provider's documented API and are covered by offline tests.
 
 **When does JBFC help?**
 When the model's mistakes are ones Jev can tell apart. In our runs that meant a small model calling tools that do not apply: Jev flagged those calls clearly and the model withdrew them. A stronger model made fewer such mistakes, Jev separated the rest poorly, and its rejections of correct no-calls cost more than its fixes. Measure on your own traffic before using it with a strong model; `verify()` returns verdicts without changing what your agent does.
@@ -345,7 +351,7 @@ When the model's mistakes are ones Jev can tell apart. In our runs that meant a 
 - **One decision per step.** JBFC decides a single call or no call. `call()` and `run()` take text messages, so give earlier tool results back to the model as text; `verify()` also accepts tool-call and tool-result messages.
 - **A verifier is a model too.** Jev can accept a wrong call or reject a right one; accepted calls were about 90% correct in the paper's runs, not 100%, and with `gpt-5.4-mini` its rejections did more harm than good.
 - **Cost and latency.** Each proposal costs one generator call and one Jev call; with at most three repairs, that is up to four of each.
-- **Evidence so far.** Two models, mostly English requests, one run each. JBFC helped `gpt-5-nano` and hurt `gpt-5.4-mini`; the repair limit was chosen on the same examples.
+- **Evidence so far.** Two models and mostly English requests; three runs of Direct and JBFC, one of the other methods. JBFC helped `gpt-5-nano` and hurt `gpt-5.4-mini` in every run; the repair limit was chosen on the first run.
 
 ## Reproduce the paper
 
@@ -361,10 +367,12 @@ make table2        # all seven methods at r=2 (21,357 records), the source run o
 make table3        # Figure 2: JBFC at repair limits 1, 2, 3, 5, 7, 10, extending the Table 2 run
 make compare       # Direct with gpt-5.4-mini on all examples (no Jev)
 make r3            # Tables 1-2 at r=3: raise the Table 2 run, add JBFC to gpt-5.4-mini, fill both
-python scripts/analyze_results.py results/table2_gpt-5-nano_r3   # the numbers quoted in Results
+make repeat        # Table 1 over three runs: runs 2-3 of Direct and JBFC for both models, then the mean
+python scripts/analyze_results.py results/table2_gpt-5-nano_r3   # the first run's numbers quoted in Results
+python scripts/table1_repeat.py   # Table 1's means, run-to-run spread and paired intervals
 ```
 
-The paper's runs used an Azure OpenAI deployment of `gpt-5-nano` behind an Azure API Management gateway. Jev went through the same gateway until it stopped serving it; later requests (repairs 8 to 10 in Figure 2, the third repair of the other methods, and JBFC with `gpt-5.4-mini`) call TypeSafe directly with `TYPESAFE_API_KEY` (same model; recorded in each run's manifest). See [`docs/apim-gateway.md`](docs/apim-gateway.md). With `WORKERS=8`, Table 2 took about two hours and $2.4 at list prices, extending it to ten repairs about 30 minutes and $1.4, the `gpt-5.4-mini` Direct run (`make compare`) about 8 minutes and $2.2, and `make r3` about 26 minutes and $3.6. Completed records are reused when a run resumes. Run notes and checks are in [`docs/validation.md`](docs/validation.md).
+The paper's runs used an Azure OpenAI deployment of `gpt-5-nano` behind an Azure API Management gateway. Jev went through the same gateway until it stopped serving it; later requests (repairs 8 to 10 in Figure 2, the third repair of the other methods, JBFC with `gpt-5.4-mini`, and runs 2 and 3 of Table 1) call TypeSafe directly with `TYPESAFE_API_KEY` (same model; recorded in each run's manifest). See [`docs/apim-gateway.md`](docs/apim-gateway.md). With `WORKERS=8`, Table 2 took about two hours and $2.4 at list prices, extending it to ten repairs about 30 minutes and $1.4, the `gpt-5.4-mini` Direct run (`make compare`) about 8 minutes and $2.2, `make r3` about 26 minutes and $3.6, and `make repeat` about 47 minutes and $12. Completed records are reused when a run resumes. Run notes and checks are in [`docs/validation.md`](docs/validation.md).
 
 <details>
 <summary><b>Repository layout</b></summary>

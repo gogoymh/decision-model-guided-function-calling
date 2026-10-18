@@ -168,10 +168,10 @@ def main(data_path, out_dir):
     jobs = []
     for mode, t in THEMES.items():
         jobs.append((f"chart-categories-{mode}.png", page(t, "Accuracy by BFCL category",
-                     "All 3,051 examples · one run per generator · arrow: Direct (ring) to JBFC with at most 3 repairs (dot) · bold: highest in the row",
+                     "All 3,051 examples · mean of three runs · arrow: Direct (ring) to JBFC with at most 3 repairs (dot) · bold: highest in the row",
                      [("gpt-5-nano", t["blue"]), ("gpt-5.4-mini", t["orange"])], categories(t, data["categories"]))))
         jobs.append((f"chart-methods-{mode}.png", page(t, "Call accuracy by method",
-                     "gpt-5-nano · same first proposal for every method · at most 3 repairs · time and cost per request at right",
+                     "gpt-5-nano · first run · same first proposal for every method · at most 3 repairs · time and cost per request at right",
                      [], methods(t, data["methods"]))))
         jobs.append((f"chart-limits-{mode}.png", page(t, "JBFC by repair limit r",
                      "Call accuracy and cost · one run extended from r=2, so every limit shares its first attempts",

@@ -8,7 +8,7 @@ of gpt-5.4-mini was made). Every run covers all 3,051 examples with the same cod
 interface, settings and prices; only the generator's samples differ.
 
 Table 1 shows each cell's mean over the runs, the standard deviation of the total across
-runs, and the mean cost per 1,000 requests. The JSON report adds each run's values and
+runs (the s.d. row), and the mean cost per 1,000 requests. The JSON report adds each run's values and
 paired differences with 95% intervals: each example's difference is averaged over the
 runs first, then examples are resampled (seed 1729, 2,000 times, as in the paper).
 
@@ -169,14 +169,14 @@ def latex_table1(small, large):
     effort_note = "" if effort in (None, "none") else \
         rf" \texttt{{{_tex_escape(large_model)}}} uses reasoning effort \texttt{{{_tex_escape(effort)}}}."
     lines += [r"\midrule", "Total & 3051 & " + " & ".join(total) + r"\\",
-              "Total s.d. & & " + " & ".join(deviation) + r"\\",
+              "s.d. & & " + " & ".join(deviation) + r"\\",
               "USD/1k & & " + " & ".join(cost) + r"\\",
               r"\bottomrule", r"\end{tabular}",
-              rf"\caption{{Accuracy (\%) on all BFCL examples, mean of {NUMBER_WORDS.get(count, count)} runs per "
-              rf"generator, $r={limit}$ (Direct makes no repairs)." + effort_note
+              rf"\caption{{Accuracy (\%) on all BFCL examples, mean of {NUMBER_WORDS.get(count, count)} runs, "
+              rf"$r={limit}$ (Direct makes no repairs)." + effort_note
               + (" Bold: highest per row." if bolded else "")
-              + " Total s.d.: across runs. USD/1k: mean cost per 1,000 requests."
-              + r" $^\dagger$Call presence only; excluded from the total.}",
+              + " s.d.: of the total across runs. USD/1k: mean cost per 1,000 requests."
+              + r" $^\dagger$Call presence only; not in the total.}",
               r"\label{tab:categories}", r"\end{table}"]
     return "\n".join(lines)
 
