@@ -2,9 +2,9 @@
 <html><head><meta charset="utf-8">
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { width: 1280px; height: 400px; background: transparent; }
+  html, body { width: 1280px; height: 460px; background: transparent; }
   .hero {
-    position: relative; width: 1280px; height: 400px; border-radius: 22px; overflow: hidden;
+    position: relative; width: 1280px; height: 460px; border-radius: 22px; overflow: hidden;
     font-family: "Inter", "Noto Color Emoji", sans-serif; color: #fff;
     background:
       radial-gradient(520px 320px at 8% 0%, rgba(56,189,248,.30), transparent 70%),
@@ -31,18 +31,19 @@
     -webkit-background-clip: text; background-clip: text; color: transparent; width: fit-content;
   }
   .sub { margin-top: 12px; font: 600 30px/1.24 Inter; color: rgba(255,255,255,.95); letter-spacing: -.005em; }
-  .flow { position: absolute; left: 64px; bottom: 46px; display: flex; align-items: center; gap: 10px; }
-  .pill {
-    display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px;
-    font: 600 16px Inter; border: 1.5px solid; backdrop-filter: blur(4px);
+  .node {
+    position: absolute; display: flex; align-items: center; gap: 11px; padding: 0 16px; border-radius: 14px;
+    border: 1.5px solid; backdrop-filter: blur(4px);
   }
-  .pill .e { font-size: 18px; }
-  .p1 { color: #bae6fd; border-color: rgba(56,189,248,.65); background: rgba(56,189,248,.14); }
-  .p2 { color: #fde68a; border-color: rgba(251,191,36,.65); background: rgba(251,191,36,.14); }
-  .p3 { color: #ddd6fe; border-color: rgba(167,139,250,.70); background: rgba(167,139,250,.16); }
-  .p4 { color: #bbf7d0; border-color: rgba(34,197,94,.65); background: rgba(34,197,94,.14); }
-  .arrow { color: rgba(255,255,255,.55); font: 600 20px Inter; }
-  .loop { font: 500 13px Inter; color: rgba(221,214,254,.85); margin-left: 4px; }
+  .node .e { font-size: 21px; line-height: 1; }
+  .node .t1 { font: 650 17px/1.2 Inter; }
+  .node .t2 { margin-top: 2px; font: 400 13px/1.25 Inter; color: rgba(255,255,255,.70); }
+  .n1 { color: #bae6fd; border-color: rgba(56,189,248,.65); background: rgba(56,189,248,.13); }
+  .n2 { color: #fde68a; border-color: rgba(251,191,36,.65); background: rgba(251,191,36,.12); }
+  .n3 { color: #ddd6fe; border-color: rgba(167,139,250,.75); background: rgba(167,139,250,.15); }
+  .n4 { color: #bbf7d0; border-color: rgba(34,197,94,.65); background: rgba(34,197,94,.13); }
+  .wires { position: absolute; inset: 0; pointer-events: none; }
+  .wires text { font-family: Inter; font-size: 13px; font-weight: 600; }
   .card {
     position: absolute; right: 56px; top: 50px; width: 372px; padding: 22px 24px 20px;
     border-radius: 20px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16);
@@ -70,15 +71,23 @@
     <div class="title">Jev-Backed Function Calling:</div>
     <div class="sub">Agentic In-Context Learning with<br>Cumulative Decision Feedback</div>
   </div>
-  <div class="flow">
-    <div class="pill p1"><span class="e">🤖</span>LLM proposes</div>
-    <div class="arrow">→</div>
-    <div class="pill p2"><span class="e">🔍</span>Jev checks</div>
-    <div class="arrow">→</div>
-    <div class="pill p3"><span class="e">🔁</span>Repairs with feedback</div>
-    <div class="arrow">→</div>
-    <div class="pill p4"><span class="e">✅</span>Runs</div>
-  </div>
+  <svg class="wires" width="1280" height="460" viewBox="0 0 1280 460">
+  <path d="M320,322.0 H422" stroke="rgba(255,255,255,.55)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M414,317.0 L423,322.0 L414,327.0" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M774,322.0 H894" stroke="#86efac" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M886,317.0 L895,322.0 L886,327.0" fill="none" stroke="#86efac" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="834" y="311.0" fill="#86efac" text-anchor="middle">accepted</text>
+  <path d="M598,356 V380" stroke="#c4b5fd" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M593.0,372 L598.0,381 L603.0,372" fill="none" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="610" y="373" fill="#c4b5fd">rejected</text>
+  <path d="M377,411.0 H203 Q189,411.0 189,397.0 V356" stroke="#c4b5fd" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M184.0,364 L189.0,355 L194.0,364" fill="none" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="294" y="402.0" fill="#c4b5fd" text-anchor="middle">repair</text>
+  </svg>
+  <div class="node n1" style="left:64px;top:294px;width:250px;height:56px"><span class="e">🤖</span><div><div class="t1">LLM proposes</div><div class="t2">a call, or no call</div></div></div>
+  <div class="node n2" style="left:428px;top:294px;width:340px;height:56px"><span class="e">🔍</span><div><div class="t1">Jev + schema check</div><div class="t2">right function? right arguments?</div></div></div>
+  <div class="node n4" style="left:900px;top:294px;width:212px;height:56px"><span class="e">✅</span><div><div class="t1">Runs</div><div class="t2">only an accepted call</div></div></div>
+  <div class="node n3" style="left:383px;top:386px;width:430px;height:50px"><span class="e">🔁</span><div><div class="t1">Feedback history grows</div><div class="t2">rejected calls + verdicts, placed before the request</div></div></div>
   <div class="card">
     <div class="lbl">Checked before it runs</div>
     <div class="req"><span class="who">User</span>How many kilograms are in a pound?</div>

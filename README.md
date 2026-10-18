@@ -2,8 +2,6 @@
   <img src="docs/assets/jbfc-hero.png" alt="Jev-Backed Function Calling: Agentic In-Context Learning with Cumulative Decision Feedback (JBFC). The LLM proposes a call, Jev checks it, a rejected call goes back to the LLM with the verdict, and only a call that passes runs." width="100%">
 </p>
 
-<h3 align="center">Your LLM's tool calls, checked before they run and sent back for repair when rejected.</h3>
-
 <p align="center">
   <img alt="OpenAI" src="https://img.shields.io/badge/OpenAI-412991?style=flat-square&logo=openai&logoColor=white">
   <img alt="Anthropic" src="https://img.shields.io/badge/Anthropic-D97757?style=flat-square&logo=anthropic&logoColor=white">
