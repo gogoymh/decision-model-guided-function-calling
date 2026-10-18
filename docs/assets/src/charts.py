@@ -2,7 +2,7 @@
 
 Usage: python docs/assets/src/charts.py docs/assets/src/data.json docs/assets
 Needs Playwright with Chromium and the Inter font. The numbers in data.json must equal
-the filled paper tables (Tables 1-3); colors are a validated categorical palette.
+the filled paper results (Tables 1-2 and Figure 2); colors are a validated categorical palette.
 """
 import json
 import sys
@@ -13,10 +13,10 @@ from playwright.sync_api import sync_playwright
 THEMES = {
     "light": dict(surface="#fcfcfb", ink="#0b0b0b", ink2="#52514e", muted="#898781", grid="#e1e0d9",
                   base="#c3c2b7", blue="#2a78d6", orange="#eb6834", gray="#c9c7c0", link="#c3c2b7",
-                  up="#006300", border="rgba(11,11,11,0.10)"),
+                  border="rgba(11,11,11,0.10)"),
     "dark": dict(surface="#1a1a19", ink="#f0efec", ink2="#c3c2b7", muted="#898781", grid="#2c2c2a",
                  base="#383835", blue="#3987e5", orange="#d95926", gray="#4b4a46", link="#4b4a46",
-                 up="#0ca30c", border="rgba(255,255,255,0.10)"),
+                 border="rgba(255,255,255,0.10)"),
 }
 W = 880
 
@@ -68,7 +68,7 @@ def categories(t, rows):
         out.append(text(cols["Direct"], y, f"{direct:.1f}", t["ink2"], 13, 450, "end"))
         out.append(text(cols["JBFC"], y, f"{jbfc:.1f}", t["ink"], 13, 650, "end"))
         delta = jbfc - direct
-        out.append(text(cols["Δ"], y, f"+{delta:.1f}" if delta > 0.05 else "±0", t["up"] if delta > 0.05 else t["muted"], 13, 600, "end"))
+        out.append(text(cols["Δ"], y, f"+{delta:.1f}" if delta > 0.05 else "±0", t["ink2"] if delta > 0.05 else t["muted"], 13, 450, "end"))
     out.append("</svg>")
     return "".join(out)
 
@@ -156,8 +156,8 @@ def main(data_path, out_dir):
         jobs.append((f"chart-methods-{mode}.png", page(t, "Call accuracy by method",
                      "Same first proposal for every method · at most 2 repairs · time and cost per request at right",
                      [], methods(t, data["methods"]))))
-        jobs.append((f"chart-limits-{mode}.png", page(t, "More repairs, more accuracy, more cost",
-                     "JBFC by repair limit r · one run extended from r=2, so every row shares its first attempts",
+        jobs.append((f"chart-limits-{mode}.png", page(t, "JBFC by repair limit r",
+                     "Call accuracy and cost · one run extended from r=2, so every limit shares its first attempts",
                      [], limits(t, data["limits"]))))
     with sync_playwright() as p:
         browser = p.chromium.launch()

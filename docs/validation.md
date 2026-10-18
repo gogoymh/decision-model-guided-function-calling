@@ -278,3 +278,11 @@
 - 4쪽 유지: 그림이 표보다 높아 Acknowledgements가 5쪽으로 넘쳤습니다. 범례를 그림 안으로 옮기고 패널 높이와 캡션을 줄였으며, Study Limits의 "may suit some methods better than others"를 "may favor some methods"로 줄였습니다.
 - 제목: 사용자 요청으로 부제를 "Agentic In-Context Learning with Cumulative Decision Feedback"로 바꿨습니다(원고, README 인용).
 - PDF: 본문 4쪽·참고문헌 5쪽, Type 3 폰트 없음, overfull 없음을 확인했습니다.
+
+## README: 성능 수치 강조 제거 (2026-10-18)
+
+- 사용자 요청: 크지 않은 연구와 실험에서 "몇 점에서 몇 점으로" 같은 수치를 README 첫머리에서 내세우면 역효과가 날 수 있으므로 강조를 뺍니다.
+- 히어로 이미지의 "+9.7 points" 카드를 실제 실행의 예(불필요한 호출이 Jev에 거부되고, 모델이 호출 없이 답하는 과정)를 보여 주는 카드로 바꿨습니다. 수치는 없습니다. 태그라인도 "repaired when it is wrong" 대신 "sent back for repair when rejected"로 바꿨습니다(수정이 항상 성공하지는 않으므로).
+- 결과 배지 줄(63.8%→73.5%, 25.4%→74.2%, 78.6%)을 지웠습니다. 기능 표의 "Paper-grade"·"Fast labels"를 "Open study"·"Light checks"로 바꾸고 측정값은 "in our runs"로 한정했습니다.
+- "The numbers" 절을 API 설명 뒤의 "Results" 절로 옮겼습니다. 첫머리에 연구 범위(생성기 하나, 한 번 실행, BFCL 3,051개, 조정 없음)를 적고, 굵은 수치와 "keep paying off" 같은 표현을 뺐습니다. 수락 ≠ 정답(90.6%), 이득 대부분이 도구가 필요 없는 요청에서 나온다는 점, 비용(약 4배)을 같은 목록에 두었습니다. 차트의 Δ 열은 초록 대신 본문 색으로, 수정 한도 차트 제목은 "JBFC by repair limit r"로 바꿨습니다. 수치 자체는 원고 표와 같습니다.
+- AGENTS.md에 README 첫 화면에 성능 수치를 내세우지 않는다는 규칙을 더했습니다.

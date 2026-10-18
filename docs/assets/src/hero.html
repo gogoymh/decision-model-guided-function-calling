@@ -40,18 +40,23 @@
   .arrow { color: rgba(255,255,255,.55); font: 600 20px Inter; }
   .loop { font: 500 13px Inter; color: rgba(221,214,254,.85); margin-left: 4px; }
   .card {
-    position: absolute; right: 56px; top: 54px; width: 356px; padding: 26px 28px 24px;
+    position: absolute; right: 56px; top: 50px; width: 372px; padding: 22px 24px 20px;
     border-radius: 20px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16);
     box-shadow: 0 20px 60px rgba(0,0,0,.35); backdrop-filter: blur(6px);
   }
   .card .lbl { font: 600 13px Inter; letter-spacing: .1em; text-transform: uppercase; color: #a5b4fc; }
-  .card .big { margin-top: 6px; font: 800 76px/1 "Inter Display"; color: #fff; letter-spacing: -.02em; }
-  .card .big span { font: 700 28px Inter; color: rgba(255,255,255,.75); margin-left: 6px; letter-spacing: 0; }
-  .card .row { margin-top: 14px; font: 500 16px Inter; color: rgba(255,255,255,.86); display: flex; justify-content: space-between; }
-  .card .row b { font-weight: 700; color: #fff; }
-  .card .row .up { color: #86efac; font-weight: 700; }
-  .card .hr { height: 1px; background: rgba(255,255,255,.14); margin-top: 14px; }
-  .card .foot { margin-top: 12px; font: 400 13px Inter; color: rgba(255,255,255,.6); }
+  .card .req { margin-top: 12px; font: 500 15px/1.35 Inter; color: rgba(255,255,255,.92); }
+  .card .req .who { font: 600 11px Inter; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.55); margin-right: 8px; }
+  .card .step { margin-top: 12px; display: flex; gap: 11px; align-items: flex-start; }
+  .card .ic { flex: none; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+  .card .bad .ic { background: rgba(248,113,113,.22); border: 1.5px solid rgba(248,113,113,.8); }
+  .card .good .ic { background: rgba(74,222,128,.20); border: 1.5px solid rgba(74,222,128,.8); }
+  .card .code { font: 500 14px/1.35 "DejaVu Sans Mono", monospace; color: #fff; }
+  .card .bad .code { color: #fecaca; text-decoration: line-through; text-decoration-color: rgba(248,113,113,.7); }
+  .card .good .code { color: #bbf7d0; }
+  .card .why { margin-top: 3px; font: 400 13px Inter; color: rgba(255,255,255,.66); }
+  .card .why b { font-weight: 700; color: #fff; }
+  .card .mid { margin: 10px 0 0 33px; font: 500 13px Inter; color: #ddd6fe; }
 </style></head>
 <body>
 <div class="hero">
@@ -60,7 +65,7 @@
     <div class="eyebrow">Verify before you call</div>
     <div class="title">JBFC</div>
     <div class="sub">Jev-Backed Function Calling</div>
-    <div class="tag">Every tool call is checked before it runs, and repaired when it is wrong.</div>
+    <div class="tag">Tool calls are checked before they run and sent back for repair when rejected.</div>
   </div>
   <div class="flow">
     <div class="pill p1"><span class="e">🤖</span>LLM proposes</div>
@@ -72,12 +77,13 @@
     <div class="pill p4"><span class="e">✅</span>Runs</div>
   </div>
   <div class="card">
-    <div class="lbl">BFCL · gpt-5-nano</div>
-    <div class="big">+9.7<span>points</span></div>
-    <div class="row"><span>Call accuracy</span><span>63.8% → <b>73.5%</b></span></div>
-    <div class="row"><span>No tool needed</span><span>25.4% → <span class="up">74.2%</span></span></div>
-    <div class="hr"></div>
-    <div class="foot">3,051 examples · one run · at most 2 repairs</div>
+    <div class="lbl">Checked before it runs</div>
+    <div class="req"><span class="who">User</span>How many kilograms are in a pound?</div>
+    <div class="step bad"><div class="ic"><svg width="10" height="10" viewBox="0 0 10 10"><path d="M2 2 L8 8 M8 2 L2 8" stroke="#fecaca" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+      <div><div class="code">portfolio_returns(…)</div><div class="why">Jev · right function? <b>no</b></div></div></div>
+    <div class="mid">↻ verdict goes back to the model</div>
+    <div class="step good"><div class="ic"><svg width="11" height="10" viewBox="0 0 11 10"><path d="M1.5 5.2 L4.3 8 L9.5 2" fill="none" stroke="#bbf7d0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div><div class="code">no call: answers in text</div><div class="why">Jev · right to make no call? <b>yes</b></div></div></div>
   </div>
 </div>
 </body></html>

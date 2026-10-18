@@ -1,14 +1,8 @@
 <p align="center">
-  <img src="docs/assets/jbfc-hero.png" alt="JBFC: Jev-Backed Function Calling. The LLM proposes a call, Jev checks it, the LLM repairs it with the feedback, and only then does it run." width="100%">
+  <img src="docs/assets/jbfc-hero.png" alt="JBFC: Jev-Backed Function Calling. The LLM proposes a call, Jev checks it, a rejected call goes back to the LLM with the verdict, and only a call that passes runs." width="100%">
 </p>
 
-<h3 align="center">Your LLM's tool calls, checked before they run, and repaired when they are wrong.</h3>
-
-<p align="center">
-  <a href="#the-numbers"><img alt="BFCL call accuracy 63.8% to 73.5%" src="https://img.shields.io/badge/BFCL%20call%20accuracy-63.8%25%20%E2%86%92%2073.5%25-2563eb?style=for-the-badge"></a>
-  <a href="#see-it"><img alt="No tool needed 25.4% to 74.2%" src="https://img.shields.io/badge/no%20tool%20needed-25.4%25%20%E2%86%92%2074.2%25-7c3aed?style=for-the-badge"></a>
-  <a href="#more-repairs"><img alt="With 10 repairs 78.6%" src="https://img.shields.io/badge/with%2010%20repairs-78.6%25-db2777?style=for-the-badge"></a>
-</p>
+<h3 align="center">Your LLM's tool calls, checked before they run and sent back for repair when rejected.</h3>
 
 <p align="center">
   <img alt="OpenAI" src="https://img.shields.io/badge/OpenAI-412991?style=flat-square&logo=openai&logoColor=white">
@@ -32,10 +26,10 @@
   <a href="#see-it"><b>See it</b></a> ·
   <a href="#install"><b>Install</b></a> ·
   <a href="#quickstart"><b>Quickstart</b></a> ·
-  <a href="#the-numbers"><b>Numbers</b></a> ·
   <a href="#how-it-works"><b>How it works</b></a> ·
   <a href="#use-any-model"><b>Any model</b></a> ·
   <a href="#verify-calls-from-any-framework"><b>Verify</b></a> ·
+  <a href="#results"><b>Results</b></a> ·
   <a href="#faq"><b>FAQ</b></a> ·
   <a href="#reproduce-the-paper"><b>Reproduce</b></a>
 </p>
@@ -84,14 +78,14 @@ Two real traces from the paper's run (`gpt-5-nano` on BFCL, `jev-1.13.0`). Red l
 
 <table>
   <tr>
-    <td width="33%" valign="top"><b>🎯 Catches what schemas miss</b><br>Wrong function, invented values, a call that should not happen at all. Jev judges meaning; a local schema check covers format.</td>
+    <td width="33%" valign="top"><b>🎯 Checks what schemas cannot</b><br>Wrong function, invented values, a call that should not happen at all. Jev judges meaning; a local schema check covers format.</td>
     <td width="33%" valign="top"><b>🔁 Repairs instead of failing</b><br>Rejected calls go back to the model with every earlier attempt and verdict. Nothing runs until a call passes.</td>
-    <td width="33%" valign="top"><b>⚡ Fast labels</b><br>Jev judges a call in 0.30 s on average, under a quarter of the time the model takes to propose it, at $0.06 per 1,000 checks.</td>
+    <td width="33%" valign="top"><b>⚡ Light checks</b><br>A Jev verdict took about 0.3 s per call in our runs, less time than the model took to propose the call, and about $0.06 per 1,000 checks.</td>
   </tr>
   <tr>
     <td valign="top"><b>🔌 Any model</b><br>OpenAI, Anthropic, Gemini, xAI Grok, Azure OpenAI, OpenRouter, or any OpenAI-compatible server. Plain HTTP, no vendor SDKs.</td>
     <td valign="top"><b>🧰 Plain Python tools</b><br>Pass functions. Schemas come from type hints and docstrings; JSON Schema works too.</td>
-    <td valign="top"><b>📄 Paper-grade</b><br>The same loop produced the paper's numbers. Every result here comes from one complete run on 3,051 BFCL examples.</td>
+    <td valign="top"><b>📄 Open study</b><br>The library runs the same loop as the paper. Code, the pinned BFCL revision and the checks behind every table are in this repo.</td>
   </tr>
 </table>
 
@@ -143,77 +137,13 @@ elif result.no_call:
     print(result.text)                   # the model answered without a tool
 ```
 
-## The numbers
-
-All 3,051 examples from seven BFCL categories, one run, `gpt-5-nano` (reasoning effort `none`) as the model and `jev-1.13.0` as the verifier. Every method shares each example's first proposal. From the paper in [`paper/`](paper/main.pdf).
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-categories-dark.png">
-  <img alt="Accuracy by BFCL category, Direct vs JBFC: Simple Python 90.8 to 91.5, Multiple 91.0 to 91.5, Irrelevance 25.4 to 74.2, Live simple 73.6 to 75.2, Live multiple 67.7 to 71.2, Live irrelevance 48.2 to 63.2, total 63.8 to 73.5." src="docs/assets/chart-categories-light.png" width="100%">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-methods-dark.png">
-  <img alt="Call accuracy by method: JBFC 73.5, JBFC-A 72.9, JBFC-L 72.8, JBFC-F 72.6, Self-refine 69.8, Schema repair 65.7, Direct 63.8, with API seconds and USD per 1,000 requests." src="docs/assets/chart-methods-light.png" width="100%">
-</picture>
-
-- Every repair method beats Direct; JBFC by **9.7 points** (paired bootstrap 95% CI 8.5–11.0).
-- Generic self-review spends three proposals on every request and still trails every Jev-based method, which average 1.5 to 1.8.
-- Keeping the whole revision history adds 0.7 points over showing only the latest rejection (95% CI 0.1–1.4).
-- Calls that pass all checks are **90.6% correct** (68.4% of examples), so the verdict doubles as a confidence signal.
-
-<a id="more-repairs"></a>
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-limits-dark.png">
-  <img alt="JBFC by repair limit: call accuracy 72.6% at r=1, 73.5% at r=2 (default), 75.3% at r=3, 76.2% at r=5, 77.0% at r=7 and 78.6% at r=10; cost per 1,000 requests $0.172, $0.221, $0.273, $0.378, $0.483 and $0.669." src="docs/assets/chart-limits-light.png" width="100%">
-</picture>
-
-More repairs keep paying off, at a price: the same run, continued up to ten repairs, reaches **78.6%**. The default stays at `max_repairs=2`; raise it when accuracy matters more than latency.
-
-> [!NOTE]
-> **The rows that are not green.** Most of the gain comes from requests where no tool applies (Irrelevance: 25.4% → 74.2%). Where a call *is* needed, Jev rejects most wrong calls, but a yes/no verdict says *that* a call is wrong, not *which* call is right, so fewer get fixed (Simple Python +0.7, Multiple +0.5). It costs about four times Direct: $0.22 instead of $0.056 per 1,000 requests with `gpt-5-nano`, and 1.6 extra API seconds.
-
-<details>
-<summary><b>All numbers as tables</b></summary>
-
-| Category | Examples | Direct | **JBFC** |
-|---|---:|---:|---:|
-| Simple Python | 400 | 90.8 | **91.5** |
-| Multiple | 200 | 91.0 | **91.5** |
-| Irrelevance | 240 | 25.4 | **74.2** |
-| Live simple | 258 | 73.6 | **75.2** |
-| Live multiple | 1,053 | 67.7 | **71.2** |
-| Live irrelevance | 884 | 48.2 | **63.2** |
-| **Total** (excl. 16 live relevance) | 3,035 | 63.8 | **73.5** |
-
-| Method | Call acc. | Function acc. | Argument acc. | API sec. | USD / 1k requests |
-|---|---:|---:|---:|---:|---:|
-| Direct (no checks) | 63.8 | 74.8 | 81.2 | 1.30 | 0.056 |
-| Schema repair | 65.7 | 76.4 | 81.8 | 1.36 | 0.059 |
-| Self-refine (3 proposals, every request) | 69.8 | 80.0 | 82.3 | 4.01 | 0.190 |
-| JBFC-F (function check only) | 72.6 | 83.5 | 81.8 | 2.61 | 0.190 |
-| JBFC-A (argument check only) | 72.9 | 82.8 | **83.0** | 2.40 | 0.175 |
-| JBFC-L (latest feedback only) | 72.8 | 83.1 | 82.6 | 2.92 | 0.217 |
-| **JBFC** | **73.5** | **83.7** | 82.8 | 2.90 | 0.221 |
-
-| `max_repairs` | 1 | 2 (default) | 3 | 5 | 7 | 10 |
-|---|---:|---:|---:|---:|---:|---:|
-| Call accuracy | 72.6 | 73.5 | 75.3 | 76.2 | 77.0 | **78.6** |
-| Function accuracy | 83.0 | 83.7 | 85.0 | 86.0 | 86.5 | **87.7** |
-| Mean repairs used | 0.42 | 0.75 | 1.07 | 1.69 | 2.29 | 3.17 |
-| Reached the limit without passing | 33.4% | 31.8% | 30.9% | 30.2% | 29.7% | 29.2% |
-| API seconds | 2.33 | 2.90 | 3.49 | 4.65 | 5.79 | 7.35 |
-| USD / 1k requests | 0.172 | 0.221 | 0.273 | 0.378 | 0.483 | 0.669 |
-
-</details>
-
 ## How it works
 
 ![JBFC: the model proposes a call, Jev checks it, and rejected calls return to the model as a growing feedback history](docs/assets/jbfc-framework.png)
 
 **(a)** The LLM proposes a call $c_t$, one function with its arguments, or no call. A local schema check and Jev judge it: Jev sees the request, the available functions and the call, and answers *right function?* and, when there is a call, *right arguments?* as probabilities of yes. A check passes at 0.8 or more. A rejected call and its verdicts $d_t$ are appended to the feedback history $H_t$, and the model tries again. **(b)** The history goes *before* the original request, oldest first, and is marked as not executed, so the model sees every earlier attempt and can change the function, the arguments, or decide not to call. (The scores in (b) are illustrative.)
 
-Each record is a labeled example: a call the model wrote, with Jev's verdict on it. Like the demonstrations in [many-shot in-context learning](https://arxiv.org/abs/2404.11018), more of them help: the full history beats the latest record alone, and accuracy keeps rising with the repair limit (which also adds attempts). Jev makes those labels in a fraction of a second, without reference answers.
+Each record is a labeled example: a call the model wrote, with Jev's verdict on it. Like the demonstrations in [many-shot in-context learning](https://arxiv.org/abs/2404.11018), more of them seemed to help in our run: the full history scored slightly above the latest record alone, and accuracy rose with the repair limit (which also adds attempts). Jev makes those labels in a fraction of a second, without reference answers.
 
 The loop stops at the first proposal that passes every check, or after `max_repairs` repairs (2 by default). Nothing runs during repairs; `run()` executes only the final, accepted call.
 
@@ -320,6 +250,70 @@ jbfc.JBFC(
 | `attempts` | every proposal with its Jev probabilities and schema errors |
 | `usage`, `latency_s` | tokens for the model and for Jev, and wall time |
 | `trace` | the full record: proposals, verdicts and feedback |
+
+</details>
+
+## Results
+
+> [!NOTE]
+> A small study, not a benchmark claim: one generator (`gpt-5-nano`, reasoning effort `none`), one verifier (`jev-1.13.0`), 3,051 single-turn examples from seven BFCL categories, one run per method, nothing tuned. Every method shares each example's first proposal. Intervals and caveats are in the [paper](paper/main.pdf).
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-categories-dark.png">
+  <img alt="Accuracy by BFCL category, Direct vs JBFC: Simple Python 90.8 to 91.5, Multiple 91.0 to 91.5, Irrelevance 25.4 to 74.2, Live simple 73.6 to 75.2, Live multiple 67.7 to 71.2, Live irrelevance 48.2 to 63.2, total 63.8 to 73.5." src="docs/assets/chart-categories-light.png" width="100%">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-methods-dark.png">
+  <img alt="Call accuracy by method: JBFC 73.5, JBFC-A 72.9, JBFC-L 72.8, JBFC-F 72.6, Self-refine 69.8, Schema repair 65.7, Direct 63.8, with API seconds and USD per 1,000 requests." src="docs/assets/chart-methods-light.png" width="100%">
+</picture>
+
+- Every repair method scored above Direct in this run; JBFC by 9.7 points (paired bootstrap 95% CI 8.5–11.0).
+- Most of that difference comes from requests where no tool applies (Irrelevance: 25.4% → 74.2%). Where a call is needed, the gains are small (Simple Python +0.7, Multiple +0.5): a yes/no verdict says *that* a call is wrong, not *which* call is right.
+- Generic self-review spends three proposals on every request and trailed every Jev-based method, which averaged 1.5 to 1.8 proposals.
+- Keeping the whole history scored 0.7 points above showing only the latest rejection (95% CI 0.1–1.4).
+- Accepted is not the same as correct: calls that passed every check (68.4% of examples) were 90.6% correct.
+- JBFC cost about four times Direct ($0.22 instead of $0.056 per 1,000 requests) and took 1.6 more API seconds.
+
+<a id="more-repairs"></a>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-limits-dark.png">
+  <img alt="JBFC by repair limit: call accuracy 72.6% at r=1, 73.5% at r=2 (default), 75.3% at r=3, 76.2% at r=5, 77.0% at r=7 and 78.6% at r=10; cost per 1,000 requests $0.172, $0.221, $0.273, $0.378, $0.483 and $0.669." src="docs/assets/chart-limits-light.png" width="100%">
+</picture>
+
+Continuing the same run to higher repair limits raised call accuracy from 73.5% at two repairs to 78.6% at ten, at about three times the cost; most newly correct answers (178 of 194) were again cases where no tool applies. The default stays at `max_repairs=2`.
+
+<details>
+<summary><b>All numbers as tables</b></summary>
+
+| Category | Examples | Direct | **JBFC** |
+|---|---:|---:|---:|
+| Simple Python | 400 | 90.8 | **91.5** |
+| Multiple | 200 | 91.0 | **91.5** |
+| Irrelevance | 240 | 25.4 | **74.2** |
+| Live simple | 258 | 73.6 | **75.2** |
+| Live multiple | 1,053 | 67.7 | **71.2** |
+| Live irrelevance | 884 | 48.2 | **63.2** |
+| **Total** (excl. 16 live relevance) | 3,035 | 63.8 | **73.5** |
+
+| Method | Call acc. | Function acc. | Argument acc. | API sec. | USD / 1k requests |
+|---|---:|---:|---:|---:|---:|
+| Direct (no checks) | 63.8 | 74.8 | 81.2 | 1.30 | 0.056 |
+| Schema repair | 65.7 | 76.4 | 81.8 | 1.36 | 0.059 |
+| Self-refine (3 proposals, every request) | 69.8 | 80.0 | 82.3 | 4.01 | 0.190 |
+| JBFC-F (function check only) | 72.6 | 83.5 | 81.8 | 2.61 | 0.190 |
+| JBFC-A (argument check only) | 72.9 | 82.8 | **83.0** | 2.40 | 0.175 |
+| JBFC-L (latest feedback only) | 72.8 | 83.1 | 82.6 | 2.92 | 0.217 |
+| **JBFC** | **73.5** | **83.7** | 82.8 | 2.90 | 0.221 |
+
+| `max_repairs` | 1 | 2 (default) | 3 | 5 | 7 | 10 |
+|---|---:|---:|---:|---:|---:|---:|
+| Call accuracy | 72.6 | 73.5 | 75.3 | 76.2 | 77.0 | 78.6 |
+| Function accuracy | 83.0 | 83.7 | 85.0 | 86.0 | 86.5 | 87.7 |
+| Mean repairs used | 0.42 | 0.75 | 1.07 | 1.69 | 2.29 | 3.17 |
+| Reached the limit without passing | 33.4% | 31.8% | 30.9% | 30.2% | 29.7% | 29.2% |
+| API seconds | 2.33 | 2.90 | 3.49 | 4.65 | 5.79 | 7.35 |
+| USD / 1k requests | 0.172 | 0.221 | 0.273 | 0.378 | 0.483 | 0.669 |
 
 </details>
 
