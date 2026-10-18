@@ -241,3 +241,32 @@
 - `r=2`→`r=7`: 143개가 정답으로, 36개가 오답으로 바뀌었습니다(순증 107개, +3.5%p). 정답이 된 143개 중 132개는 Irrelevance(38)·Live irrelevance(94)로, 거부가 반복되자 생성기가 마침내 호출을 거둔 경우입니다. 이 중 Jev가 최종 수락한 것은 42개뿐이고 나머지는 `execute_last`로 반환된 거부된 최종 제안이라, 한도 소진율은 31.8%에서 29.7%로만 줄었습니다. 오답으로 바뀐 36개는 Live multiple 14, Live irrelevance 10, Simple Python 5, Live simple 5, Multiple 2입니다. `r=7`의 최종 수락률은 70.5%, 수락 정밀도 90.6%입니다.
 - 원고: 4.3의 "Table 3 미실행" 문장을 지우고, 4.4 끝에 "More repairs." 문단(위 수치)을 넣었습니다. Conclusion은 "Seven repairs reached 77.0% at about twice the cost of two"로 바꿨습니다. 4쪽을 지키려고 Conclusion을 줄였고, 4.4 첫 문단의 수락 정밀도 문장을 합쳤으며, 4.3의 수락 지표 문장과 Study Limits의 두 문장(이진 판정 설명, `r=2` 고정 문장)을 짧게 고치고, Irrelevance 문단의 `execute_last` 설명은 "More repairs." 문단으로 옮겼습니다. Abstract는 사실과 다른 문장이 없어 바꾸지 않았습니다("The repair limit is fixed at two."는 주 비교 설정이라 그대로 둠). PDF는 본문 4쪽·참고문헌 5쪽, Type 3 폰트 없음, overfull 없음을 확인했습니다.
 - README에 수정 한도별 표를 넣고 첫 요약에 "77.0% with up to seven repairs"를 더했습니다. 모든 실험이 끝났으므로 `pyproject.toml`의 wheel 패키지에 `src/jbfc`를 더하고 설명·readme·keywords를 고쳤습니다(배포 이름은 그대로라 `uv.lock`은 바뀌지 않으며 `uv lock --check`로 확인). 빌드한 wheel에 `jbfc`와 `jev_fc`가 함께 들어 있고, 새 가상환경(Python 3.11, 3.13)에 설치해 `import jbfc`와 테스트가 통과함을 확인했습니다.
+
+## Table 3 확장: r=10, Jev 직접 호출 (2026-10-18)
+
+- 사용자 요청: `r`이 클수록 정확도가 오르므로 `r=10`도 표에 넣습니다. `r=7` 확장 실행을 그대로 이어 `r=10`까지 돌렸으므로 `r≤7` 값은 바뀌지 않습니다(`scripts/table3.py`가 확장 사슬 `r10 → r7 → Table 2`를 따라가며 `r=7`·`r=2`로 자른 기록이 각 원본과 같은지 확인).
+- 첫 시도는 사전 점검에서 Jev HTTP 402로 멈췄습니다(게이트웨이 뒤 TypeSafe 계정의 결제 문제, 기록 없음). 사용자가 `.env`의 `TYPESAFE_API_KEY`에 키를 넣었고, Table 3 스크립트만 Jev를 직접 부르도록 고쳤습니다(`JEV_GATEWAY`/`--jev-gateway`, `make table3` 기본값 `direct`). `src/jev_fc`는 그대로이므로 코드 해시(`c167522df5f566dc`)가 유지됩니다. 경로 외 설정이 다르면 요청 전에 거부하며, 매니페스트의 `jev_routes`가 시도 0–7은 게이트웨이, 8–10은 직접임을 기록합니다. 표 캡션에 "Repairs beyond r=7 call Jev directly."가 자동으로 들어가고, 4.2에도 한 구절을 넣었습니다.
+- 실행: `make table3 WORKERS=8`, 13:50–14:00 KST(약 10분). 3,051개 완료, API 오류 0건. 새 시도 2,699개(Jev 요청 2,698개; 1개는 콘텐츠 필터에 막힌 요청이라 로컬 검사에서 거부), 비용 약 $0.57(Table 3 확장 누계 약 $1.37). 읽을 수 없는 응답은 `live_irrelevance_651-206-0`의 7·8번째 수정 두 건(콘텐츠 필터)입니다.
+
+| r | Call | Func. | 평균 수정 | 한도 소진 | 초 | USD/1k |
+|---:|---:|---:|---:|---:|---:|---:|
+| 7 | 77.0 | 86.5 | 2.29 | 29.7% | 5.79 | 0.483 |
+| 10 | 78.6 | 87.7 | 3.17 | 29.2% | 7.35 | 0.669 |
+
+- `r=2`→`r=10`: 194개가 정답으로, 39개가 오답으로 바뀌었습니다(순증 155개, +5.1%p). 정답이 된 194개 중 178개가 Irrelevance(42)·Live irrelevance(136)이고, 그중 최종 수락은 52개뿐입니다. `r=7`→`r=10`만 보면 87개 정답, 39개 오답(순증 48개)입니다. `r=10`의 최종 수락률 70.9%, 수락 정밀도 90.7%입니다.
+- 원고: 4.2 수정 한도 문단을 `r=10`으로, 4.4 "More repairs."를 위 수치로, Conclusion을 "ten repairs reached 78.6% at about three times the cost of two"로 고쳤습니다.
+
+## Many-Shot In-Context Learning 추가 (2026-10-18)
+
+- 사용자 요청: Agarwal et al., "Many-Shot In-Context Learning"(NeurIPS 2024, 37:76930–76966, arXiv:2404.11018)을 Related Work에 넣고, Jev가 문맥 학습 예제를 빠르게 만들 수 있다는 논리를 본문에 더합니다. 고정 절인 Related Work는 사용자의 명시적 요청에 따라 "Accumulated prompts." 문단 끝에 두 문장만 더했습니다(논문의 Reinforced ICL: 정답 여부로 거른 모델 생성 풀이). `paper/references.bib`, 원고 참고문헌 [17], `docs/literature.md`에 함께 넣었습니다.
+- 본문: 4.4에 "Records as in-context examples." 문단을 넣었습니다. 기록 하나는 모델이 만든 호출과 Jev 판정의 쌍이므로 정답 없이 만든 라벨 예제로 볼 수 있고, Jev 라벨 속도는 Table 2 기록에서 측정했습니다(Jev 판정 평균 0.30초, 중앙 0.27초, p95 0.43초, 입력 약 1,408토큰 ≈ 1,000건당 $0.06; 생성기 제안 평균 1.35초). 근거는 같은 시도 수에서 누적 기록이 최신 기록보다 0.7점 높다는 결과(**JBFC** − **JBFC-L**, 95% 구간 0.1–1.4)와 한도에 따른 정확도 상승(Table 3, 한도는 시도 수도 늘림)입니다. Conclusion도 "the history, in effect Jev-labeled in-context examples"로 고쳤습니다.
+- 주장의 범위: 실험이 보여 주는 것은 같은 요청에 대한 Jev 라벨 시도가 문맥에 있으면 도움이 된다는 것까지입니다. 다른 요청을 위한 시연 예제(진짜 many-shot ICL)로 쓰는 실험은 하지 않았으므로 "입증"이 아니라 "일치하는 결과"로 쓰고, 다른 요청에 대한 효과는 검증하지 않았다고 본문에 적었습니다.
+- 4쪽 유지: 추가 문단과 Table 3 행 때문에 넘친 약 20줄을 실험 절과 결론에서 줄였습니다. 수치는 하나도 빼지 않았고 표에 있는 값을 되풀이한 문장(4.4 첫 문단의 시간·비용), 중복 설명(4.1의 AST·범주 설명 통합, 4.3 비용 문장, Study Limits 문장 통합, 결론의 마지막 문장, 각주)을 줄였습니다. PDF는 본문 4쪽·참고문헌 5쪽, Type 3 폰트 없음, overfull·미정의 참조 없음을 확인했습니다.
+
+## README 디자인, MIT 라이선스 (2026-10-18)
+
+- 사용자 요청: README를 더 화려하게(예: affaan-m/ECC), GitHub Trending 인기 저장소의 공통점을 반영, 라이선스는 MIT.
+- 살펴본 저장소(2026-10-18 Trending): affaan-m/ECC, morluto/rea, obra/superpowers, mksglu/context-mode, JuliusBrussee/caveman. 공통점: 첫 화면의 히어로 이미지나 굵은 한 줄 소개, 목적별 배지 줄(라이선스 포함), 점으로 구분한 앵커 내비게이션, 앞쪽의 전후 비교 데모와 설치 명령, 굵은 합계가 있는 수치 표와 접는 상세(`<details>`), 약점을 숨기지 않는 솔직한 노트, GitHub 알림 블록, FAQ, License 절. 제목에는 이모지를 거의 쓰지 않습니다.
+- 반영: 직접 만든 히어로 배너(`docs/assets/jbfc-hero.png`), 결과·공급자·메타 배지 3줄, 앵커 내비게이션, 실제 실행의 수정 예 두 개를 `diff` 색 블록으로, 기능 표(6칸), 결과 차트 3개(범주별 Direct→**JBFC**, 방법별 정확도·시간·비용, 수정 한도별 정확도·비용)를 라이트·다크 두 벌로 `<picture>`에 넣고, 약점 노트("The rows that are not green"), 표는 `<details>`, FAQ, License 절을 더했습니다. 차트 색은 검증한 범주형 팔레트(파랑·주황, 두 모드 모두 색각 이상 시뮬레이션 통과)이고, 모든 수치는 원고 표와 같습니다. 이미지 생성 코드는 `docs/assets/src`(Playwright·Chromium·Inter 필요)에 있으며 `data.json`이 원고 표와 같아야 합니다.
+- 배지는 shields.io에서 그려지는데, 작업 환경 두 곳 모두에서 shields.io에 접속할 수 없어 미리 보지 못했습니다. 로고 이름이 Simple Icons에 없으면 로고 없이 표시됩니다.
+- `LICENSE`(MIT, Copyright (c) 2026 Minhyeong Yu)를 추가하고 `pyproject.toml`에 `license = "MIT"`를 넣었습니다. wheel 메타데이터에 `License-Expression: MIT`와 라이선스 파일이 들어가고, `uv.lock`은 바뀌지 않습니다. BFCL 데이터는 저장소에 없고 `make prepare`가 받아 옵니다.

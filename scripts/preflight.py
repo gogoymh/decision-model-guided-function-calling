@@ -24,6 +24,16 @@ from jev_fc.jev import JevAPIError, JevVerifier  # noqa: E402
 from jev_fc.llm import FunctionCallingLLM, LLMAPIError  # noqa: E402
 
 
+# What a Jev HTTP status usually means; the run stops before any record is written.
+JEV_HINTS = {
+    401: "the key was not accepted; check APIM_SUBSCRIPTION_KEY (APIM) or TYPESAFE_API_KEY (direct).",
+    402: "the TypeSafe account behind this route has no credit or reached its spending limit; "
+         "add credit or raise the limit (for APIM, ask the gateway owner), then run the same command again.",
+    403: "this key has no access to the Jev route or model.",
+    429: "rate or quota limit; wait and run the same command again, or lower WORKERS.",
+}
+
+
 def provider_message(response):
     try:
         error = response.json().get("error")
@@ -62,16 +72,19 @@ def main(env_file, efforts=("none", "minimal", "low", "")):
         print("STOPPED: no working generator setting. Send these lines to Claude.")
         return 2
     effort, out = chosen
-    verifier = JevVerifier(max_retries=0)
+    verifier = JevVerifier(max_retries=0, gateway=os.getenv("JEV_GATEWAY") or None)
     try:
         started = time.perf_counter()
         check = verifier.verify(example, out["calls"])
         if check["api_calls"] == 0:  # unreadable proposal: ask the function question about no call
             check = verifier.verify(example, [])
-        print(f"Jev OK: model={check['model']} {time.perf_counter() - started:.1f}s "
+        print(f"Jev OK: model={check['model']} route={verifier.gateway} {time.perf_counter() - started:.1f}s "
               f"p_function={check['function_probability']} p_arguments={check['arguments_probability']}")
     except JevAPIError as exc:
         print(f"Jev failed: HTTP {exc.status_code}: {exc}")
+        hint = JEV_HINTS.get(exc.status_code)
+        if hint:
+            print(f"Likely cause: {hint}")
         print("STOPPED: Jev did not answer. Send these lines to Claude.")
         return 3
     finally:

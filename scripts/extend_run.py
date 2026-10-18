@@ -8,9 +8,13 @@ through the same pipeline and checked against the record, so every new request i
 exactly the one an uninterrupted run with the larger limit would have sent.
 
 The source run must come from the same code (source_sha256) and the same models,
-interfaces and prices. The result is a normal run directory with methods=[jev_joint].
+interfaces and prices. Only Jev's route may change, and only on request
+(--jev-gateway or JEV_GATEWAY): the same Jev model then answers the same questions
+directly or through the gateway, and the manifest lists the route of each attempt
+range in jev_routes. The result is a normal run directory with methods=[jev_joint].
 
 Usage: python scripts/extend_run.py SOURCE_RUN --max-repairs 7 --output OUT [--workers 8] [--resume]
+                                   [--jev-gateway direct|apim]
 """
 
 import argparse
@@ -43,6 +47,8 @@ SAME_AS_SOURCE = ("llm_model", "llm_base_url", "llm_provider", "llm_api_style", 
                   "llm_auth_header", "llm_timeout_s", "llm_max_retries", "reasoning_effort", "temperature",
                   "max_completion_tokens", "jev_model", "jev_base_url", "jev_gateway", "jev_endpoint",
                   "jev_timeout_s", "jev_max_retries", "prices_usd_per_million")
+# How requests reach Jev; may differ from the source run only when requested and recorded.
+JEV_ROUTE = ("jev_gateway", "jev_base_url", "jev_endpoint")
 
 
 def current_settings(generator, verifier):
@@ -56,6 +62,24 @@ def current_settings(generator, verifier):
         "jev_endpoint": verifier.base_url + "/v1/systemone", "jev_timeout_s": verifier.timeout,
         "jev_max_retries": verifier.max_retries, "prices_usd_per_million": cli._prices(generator),
     }
+
+
+def compare_settings(source, current, jev_gateway=None):
+    """Settings that differ from the source run, and the Jev route fields to record.
+
+    Jev's route may differ only when jev_gateway was requested. Then, and whenever the
+    source already lists routes, jev_routes gives the route used from each attempt on.
+    """
+    route_change = [key for key in JEV_ROUTE if current[key] != source.get(key)]
+    changed = [key for key in SAME_AS_SOURCE if current[key] != source.get(key)
+               and not (jev_gateway and key in JEV_ROUTE)]
+    record = {}
+    if (route_change and jev_gateway) or "jev_routes" in source:
+        routes = deepcopy(source.get("jev_routes") or [{"first_attempt": 0, **{key: source.get(key) for key in JEV_ROUTE}}])
+        if route_change:
+            routes.append({"first_attempt": source["max_repairs"] + 1, **{key: current[key] for key in JEV_ROUTE}})
+        record = {"jev_routes": routes, **{key: current[key] for key in JEV_ROUTE}}
+    return changed, record
 
 
 def _sha256(path):
@@ -155,6 +179,9 @@ def main(argv=None):
     parser.add_argument("--checker", default=str(ROOT / "data/bfcl/upstream/ast_checker.py"))
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--resume", action="store_true")
+    parser.add_argument("--jev-gateway", choices=("direct", "apim"), default=os.getenv("JEV_GATEWAY") or None,
+                        help="send Jev requests directly to TypeSafe (TYPESAFE_API_KEY) or through the gateway; "
+                             "recorded in the manifest when it differs from the source run")
     args = parser.parse_args(argv)
     load_dotenv(ROOT / ".env")
     if args.workers < 1:
@@ -167,14 +194,20 @@ def main(argv=None):
     examples = {e["id"]: e for e in load_examples(data_path)}
 
     generator = cli.FunctionCallingLLM()
-    verifier = cli.JevVerifier(function_threshold=source["threshold"], arguments_threshold=source["threshold"])
+    route_option = {"gateway": args.jev_gateway} if args.jev_gateway else {}
+    verifier = cli.JevVerifier(function_threshold=source["threshold"], arguments_threshold=source["threshold"],
+                               **route_option)
     try:
         current = current_settings(generator, verifier)
-        changed = [key for key in SAME_AS_SOURCE if current[key] != source.get(key)]
+        changed, route = compare_settings(source, current, args.jev_gateway)
         if changed:
             raise ValueError("Settings differ from the source run: " + ", ".join(changed))
+        if route.get("jev_routes") and len(route["jev_routes"]) > len(source.get("jev_routes") or [None]):
+            print(f"Jev route: {current['jev_gateway']} ({current['jev_base_url']}) from attempt "
+                  f"{source['max_repairs'] + 1}; earlier attempts used {source.get('jev_gateway')}.", flush=True)
         skip = {"config_id", "created_at", "methods", "max_repairs", "expected_records", "workers"}
         settings = {key: value for key, value in source.items() if key not in skip}
+        settings.update(route)
         settings.update(methods=[METHOD], max_repairs=args.max_repairs, workers=args.workers,
                         expected_records=len(joint),
                         extends={"run_dir": _relative(source_dir), "config_id": source["config_id"],

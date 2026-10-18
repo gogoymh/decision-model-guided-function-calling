@@ -2,6 +2,7 @@
 
 import hashlib
 import importlib.util
+import json
 from copy import deepcopy
 from pathlib import Path
 
@@ -82,18 +83,20 @@ def summary(accuracy, model="gpt-5-nano"):
         "mean_latency_s": 3.0, "mean_cost_usd": 2e-4}}}
 
 
-def test_unrun_table3_lists_the_five_limits():
+def test_unrun_table3_lists_the_six_limits():
     table = table3.latex_table3()
-    for r in (1, 2, 3, 5, 7):
+    assert table3.LIMITS == (1, 2, 3, 5, 7, 10)
+    for r in table3.LIMITS:
         assert f"${r}$ & -- & -- & -- & -- & -- & -- \\\\" in table
     assert "Bold" not in table and "-- means unrun." in table and r"\label{tab:repairs}" in table
-    assert "extended to $r=7$, so $r=2$ matches it." in table
+    assert "extended to $r=10$, so $r=2$ matches it." in table
 
 
 def test_filled_table3_bolds_the_best_accuracy_and_drops_the_unrun_note():
-    table = table3.latex_table3({1: summary(.70), 2: summary(.73), 3: summary(.74), 5: summary(.74), 7: summary(.72)})
+    table = table3.latex_table3({1: summary(.70), 2: summary(.73), 3: summary(.74), 5: summary(.74), 7: summary(.72),
+                                 10: summary(.71)})
     assert r"$3$ & \textbf{74.0} & \textbf{80.0} & 0.70 & 30.0 & 3.00 & 0.200 \\" in table
-    assert r"$5$ & \textbf{74.0} &" in table and r"$7$ & 72.0 &" in table
+    assert r"$5$ & \textbf{74.0} &" in table and r"$7$ & 72.0 &" in table and r"$10$ & 71.0 &" in table
     assert r"Generator: \texttt{gpt-5-nano}." in table and "Bold marks the highest accuracy" in table
     assert "--" not in table
 
@@ -103,13 +106,42 @@ def test_table3_paper_check_follows_the_paper_protocol_except_the_limit():
     if not path.exists():
         pytest.skip("Requires prepared BFCL files")
     manifest = {**PAPER_SETTINGS, "ids": [row["id"] for row in load_examples(path)], "methods": ["jev_joint"],
-                "max_repairs": 7, "prices_usd_per_million": dict(PAPER_PRICES),
-                "dataset_sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "extends": {"max_repairs": 2}}
-    table3.check_paper_protocol({"manifest": manifest})
-    for change in ({"reasoning_effort": "low"}, {"extends": {"max_repairs": 3}}, {"ids": ["simple_python_0"]},
-                   {"llm_model": "gpt-5.4-mini-2026-03-17"}):
+                "max_repairs": 10, "prices_usd_per_million": dict(PAPER_PRICES),
+                "dataset_sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "extends": {"max_repairs": 7}}
+    root = {**PAPER_SETTINGS, "methods": ["direct", "jev_joint"], "max_repairs": 2,
+            "prices_usd_per_million": dict(PAPER_PRICES)}
+    table3.check_paper_protocol({"manifest": manifest}, root)
+    for change in ({"reasoning_effort": "low"}, {"ids": ["simple_python_0"]}, {"llm_model": "gpt-5.4-mini-2026-03-17"}):
         with pytest.raises(ValueError):
-            table3.check_paper_protocol({"manifest": {**manifest, **change}})
+            table3.check_paper_protocol({"manifest": {**manifest, **change}}, root)
+    for change in ({"max_repairs": 3}, {"extends": {"max_repairs": 2}}, {"reasoning_effort": "low"}):
+        with pytest.raises(ValueError, match="r=2 run"):
+            table3.check_paper_protocol({"manifest": manifest}, {**root, **change})
+
+
+def make_run(directory, records, extends=None):
+    directory.mkdir()
+    (directory / "records.jsonl").write_text(records)
+    manifest = {"config_id": f"config-{directory.name}", "max_repairs": int(directory.name[1:]),
+                "methods": ["jev_joint"] if extends else ["direct", "jev_joint"]}
+    if extends:
+        manifest["extends"] = {"run_dir": str(extends), "config_id": f"config-{extends.name}",
+                               "max_repairs": int(extends.name[1:]),
+                               "records_sha256": hashlib.sha256((extends / "records.jsonl").read_bytes()).hexdigest()}
+    (directory / "manifest.json").write_text(json.dumps(manifest))
+    return directory
+
+
+def test_table3_follows_a_chain_of_extensions_back_to_the_original_run(tmp_path):
+    root = make_run(tmp_path / "r2", "root\n")
+    middle = make_run(tmp_path / "r7", "middle\n", extends=root)
+    top = make_run(tmp_path / "r10", "top\n", extends=middle)
+    assert table3.check_extension(top) == (top, [middle, root])
+    with pytest.raises(ValueError, match="extend_run"):
+        table3.check_extension(root)
+    (root / "records.jsonl").write_text("changed\n")
+    with pytest.raises(ValueError, match="records changed"):
+        table3.check_extension(top)
 
 
 def test_table3_template_fills_only_its_block(tmp_path):
@@ -118,3 +150,54 @@ def test_table3_template_fills_only_its_block(tmp_path):
     table3.main(["--template", "--paper", str(paper)])
     source = paper.read_text()
     assert "% BEGIN AUTO RESULTS\nold\n% END AUTO RESULTS" in source and r"\label{tab:repairs}" in source
+
+
+APIM = {"jev_gateway": "apim", "jev_base_url": "https://gw.example/llm/typesafe",
+        "jev_endpoint": "https://gw.example/llm/typesafe/v1/systemone"}
+DIRECT = {"jev_gateway": "direct", "jev_base_url": "https://api.typesafe.ai",
+          "jev_endpoint": "https://api.typesafe.ai/v1/systemone"}
+
+
+def settings(**changes):
+    values = {key: f"same-{key}" for key in extend_run.SAME_AS_SOURCE}
+    values.update(APIM, jev_model="jev-1.13.0")
+    return {**values, **changes}
+
+
+def test_jev_route_may_change_only_on_request_and_is_recorded():
+    source = {**settings(), "max_repairs": 7}
+    assert extend_run.compare_settings(source, settings()) == ([], {})
+    changed, record = extend_run.compare_settings(source, settings(**DIRECT))
+    assert set(changed) == set(extend_run.JEV_ROUTE) and record == {}
+    changed, record = extend_run.compare_settings(source, settings(**DIRECT), jev_gateway="direct")
+    assert changed == [] and record == {**DIRECT, "jev_routes": [{"first_attempt": 0, **APIM},
+                                                                  {"first_attempt": 8, **DIRECT}]}
+    changed, _ = extend_run.compare_settings(source, settings(**DIRECT, jev_model="jev-2"), jev_gateway="direct")
+    assert changed == ["jev_model"]
+    # A later extension on the same route keeps the recorded routes.
+    later = {**source, **record, "max_repairs": 10}
+    assert extend_run.compare_settings(later, settings(**DIRECT), jev_gateway="direct") == (
+        [], {**DIRECT, "jev_routes": record["jev_routes"]})
+
+
+def test_table3_accepts_a_recorded_jev_route_and_states_it_in_the_caption():
+    path = Path("data/bfcl/examples.jsonl")
+    if not path.exists():
+        pytest.skip("Requires prepared BFCL files")
+    routes = [{"first_attempt": 0, **APIM}, {"first_attempt": 8, **DIRECT}]
+    manifest = {**PAPER_SETTINGS, "ids": [row["id"] for row in load_examples(path)], "methods": ["jev_joint"],
+                "max_repairs": 10, "prices_usd_per_million": dict(PAPER_PRICES),
+                "dataset_sha256": hashlib.sha256(path.read_bytes()).hexdigest(), **DIRECT, "jev_routes": routes}
+    root = {**PAPER_SETTINGS, **APIM, "methods": ["direct", "jev_joint"], "max_repairs": 2,
+            "prices_usd_per_million": dict(PAPER_PRICES)}
+    table3.check_paper_protocol({"manifest": manifest}, root)
+    for bad in ([{"first_attempt": 0, **DIRECT}, {"first_attempt": 8, **DIRECT}], [{"first_attempt": 8, **DIRECT}],
+                [{"first_attempt": 0, **APIM}, {"first_attempt": 8, **APIM}]):
+        with pytest.raises(ValueError, match="Jev routes"):
+            table3.check_paper_protocol({"manifest": {**manifest, "jev_routes": bad}}, root)
+    with pytest.raises(ValueError):  # a different Jev model is never a route change
+        table3.check_paper_protocol({"manifest": {**manifest, "jev_model": "jev-2"}}, root)
+    final = {**summary(.77), "manifest": {"llm_model": "gpt-5-nano", "jev_routes": routes}}
+    table = table3.latex_table3({r: summary(.7) for r in (1, 2, 3, 5, 7)} | {10: final})
+    assert r"Repairs beyond $r=7$ call \textit{Jev} directly." in table
+    assert "call \\textit{Jev}" not in table3.latex_table3({r: summary(.7) for r in table3.LIMITS})

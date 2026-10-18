@@ -121,7 +121,7 @@ Gorilla studies API-call generation~\cite{patil2024gorilla}; ToolLLM studies too
 Self-Refine uses self-generated feedback~\cite{madaan2023selfrefine}, Reflexion uses written feedback~\cite{shinn2023reflexion}, and CRITIC uses feedback from tools~\cite{gou2024critic}. Self-correction can turn correct answers into wrong ones~\cite{huang2024selfcorrect}, so we measure both fixes and new errors. ToolVerifier compares alternatives to check tool choice and parameters separately~\cite{mekala2024toolverifier}. ToolCritic identifies tool-use errors and returns feedback~\cite{hamad2025toolcritic}. \textbf{JBFC} checks complete proposals with a fixed external model through an API and limits repairs.
 
 \paragraph{Accumulated prompts.}
-ReAct combines reasoning with actions and observations from an environment~\cite{yao2023react}. Our method uses a similar idea of carrying earlier feedback into the next prompt. Each record contains a proposed function call and verification results, rather than an execution result. The LLM receives all records before the unchanged user request. We do not require a generated reasoning trace or run functions during repair.
+ReAct combines reasoning with actions and observations from an environment~\cite{yao2023react}. Our method uses a similar idea of carrying earlier feedback into the next prompt. Each record contains a proposed function call and verification results, rather than an execution result. The LLM receives all records before the unchanged user request. We do not require a generated reasoning trace or run functions during repair. Many-shot in-context learning often improves as prompts grow to hundreds or thousands of examples, and model-generated rationales kept only when their answers are correct can stand in for human-written ones~\cite{agarwal2024manyshot}. Our records are likewise model-generated examples, labeled by \textit{Jev} instead of reference answers.
 
 \paragraph{\textit{Jev} as a judge.}
 Li et al.'s \emph{JEV-as-a-Judge}~\cite{li2026jevjudge} checks finished outputs with probabilities for defined verdicts. If a verdict is uncertain, an independent, stronger judge decides. With fixed rules for when to use the stronger judge, it lowers judging cost while keeping similar accuracy on some tasks. It has limits on difficult reasoning, misleading answer styles, and writing judged without reference information. The study does not test tool or action selection inside agents. \textbf{JBFC} checks proposed function calls and returns failed checks to the same generator for revision. We test the specific design of \textbf{JBFC}.
@@ -191,7 +191,7 @@ When a proposal passes all applicable checks, we return it. If the repair limit 
 
 \section{Experiments}
 \subsection{Data and Evaluation}
-We prepare 3,051 BFCL examples from seven categories at repository revision \texttt{6ea57973c7a6}\footnote{Full revision: \nolinkurl{6ea57973c7a6097fd7c5915698c54c17c5b1b6c8}. The saved setup file lists source URLs, file hashes, and format changes; each run's manifest lists the example IDs.}. Table~\ref{tab:categories} shows the example counts and results. We use all examples and tune nothing on them: the repair limit is fixed at $r=2$ and the \textit{Jev} thresholds at 0.8.
+We prepare 3,051 BFCL examples from seven categories at repository revision \texttt{6ea57973c7a6}\footnote{Full revision: \nolinkurl{6ea57973c7a6097fd7c5915698c54c17c5b1b6c8}. The saved setup lists source URLs, hashes, and format changes.}. We use all examples and tune nothing on them: the repair limit is fixed at $r=2$ and the \textit{Jev} thresholds at 0.8.
 
 % BEGIN AUTO CATEGORIES
 \begin{table}[t]
@@ -217,14 +217,12 @@ Total & 3051 & 63.8 & \textbf{73.5}\\
 \end{table}
 % END AUTO CATEGORIES
 
-For categories with reference calls, the original Python abstract syntax tree (AST) checker tests function names and arguments against allowed answers. Irrelevance categories require no call. Live relevance checks only call presence, so we exclude it from main accuracy and Brier scores. The main score is a micro-average over 3,035 examples; category scores show what the larger live categories may hide.
-
-BFCL's ``multiple'' categories offer several functions but no parallel calls; we exclude parallel, multi-turn, web-search, memory, and execution categories. AST checks compare call structure with annotated alternatives, not execution success.
+The original Python abstract syntax tree (AST) checker compares function names and arguments with allowed answers, not execution success; irrelevance categories require no call. Live relevance checks only call presence, so the main score, a micro-average, covers 3,035 examples. BFCL's ``multiple'' categories offer several functions but no parallel calls; we exclude parallel, multi-turn, web-search, memory, and execution categories.
 
 \subsection{Models and Methods}
-The generator is the Azure OpenAI deployment \texttt{gpt-5-nano} (\texttt{gpt-5-nano-2025-08-07}), with reasoning effort \texttt{none} and at most 4,096 output tokens; \textit{Jev} is pinned to \texttt{jev-1.13.0}. We use Chat Completions and System One through an APIM gateway and convert BFCL schemas to JSON Schema with API-safe function names. Each method runs once per example with fixed prompts. Generations cut off at the output limit or blocked by the provider's filter are unreadable proposals and count as wrong.
+The generator is the Azure OpenAI deployment \texttt{gpt-5-nano} (\texttt{gpt-5-nano-2025-08-07}), with reasoning effort \texttt{none} and at most 4,096 output tokens; \textit{Jev} is pinned to \texttt{jev-1.13.0}. We use Chat Completions and System One through an APIM gateway (System One directly for repairs beyond $r=7$) and convert BFCL schemas to JSON Schema with API-safe function names. Generations cut off at the output limit or blocked by the provider's filter are unreadable proposals and count as wrong.
 
-We compare seven methods, sharing one initial proposal per example. \emph{Direct} uses the initial proposal; \emph{Schema-only} repairs schema errors. \emph{Self-refine} uses generic self-review in all $r$ repairs, not the full Self-Refine method~\cite{madaan2023selfrefine}. \textbf{JBFC-F} and \textbf{JBFC-A} obtain applicable \texttt{Noul} judgments but expose and require only the function or argument verdict, plus schema checks. \textbf{JBFC-A} accepts no call on schema checks alone. \textbf{JBFC} requires all applicable checks. \textbf{JBFC-L} shares its settings and initial proposal but shows only the latest rejected proposal and feedback. Other repair methods show all earlier records before the request. Costs can differ. With $r=2$, repair methods make at most three proposals, and the \textbf{JBFC} and \textbf{JBFC-L} prompts differ only in the second repair.
+We compare seven methods, sharing one initial proposal per example. \emph{Direct} uses the initial proposal; \emph{Schema-only} repairs schema errors. \emph{Self-refine} uses generic self-review in all $r$ repairs, not the full Self-Refine method~\cite{madaan2023selfrefine}. \textbf{JBFC-F} and \textbf{JBFC-A} obtain applicable \texttt{Noul} judgments but expose and require only the function or argument verdict, plus schema checks. \textbf{JBFC-A} accepts no call on schema checks alone. \textbf{JBFC} requires all applicable checks. \textbf{JBFC-L} shares its settings and initial proposal but shows only the latest rejected proposal and feedback. Other repair methods show all earlier records before the request. With $r=2$, repair methods make at most three proposals, and the \textbf{JBFC} and \textbf{JBFC-L} prompts differ only in the second repair.
 
 % BEGIN AUTO RESULTS
 \begin{table}[t]
@@ -249,7 +247,7 @@ Self-refine & 69.8 & 80.0 & 82.3 & 4.01 & 0.190 \\
 % END AUTO RESULTS
 
 \paragraph{Repair limits.}
-Table~\ref{tab:repairs} varies $r$ for \textbf{JBFC}. Neither model sees $r$ and nothing runs before the end, so a shorter trajectory is the start of a longer one. We continue the $r=2$ trajectories of Table~\ref{tab:main} that reach the limit up to $r=7$ and cut them at each limit.
+Table~\ref{tab:repairs} varies $r$ for \textbf{JBFC}. Since neither model sees $r$ and nothing runs before the end, we continue the $r=2$ trajectories of Table~\ref{tab:main} that reach the limit up to $r=10$ and cut them at each limit.
 
 % BEGIN AUTO REPAIRS
 \begin{table}[t]
@@ -263,46 +261,50 @@ $1$ & 72.6 & 83.0 & 0.42 & 33.4 & 2.33 & 0.172 \\
 $2$ & 73.5 & 83.7 & 0.75 & 31.8 & 2.90 & 0.221 \\
 $3$ & 75.3 & 85.0 & 1.07 & 30.9 & 3.49 & 0.273 \\
 $5$ & 76.2 & 86.0 & 1.69 & 30.2 & 4.65 & 0.378 \\
-$7$ & \textbf{77.0} & \textbf{86.5} & 2.29 & 29.7 & 5.79 & 0.483 \\
+$7$ & 77.0 & 86.5 & 2.29 & 29.7 & 5.79 & 0.483 \\
+$10$ & \textbf{78.6} & \textbf{87.7} & 3.17 & 29.2 & 7.35 & 0.669 \\
 \bottomrule
 \end{tabular}
-\caption{\textbf{JBFC} on all BFCL examples by repair limit $r$, cut from the run of Table~\ref{tab:main} extended to $r=7$, so $r=2$ matches it. Generator: \texttt{gpt-5-nano}. Bold marks the highest accuracy in each column. Accuracy (\%) excludes live relevance; Exhaust.: examples reaching the limit without passing (\%).}
+\caption{\textbf{JBFC} on all BFCL examples by repair limit $r$, cut from the run of Table~\ref{tab:main} extended to $r=10$, so $r=2$ matches it. Generator: \texttt{gpt-5-nano}. Repairs beyond $r=7$ call \textit{Jev} directly. Bold marks the highest accuracy in each column. Accuracy (\%) excludes live relevance; Exhaust.: examples reaching the limit without passing (\%).}
 \label{tab:repairs}
 \end{table}
 % END AUTO REPAIRS
 
 \subsection{Measures, Cost, and Uncertainty}
-We report final call accuracy, function accuracy, and argument accuracy given the correct function, each with its denominator; comparing initial and final candidates shows fixes and new errors. Separately from correctness, we record acceptance (coverage, accepted precision, false acceptance and rejection), repairs, API errors, and Brier scores.
+We report call accuracy, function accuracy, and argument accuracy given the correct function; comparing initial and final proposals shows fixes and new errors. We also record acceptance (coverage, accepted precision, false acceptance and rejection), repairs, API errors, and Brier scores.
 
-Costs count all generation and verification work, including the growing history, with the shared initial call charged to each method; times are mean API seconds without retry waits. Missing usage or prices stay unavailable, not zero. Prices per million tokens are \$0.05/\$0.005/\$0.40 for uncached/cached/output \texttt{gpt-5-nano} tokens and \$0.042 for \textit{Jev} input (output free), without gateway fees.
+Costs count all generation and verification work, including the growing history and the shared initial call; times are mean API seconds without retry waits. Prices per million tokens are \$0.05/\$0.005/\$0.40 for uncached/cached/output \texttt{gpt-5-nano} tokens and \$0.042 for \textit{Jev} input (output free), without gateway fees.
 
 We compare repairs with Direct and \textbf{JBFC} with \textbf{JBFC-L}, matching examples and initial proposals, and bootstrap example IDs 2,000 times with seed 1729 for 95\% intervals.
 
 \subsection{Results}
-Table~\ref{tab:categories} compares Direct with \textbf{JBFC}. \textbf{JBFC} raises overall accuracy from 63.8\% to 73.5\% (paired difference 9.7 points, 95\% interval 8.5--11.0). It turns 339 wrong initial proposals into correct ones and 44 correct ones into wrong ones. It uses 0.75 repairs per example on average; 31.8\% of examples reach the limit without passing, and the 68.4\% that pass are 90.6\% correct. Mean API time rises from 1.30 to 2.90 seconds, and cost from \$0.056 to \$0.221 per 1,000 requests.
+In Table~\ref{tab:categories}, \textbf{JBFC} raises overall accuracy from 63.8\% to 73.5\% (paired difference 9.7 points, 95\% interval 8.5--11.0). It fixes 339 wrong initial proposals and breaks 44 correct ones. It uses 0.75 repairs per example on average; 31.8\% of examples reach the limit without passing, and the 68.4\% that pass are 90.6\% correct.
 
 \paragraph{Comparison of methods.}
-In Table~\ref{tab:main}, every repair method beats Direct, with paired 95\% intervals above zero: by 2.0 points for schema repair, 6.1 for self-refine, 8.8 for \textbf{JBFC-F}, 9.2 for \textbf{JBFC-A}, and 9.0 for \textbf{JBFC-L}. Self-refine makes three proposals for every request yet stays below the \textit{Jev}-based methods, which average 1.5 to 1.8. Keeping all earlier records adds 0.7 points over the latest one alone (\textbf{JBFC} minus \textbf{JBFC-L}, 95\% interval 0.1--1.4) at nearly the same cost.
+In Table~\ref{tab:main}, every repair method beats Direct (paired 95\% intervals above zero): schema repair by 2.0 points, self-refine 6.1, \textbf{JBFC-F} 8.8, \textbf{JBFC-A} 9.2, and \textbf{JBFC-L} 9.0. Self-refine makes three proposals per request yet trails the \textit{Jev}-based methods, which average 1.5 to 1.8.
 
 \paragraph{Why no-call cases gain most.}
-Every Irrelevance example offers one unrelated function, and Direct calls it in 179 of 240 cases; two further Direct runs gave 25.4\% and 27.1\% accuracy. \textit{Jev}'s function question separates these calls from correct no-calls: its median probability is 0.09 for the calls and 0.95 for the 61 initial no-calls. \textbf{JBFC} rejects 166 of the 179 calls, and after the feedback the generator withholds the call in 118 of them. The 62 errors are 13 accepted calls, 48 cases where the generator kept calling, and one correct no-call that became a call after a false rejection. Live irrelevance offers 2.3 functions on average and real user requests. There, \textit{Jev} separates less sharply (median 0.53 for unnecessary calls and 0.87 for correct no-calls), the generator drops only 158 of 432 rejected calls, and 25 correct no-calls become calls after a false rejection. In categories with reference calls, \textbf{JBFC} rejects 334 of 463 wrong initial calls but fixes only 63 and breaks 18. A binary verdict says that a call is wrong, not which call is right; for an unnecessary call, withholding it is the obvious repair.
+Every Irrelevance example offers one unrelated function, and Direct calls it in 179 of 240 cases (25.4\% and 27.1\% in two other runs). \textit{Jev}'s function question separates these calls from the 61 correct no-calls (median probability 0.09 vs.\ 0.95). \textbf{JBFC} rejects 166 of the calls, and after the feedback the generator withholds 118; the 62 errors are 13 accepted calls, 48 calls kept after rejection, and one correct no-call turned into a call. In live irrelevance (2.3 functions on average, real requests), \textit{Jev} separates less sharply (0.53 vs.\ 0.87), the generator drops only 158 of 432 rejected calls, and 25 correct no-calls become calls. In categories with reference calls, \textbf{JBFC} rejects 334 of 463 wrong initial calls but fixes only 63 and breaks 18: a binary verdict says that a call is wrong, not which call is right, while withholding an unnecessary call is the obvious repair.
 
 \paragraph{More repairs.}
-Accuracy rises from 72.6\% at $r=1$ to 77.0\% at $r=7$ (Table~\ref{tab:repairs}), while time and cost double from $r=2$. From $r=2$ to $r=7$, 143 examples become correct and 36 wrong; 132 of the 143 are irrelevance cases where the generator finally withholds the call. Only 42 of them end with a passing proposal (\texttt{execute\_last} returns the others), so exhaustion falls just from 31.8\% to 29.7\%.
+Accuracy rises from 72.6\% at $r=1$ to 78.6\% at $r=10$ (Table~\ref{tab:repairs}); from $r=2$, time grows 2.5-fold and cost triples. Of the 194 examples that become correct between $r=2$ and $r=10$ (39 become wrong), 178 are irrelevance cases where the generator finally withholds the call, and only 52 end with a passing proposal, so exhaustion falls just from 31.8\% to 29.2\%.
+
+\paragraph{Records as in-context examples.}
+Each record pairs a generated call with \textit{Jev}'s verdict, so the history acts as labeled in-context examples, made without reference answers in 0.30 seconds per label on average (the generator takes 1.35) at about \$0.06 per 1,000. As in many-shot learning~\cite{agarwal2024manyshot}, more examples help: with the same attempts, all records beat the latest one by 0.7 points (\textbf{JBFC} minus \textbf{JBFC-L}, 95\% interval 0.1--1.4), and accuracy rises with the limit, which also adds attempts. Unlike many-shot prompts, these are failed attempts at the same request; help for other requests is untested.
 
 \subsection{Study Limits}
-The verifier can accept a wrong call or share the generator's mistake, and repair can introduce errors. Accumulated feedback can reinforce a mistake or distract the LLM, and it grows with each repair. Higher acceptance alone does not show improvement.
+The verifier can accept a wrong call or share the generator's mistake, repair can introduce errors, and the growing feedback can reinforce a mistake or distract the LLM; higher acceptance alone does not show improvement.
 
-The study uses one model pair, mostly English requests, and single-turn calls. Public examples may overlap with training data. We keep ten documented annotation inconsistencies in the main score. In six, reference values contradict declared types, so schema-checked methods cannot accept a correct call. We fix the thresholds and reasoning effort \texttt{none} without tuning, and one common repair limit may suit some methods better than others. A single run does not show run-to-run variation.
+The study uses one model pair, mostly English requests, single-turn calls, and one run per method, so run-to-run variation is unknown; public examples may overlap with training data. Ten documented annotation inconsistencies stay in the main score; in six, reference values contradict declared types, so schema-checked methods cannot accept a correct call. Thresholds and reasoning effort \texttt{none} are untuned, and one common repair limit may suit some methods better than others.
 
 \section{Conclusion}
-\textbf{JBFC} uses \textit{Jev}'s function and argument judgments as accumulated prompt feedback: after a failed check, earlier proposals and judgments precede the original user request, and the LLM revises the complete call. In one run with \texttt{gpt-5-nano} and two repairs, \textbf{JBFC} raised accuracy from 63.8\% to 73.5\% at about four times the cost, mostly by withholding unnecessary calls. The accumulated history added 0.7 points over the latest feedback alone, and seven repairs reached 77.0\% at about twice the cost of two. Other models and domains remain to be tested.
+\textbf{JBFC} feeds \textit{Jev}'s function and argument judgments back to the LLM as a history placed before the original request. In one run with \texttt{gpt-5-nano} and two repairs, it raised accuracy from 63.8\% to 73.5\% at about four times the cost, mostly by withholding unnecessary calls. The history, in effect \textit{Jev}-labeled in-context examples, added 0.7 points over the latest feedback alone, and ten repairs reached 78.6\% at about three times the cost of two.
 
 \section*{Acknowledgements}
 This work was created as part of the No-More-Slops group activities at Pseudo Lab.
 
 \clearpage
-\begin{thebibliography}{16}
+\begin{thebibliography}{17}
 \small
 
 \bibitem{patil2025bfcl}
@@ -400,6 +402,12 @@ Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, an
 \newblock ReAct: Synergizing Reasoning and Acting in Language Models.
 \newblock In \emph{International Conference on Learning Representations}, 2023.
 \newblock \url{https://arxiv.org/abs/2210.03629}.
+
+\bibitem{agarwal2024manyshot}
+Rishabh Agarwal, Avi Singh, Lei Zhang, Bernd Bohnet, Luis Rosias, Stephanie Chan, Biao Zhang, Ankesh Anand, Zaheer Abbas, Azade Nova, John D. Co-Reyes, Eric Chu, Feryal Behbahani, Aleksandra Faust, and Hugo Larochelle.
+\newblock Many-Shot In-Context Learning.
+\newblock In \emph{Advances in Neural Information Processing Systems}, 37:76930--76966, 2024.
+\newblock \url{https://arxiv.org/abs/2404.11018}.
 
 \end{thebibliography}
 \end{document}

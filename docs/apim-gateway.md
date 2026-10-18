@@ -50,6 +50,13 @@ LLM_OUTPUT_PRICE=<출력 단가>
 
 `make table1`·`make table2`는 다른 배포(`MODEL=...`)로도 실험과 요약까지 완료합니다. 원고는 `gpt-5-nano`·Azure Chat Completions·`r=2`·전체 예제·1회 실행을 기술하므로 다른 설정의 결과는 논문 표에 자동 삽입하지 않습니다. 별도로 논문의 실험 조건을 바꾼 뒤 반영해야 합니다.
 
+## Jev만 직접 호출하기 (Table 3, 2026-10-18)
+
+- 게이트웨이 뒤의 TypeSafe 계정이 HTTP 402(Payment Required)를 반환해, Table 3의 `r=10` 확장에서는 Jev만 TypeSafe API로 직접 호출했습니다. 생성기는 계속 게이트웨이를 씁니다.
+- `JEV_GATEWAY=direct`(또는 `scripts/extend_run.py --jev-gateway direct`)이면 Jev 요청은 `TYPESAFE_API_KEY`와 `TYPESAFE_BASE_URL`(비우면 `https://api.typesafe.ai`)을 씁니다. 이 키는 TypeSafe로만 가고, 게이트웨이 키는 생성기에만 쓰입니다. `make table3`은 기본값으로 `direct`를 씁니다. 비우면 `API_GATEWAY`를 따릅니다.
+- 확장 실행은 원본 실행과 Jev 경로만 다를 수 있고, 경로 변경을 요청했을 때만 허용합니다. Jev 모델·임계값·질문은 같아야 합니다. 실행 매니페스트의 `jev_routes`에 시도 번호별 경로가 남습니다(Table 3: 시도 0–7 게이트웨이, 8–10 직접). Table 3 캡션에도 자동으로 적힙니다.
+- `make table1`·`make table2`(`jev-fc run`)는 지금도 `API_GATEWAY` 하나로 생성기와 Jev를 함께 연결합니다. 이 경로를 바꾸려면 `src/jev_fc`를 고쳐야 하며, 그러면 기존 실행을 이어 돌릴 수 없으므로 Table 3 이후로 미뤘습니다.
+
 ## 기록과 오류
 
 응답의 실제 모델명과 요청 모델명을 분리해 저장합니다. 실제 모델명이 응답에 없으면 관측된 모델명을 만들어내지 않습니다. 요청/응답 형식이 바뀌면 다른 실험 설정으로 취급하며 이전 실행에 섞지 않습니다. 키 값은 지문에 포함하지 않으므로 동일 프로젝트 키의 교체는 재개를 막지 않습니다.

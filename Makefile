@@ -35,7 +35,7 @@ table1:
 table2:
 	MODEL="$(MODEL)" WORKERS="$(WORKERS)" bash scripts/run_table2.sh
 
-# Table 3: JBFC with r=1,2,3,5,7, continuing the Table 2 run's JBFC rows from r=2 to r=7.
+# Table 3: JBFC with r=1,2,3,5,7,10, continuing the JBFC rows of the r=7 extension (or the Table 2 run) to r=10.
 table3:
 	MODEL="$(MODEL)" WORKERS="$(WORKERS)" bash scripts/run_table3.sh
 
