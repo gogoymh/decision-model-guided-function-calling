@@ -41,17 +41,23 @@ def resolve_api_config(
     api_key: str | None = None,
     base_url: str | None = None,
     gateway: str | None = None,
+    azure_chat_completions: bool = False,
 ) -> APIConfig:
     if provider not in {"openai", "anthropic", "typesafe"}:
         raise ValueError("Unknown API provider.")
     mode = gateway_mode(gateway)
+    if azure_chat_completions and (provider != "openai" or mode != "apim"):
+        raise ValueError("Azure Chat Completions requires the OpenAI provider and API_GATEWAY=apim.")
     if mode == "apim":
         key = api_key or os.getenv("APIM_SUBSCRIPTION_KEY")
         if not key:
             raise ValueError("Set APIM_SUBSCRIPTION_KEY in .env before running through APIM.")
-        root = _base_url(os.getenv("APIM_BASE_URL") or DEFAULT_APIM_BASE_URL)
-        suffix = "/llm/typesafe" if provider == "typesafe" else f"/llm/{provider}/v1"
-        url = _base_url(base_url) if base_url else root + suffix
+        if azure_chat_completions:
+            url = _base_url(base_url or os.getenv("AZURE_ENDPOINT") or os.getenv("APIM_BASE_URL") or DEFAULT_APIM_BASE_URL)
+        else:
+            root = _base_url(os.getenv("APIM_BASE_URL") or DEFAULT_APIM_BASE_URL)
+            suffix = "/llm/typesafe" if provider == "typesafe" else f"/llm/{provider}/v1"
+            url = _base_url(base_url) if base_url else root + suffix
         headers = {"api-key": key}
     else:
         if provider == "typesafe":

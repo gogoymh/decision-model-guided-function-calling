@@ -203,6 +203,14 @@ def test_presence_tasks_have_no_fabricated_argument_labels():
     assert score_example(row, [{"name": "unknown", "arguments": {}}])["correct"] is True
 
 
+def test_unreadable_proposal_is_never_a_correct_no_call():
+    # A cut-off, filtered or refused generator response is recorded as calls=None.
+    for category in ["simple_python", "irrelevance", "live_irrelevance", "live_relevance"]:
+        result = score_example(toy_example(category), None)
+        assert result["correct"] is False and result["error_type"] == "invalid_structured_call"
+        assert result["function_correct"] is (None if category == "live_relevance" else False)
+
+
 def test_malformed_calls_remain_in_function_selection_denominator():
     row = toy_example()
     result = score_example(row, [{"name": "people_lookup", "arguments": None}])

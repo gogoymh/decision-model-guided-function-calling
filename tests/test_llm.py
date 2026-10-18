@@ -5,14 +5,15 @@ from copy import deepcopy
 import httpx
 import pytest
 
-from jev_fc.llm import FunctionCallingLLM, LLMAPIError
+from jev_fc.llm import INCOMPLETE_OUTPUTS, FunctionCallingLLM, LLMAPIError
 
 
 @pytest.fixture(autouse=True)
 def isolated_api_environment(monkeypatch):
     for name in ("API_GATEWAY", "LLM_API_STYLE", "LLM_MODEL", "LLM_REASONING_EFFORT", "LLM_TEMPERATURE",
                  "LLM_BASE_URL", "LLM_MAX_COMPLETION_TOKENS", "APIM_BASE_URL", "APIM_SUBSCRIPTION_KEY",
-                 "LLM_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY"):
+                 "LLM_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "AZURE_ENDPOINT", "AZURE_MODEL",
+                 "AZURE_OPENAI_API_VERSION", "AZURE_API_KEY"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -108,13 +109,39 @@ def test_malformed_protocol_is_sanitized_error(example, body):
             FunctionCallingLLM("test-key", client=client).generate(example)
 
 
+def assert_unreadable(result, reason):
+    """A cut-off, filtered or refused response is an unreadable proposal, never a no-call."""
+    assert result["calls"] is None and result["calls"] != []
+    assert result["incomplete"] == reason
+    assert result["parse_errors"] == [INCOMPLETE_OUTPUTS[reason]]
+    assert result["content"] is None
+    assert "SECRET" not in json.dumps(result)
+
+
 @pytest.mark.parametrize("finish_reason", ["length", "content_filter"])
-def test_incomplete_generation_not_treated_as_complete_proposal(example, finish_reason):
-    data = response()
+def test_incomplete_generation_is_unreadable_proposal_with_usage(example, finish_reason):
+    data = response('{"city": "Se')
     data["choices"][0]["finish_reason"] = finish_reason
+    data["choices"][0]["message"]["content"] = "SECRET partial text"
     with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, json=data))) as client:
-        with pytest.raises(LLMAPIError, match="truncated or filtered"):
-            FunctionCallingLLM("test-key", client=client).generate(example)
+        result = FunctionCallingLLM("test-key", client=client).generate(example)
+    assert_unreadable(result, finish_reason)
+    assert result["usage"]["prompt_tokens"] == 100 and result["usage"]["completion_tokens"] == 20
+    assert result["model"] == "pinned-test-model" and result["api_calls"] == 1
+
+
+def test_incomplete_generation_needs_no_message_object(example):
+    data = response()
+    data["choices"][0] = {"finish_reason": "content_filter", "content_filter_results": {"violence": {"filtered": True}}}
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, json=data))) as client:
+        result = FunctionCallingLLM("test-key", client=client).generate(example)
+    assert_unreadable(result, "content_filter")
+
+
+def test_complete_responses_mark_no_incomplete_reason(example):
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, json=response()))) as client:
+        result = FunctionCallingLLM("test-key", client=client).generate(example)
+    assert result["incomplete"] is None and result["parse_errors"] == []
 
 
 def test_rate_limit_retries_and_preserves_attempt_count(example, monkeypatch):
@@ -237,9 +264,34 @@ def test_responses_requires_completed_status(example, status):
         generate_body(example, "responses", data)
 
 
+@pytest.mark.parametrize("reason,expected", [("max_output_tokens", "length"), ("content_filter", "content_filter")])
+def test_responses_cut_off_or_filtered_output_is_unreadable_proposal(example, reason, expected):
+    data = responses_body('{"city": "Se')
+    data.update(status="incomplete", incomplete_details={"reason": reason})
+    data["output"][0]["status"] = "incomplete"
+    result = generate_body(example, "responses", data)
+    assert_unreadable(result, expected)
+    assert result["usage"]["prompt_tokens"] == 100 and result["usage"]["completion_tokens"] == 20
+
+
+@pytest.mark.parametrize("details", [{"reason": "unknown"}, {}, "max_output_tokens"])
+def test_responses_unknown_incomplete_reason_still_fails(example, details):
+    data = responses_body()
+    data.update(status="incomplete", incomplete_details=details)
+    with pytest.raises(LLMAPIError, match="incomplete, failed, or not terminal"):
+        generate_body(example, "responses", data)
+
+
+def test_responses_refusal_is_unreadable_proposal(example):
+    data = responses_body()
+    data["output"] = [{"type": "message", "role": "assistant", "status": "completed",
+                       "content": [{"type": "refusal", "refusal": "SECRET"}]}]
+    assert_unreadable(generate_body(example, "responses", data), "refusal")
+
+
 @pytest.mark.parametrize("output", [
     [], [{"type": "reasoning", "summary": []}], [None],
-    [{"type": "message", "role": "assistant", "content": [{"type": "refusal", "refusal": "SECRET"}]}],
+    [{"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": None}]}],
     [{"type": "message", "role": "assistant", "content": []}],
     [{"type": "function_call", "name": "weather"}],
     [{"type": "function_call", "name": "", "arguments": "{}"}],
@@ -247,7 +299,7 @@ def test_responses_requires_completed_status(example, status):
     [{"type": "function_call", "name": "weather", "arguments": "{}", "status": "incomplete"}],
     [{"type": "web_search_call", "status": "completed"}],
 ])
-def test_responses_refusal_malformed_or_nonproposal_output_is_not_no_call(example, output):
+def test_responses_malformed_or_nonproposal_output_is_not_no_call(example, output):
     data = responses_body()
     data["output"] = output
     with pytest.raises(LLMAPIError) as caught:
@@ -321,19 +373,31 @@ def test_anthropic_requires_explicit_model_and_rejects_openai_reasoning():
         FunctionCallingLLM("test-key", model="claude-test-model", api_style="anthropic_messages", reasoning_effort="high")
 
 
-@pytest.mark.parametrize("reason", [None, "max_tokens", "refusal", "pause_turn", "model_context_window_exceeded", "unknown"])
-def test_anthropic_nonterminal_or_refused_output_is_not_no_call(example, reason):
+@pytest.mark.parametrize("reason", [None, "pause_turn", "unknown"])
+def test_anthropic_nonterminal_output_is_not_no_call(example, reason):
     data = anthropic_body()
     data["stop_reason"] = reason
-    with pytest.raises(LLMAPIError, match="incomplete, refused, or not terminal"):
+    with pytest.raises(LLMAPIError, match="supported terminal stop reason"):
         generate_body(example, "anthropic_messages", data)
+
+
+@pytest.mark.parametrize("reason,expected", [("max_tokens", "length"), ("model_context_window_exceeded", "length"),
+                                             ("refusal", "refusal")])
+def test_anthropic_cut_off_or_refused_output_is_unreadable_proposal(example, reason, expected):
+    data = anthropic_body()
+    data.update(stop_reason=reason, content=[{"type": "text", "text": "SECRET partial"}])
+    result = generate_body(example, "anthropic_messages", data)
+    assert_unreadable(result, expected)
+    assert result["usage"]["completion_tokens"] == 20
 
 
 def test_anthropic_stop_details_refusal_not_mistaken_for_end_turn(example):
     data = anthropic_body()
     data.update(stop_reason="end_turn", content=[{"type": "text", "text": "Refused"}],
                 stop_details={"type": "refusal", "explanation": "SECRET"})
-    with pytest.raises(LLMAPIError) as caught:
+    assert_unreadable(generate_body(example, "anthropic_messages", data), "refusal")
+    data["stop_details"] = "SECRET"
+    with pytest.raises(LLMAPIError, match="invalid stop details") as caught:
         generate_body(example, "anthropic_messages", data)
     assert "SECRET" not in str(caught.value)
 
@@ -421,12 +485,13 @@ def test_apim_request_id_cannot_echo_credentials_or_arbitrary_text(example, requ
     assert caught.value.request_id is None
 
 
-def test_chat_refusal_and_malformed_empty_tool_calls_are_not_valid_no_call(example):
-    for update in ({"refusal": "SECRET"}, {"tool_calls": {}}):
-        data = response()
-        data["choices"][0] = {"finish_reason": "stop", "message": {"role": "assistant", "content": "No call", **update}}
-        with pytest.raises(LLMAPIError):
-            generate_body(example, "chat_completions", data)
+def test_chat_refusal_is_unreadable_and_malformed_tool_calls_fail(example):
+    data = response()
+    data["choices"][0] = {"finish_reason": "stop", "message": {"role": "assistant", "content": None, "refusal": "SECRET"}}
+    assert_unreadable(generate_body(example, "chat_completions", data), "refusal")
+    data["choices"][0] = {"finish_reason": "stop", "message": {"role": "assistant", "content": "No call", "tool_calls": {}}}
+    with pytest.raises(LLMAPIError):
+        generate_body(example, "chat_completions", data)
 
 
 def test_responses_http_retry_is_bounded_and_reports_final_attempts(example, monkeypatch):
@@ -460,7 +525,7 @@ def test_responses_transport_errors_are_bounded_without_disclosing_exception_tex
     assert "SECRET" not in str(caught.value)
 
 
-@pytest.mark.parametrize("style", ["chat_completions", "responses", "anthropic_messages"])
+@pytest.mark.parametrize("style", ["chat_completions", "azure_chat_completions", "responses", "anthropic_messages"])
 @pytest.mark.parametrize("method", ["jev_joint", "jev_joint_latest"])
 def test_two_repairs_prepend_selected_history_before_unchanged_request_and_allow_function_change(example, style, method):
     from jev_fc.jev import JevVerifier
@@ -481,7 +546,7 @@ def test_two_repairs_prepend_selected_history_before_unchanged_request_and_allow
         payload = json.loads(request.content)
         requests.append(payload)
         name, city = planned[len(requests) - 1]
-        if style == "chat_completions":
+        if style in {"chat_completions", "azure_chat_completions"}:
             body = response(json.dumps({"city": city}))
             body["choices"][0]["message"]["tool_calls"][0]["function"]["name"] = name
         elif style == "responses":
@@ -510,7 +575,7 @@ def test_two_repairs_prepend_selected_history_before_unchanged_request_and_allow
     with (httpx.Client(transport=httpx.MockTransport(generator_http)) as generator_client,
           httpx.Client(transport=httpx.MockTransport(verifier_http)) as verifier_client):
         generator = FunctionCallingLLM("test-key", model="test-model", api_style=style,
-                                       gateway="direct", client=generator_client)
+                                       gateway="apim" if style == "azure_chat_completions" else "direct", client=generator_client)
         verifier = JevVerifier("test-key", model="jev-1.13.0", gateway="direct", client=verifier_client)
         result = run_example(example, generator, verifier, method=method, max_repairs=3,
                              executor=lambda calls: executions.append(deepcopy(calls)))
@@ -539,3 +604,128 @@ def test_two_repairs_prepend_selected_history_before_unchanged_request_and_allow
             assert accumulated[-1]["round"] == attempt
             assert "original request below" in instruction
     assert example == before
+
+
+@pytest.mark.parametrize("no_call", [False, True])
+def test_azure_native_call_or_no_call_preserves_chat_schema_usage_and_auth(example, monkeypatch, no_call):
+    monkeypatch.setenv("API_GATEWAY", "apim")
+    monkeypatch.setenv("LLM_API_STYLE", "azure_chat_completions")
+    monkeypatch.setenv("LLM_MODEL", "gpt-5-nano")
+    monkeypatch.setenv("AZURE_MODEL", "unused-deployment")
+    monkeypatch.setenv("APIM_SUBSCRIPTION_KEY", "subscription-only")
+    monkeypatch.setenv("AZURE_API_KEY", "unused-key")
+    example["tools"][0]["function"]["parameters"]["required"] = ["city"]
+    example["tools"][0]["function"]["parameters"]["properties"]["unit"] = {"type": "string"}
+    data = response()
+    if no_call:
+        data["choices"][0] = {"finish_reason": "stop", "message": {"role": "assistant", "content": "No matching tool."}}
+
+    def handler(request):
+        assert str(request.url) == "https://enhans-aoai-prod-apim.azure-api.net/openai/deployments/gpt-5-nano/chat/completions?api-version=2024-12-01-preview"
+        assert request.headers["api-key"] == "subscription-only"
+        assert not {"authorization", "x-api-key", "anthropic-version"} & set(request.headers)
+        assert "ORACLE" not in request.content.decode()
+        payload = json.loads(request.content)
+        assert payload["model"] == "gpt-5-nano"
+        assert payload["max_completion_tokens"] == 123
+        assert payload["reasoning_effort"] == "minimal"
+        assert payload["tools"][0]["function"]["parameters"] == example["tools"][0]["function"]["parameters"]
+        assert "strict" not in payload["tools"][0]["function"]
+        assert payload["tool_choice"] == "auto" and payload["parallel_tool_calls"] is False
+        return httpx.Response(200, json=data)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        llm = FunctionCallingLLM(client=client, reasoning_effort="minimal", max_completion_tokens=123)
+        result = llm.generate(example)
+    assert (llm.gateway, llm.provider, llm.api_style, llm.auth_header) == ("apim", "openai", "azure_chat_completions", "api-key")
+    assert result["calls"] == ([] if no_call else [{"name": "weather", "arguments": {"city": "Seoul"}}])
+    assert result["usage"] == data["usage"] and result["raw_usage"] == data["usage"]
+    assert result["requested_model"] == "gpt-5-nano" and result["model"] == "pinned-test-model"
+
+
+def test_azure_alias_fallback_and_escaped_deployment_and_version(monkeypatch):
+    monkeypatch.setenv("AZURE_MODEL", "deployment/name?query=value")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2025-01-01-preview")
+    llm = FunctionCallingLLM("test-only", gateway="apim", api_style="azure_chat_completions")
+    try:
+        assert llm.endpoint.endswith("/openai/deployments/deployment%2Fname%3Fquery%3Dvalue/chat/completions?api-version=2025-01-01-preview")
+    finally:
+        llm.close()
+
+
+@pytest.mark.parametrize("version", ["2024-12-01-preview&key=SECRET", "SECRET", "2024-12-01\nSECRET"])
+def test_invalid_azure_version_is_not_recorded_or_echoed(monkeypatch, version):
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", version)
+    with pytest.raises(ValueError, match="dated Azure API version") as caught:
+        FunctionCallingLLM("test-only", model="gpt-5-nano", gateway="apim", api_style="azure_chat_completions")
+    assert "SECRET" not in str(caught.value)
+
+
+def test_azure_requires_explicit_deployment():
+    with pytest.raises(ValueError, match="Azure deployment name"):
+        FunctionCallingLLM("test-only", gateway="apim", api_style="azure_chat_completions")
+
+
+@pytest.mark.parametrize("status", [401, 429])
+def test_azure_http_errors_remain_sanitized_and_bounded(example, status):
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(
+            status, text="test-only SECRET", headers={"apim-request-id": "azure-test-request"}))) as client:
+        with pytest.raises(LLMAPIError) as caught:
+            FunctionCallingLLM("test-only", model="gpt-5-nano", gateway="apim", api_style="azure_chat_completions",
+                               client=client, max_retries=0).generate(example)
+    assert (caught.value.status_code, caught.value.request_id, caught.value.attempts) == (status, "azure-test-request", 1)
+    assert "SECRET" not in str(caught.value) and "test-only" not in str(caught.value)
+
+
+@pytest.mark.parametrize("finish_reason", ["length", "content_filter"])
+def test_azure_truncated_or_filtered_generation_is_not_recorded_as_no_call(example, finish_reason):
+    data = response('{"city": "Se')
+    data["choices"][0]["finish_reason"] = finish_reason
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, json=data))) as client:
+        result = FunctionCallingLLM("test-only", model="gpt-5-nano", gateway="apim", api_style="azure_chat_completions",
+                                    client=client).generate(example)
+    assert_unreadable(result, finish_reason)
+    assert result["usage"] == data["usage"]
+
+
+def filtered_prompt_body(code):
+    """Azure OpenAI's HTTP 400 body when its filter or jailbreak shield rejects a prompt."""
+    return {"error": {"code": code, "message": "SECRET prompt text", "param": "prompt", "status": 400,
+                      "innererror": {"code": "ResponsibleAIPolicyViolation",
+                                     "content_filter_result": {"jailbreak": {"filtered": True, "detected": True}}}}}
+
+
+@pytest.mark.parametrize("style", ["azure_chat_completions", "responses"])
+@pytest.mark.parametrize("code", ["content_filter", "invalid_prompt"])
+def test_prompt_rejected_by_provider_filter_is_unreadable_proposal(example, style, code):
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(400, json=filtered_prompt_body(code)))) as client:
+        result = FunctionCallingLLM("test-only", model="gpt-5-nano", gateway="apim", api_style=style,
+                                    client=client, max_retries=0).generate(example)
+    assert_unreadable(result, "prompt_filter")
+    assert result["usage"] == {} and result["raw_usage"] is None and result["model"] is None
+    assert result["api_calls"] == 1
+
+
+@pytest.mark.parametrize("code,expected", [("unsupported_parameter", "unsupported_parameter"), (None, None),
+                                           ("bad code; SECRET", None), (7, None)])
+def test_other_http_400_still_stops_with_only_a_safe_provider_code(example, code, expected):
+    body = {"error": {"code": code, "message": "SECRET"}}
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(400, json=body))) as client:
+        with pytest.raises(LLMAPIError) as caught:
+            FunctionCallingLLM("test-only", model="gpt-5-nano", gateway="apim", api_style="azure_chat_completions",
+                               client=client, max_retries=0).generate(example)
+    assert (caught.value.status_code, caught.value.provider_code) == (400, expected)
+    assert "SECRET" not in str(caught.value)
+    assert str(caught.value).startswith(f"LLM HTTP 400 ({expected})" if expected else "LLM HTTP 400;")
+
+
+def test_filter_code_on_other_statuses_or_anthropic_is_not_a_filtered_prompt(example):
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(403, json=filtered_prompt_body("content_filter")))) as client:
+        with pytest.raises(LLMAPIError, match="HTTP 403"):
+            FunctionCallingLLM("test-only", model="gpt-5-nano", gateway="apim", api_style="azure_chat_completions",
+                               client=client, max_retries=0).generate(example)
+    body = {"type": "error", "error": {"type": "invalid_request_error", "code": "content_filter", "message": "SECRET"}}
+    with httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(400, json=body))) as client:
+        with pytest.raises(LLMAPIError, match="HTTP 400"):
+            FunctionCallingLLM("test-key", model="claude-test-model", api_style="anthropic_messages",
+                               client=client, max_retries=0).generate(example)

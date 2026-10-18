@@ -7,19 +7,21 @@ from pathlib import Path
 
 import pytest
 
-from jev_fc.benchmarks import load_examples, stratified_split
+from jev_fc.benchmarks import load_examples
 from jev_fc.reporting import (
-    PAPER_REPAIR_GRID,
+    PAPER_PRICES,
     PAPER_SETTINGS,
+    TABLE1_CATEGORIES,
     build_summary,
     derive_policy_run,
-    latex_budget_table,
+    latex_category_table,
     latex_table,
     paired_delta,
     paper_protocol_matches,
     summarize_group,
     token_cost,
     update_paper,
+    update_table1,
 )
 
 
@@ -478,25 +480,6 @@ def test_replay_rejects_corrupt_or_incomplete_source_before_writing(tmp_path, fa
     assert not (tmp_path / "output").exists()
 
 
-def test_unrun_development_table_has_no_selected_limit_or_imputed_values():
-    table = latex_budget_table()
-    assert r"$r$ & Dev Acc. (\%) & Repairs & Sec. & USD/1k" in table
-    for limit in PAPER_REPAIR_GRID:
-        assert f"${limit}$ & -- & -- & -- & --" in table
-    assert "marks the selected limit" not in table
-    assert "^{*}" not in table
-    assert r"\label{tab:diagnostics}" in table
-    assert "Development data choose" in table
-    assert "highest call accuracy" in table and "ties choose the smaller limit" in table
-
-
-def test_main_table_does_not_invent_a_selected_limit():
-    table = latex_table()
-    assert "chosen on development data" in table
-    assert "$r=" not in table
-    assert r"\textbf{JBFC-L} & -- & -- & -- & -- & --" in table
-
-
 def test_main_table_lists_jbfc_last_below_its_variants():
     from jev_fc.pipeline import METHODS
     from jev_fc.reporting import TABLE_METHOD_ORDER
@@ -507,141 +490,95 @@ def test_main_table_lists_jbfc_last_below_its_variants():
                     r"\textbf{JBFC-L}", r"\textbf{JBFC}"]
 
 
-def test_raw_test_manifest_without_selection_cannot_match_paper():
-    from jev_fc.pipeline import METHODS
-    manifest = {**PAPER_SETTINGS, "split": "test", "limit": None,
-                "methods": list(METHODS), "max_repairs": 5, "prices_usd_per_million": PRICES}
-    assert not paper_protocol_matches(manifest)
-
-
-@pytest.fixture
-def selected_development_run(tmp_path):
-    # Reuse the tuning tests' real canonical-ID fixture and official scoring.
-    # Its mock proposals are confined to tmp_path and never become experiments.
-    from test_tuning import make_test_config, write_dev_fixture
-    from jev_fc.tuning import select_repair_budget
-
-    source = tmp_path / "development"
-    manifest, _, test = write_dev_fixture(source, replicates=3)
-    selection = select_repair_budget(source)
-    test_manifest = make_test_config(manifest, selection, test)
-    test_manifest["repair_budget_selection"] = selection
-    return source, selection, test_manifest
-
-
 def paper_template(path):
     path.write_text("\n".join(
         f"% BEGIN AUTO {marker}\nold {marker}\n% END AUTO {marker}"
-        for marker in ("RESULTS", "CATEGORIES", "DIAGNOSTICS")
+        for marker in ("RESULTS", "CATEGORIES")
     ))
 
 
-def test_valid_selection_fills_dev_table_without_using_dev_accuracy_as_test_result(selected_development_run, tmp_path):
-    _, selection, manifest = selected_development_run
-    assert selection["selected_max_repairs"] == 2
-    assert paper_protocol_matches(manifest)
-    old_six_methods = {**manifest, "methods": [m for m in manifest["methods"] if m != "jev_joint_latest"]}
-    assert not paper_protocol_matches(old_six_methods)
+def table1_summary(**changes):
+    path = Path("data/bfcl/examples.jsonl")
+    if not path.exists():
+        pytest.skip("Requires prepared BFCL files")
+    manifest = {**PAPER_SETTINGS, "ids": [row["id"] for row in load_examples(path)],
+                "methods": ["direct", "jev_joint"], "prices_usd_per_million": dict(PAPER_PRICES),
+                "dataset_sha256": hashlib.sha256(path.read_bytes()).hexdigest(), **changes}
+    return {"status": "complete", "manifest": manifest,
+            "methods": {"direct": {"accuracy": .9}, "jev_joint": {"accuracy": .95}},
+            "by_category": {"simple_python/direct": {"accuracy": .908}, "simple_python/jev_joint": {"accuracy": .925},
+                            "live_relevance/direct": {"relevance_call_rate": .5}}}
+
+
+def test_filled_table1_drops_the_empty_cell_note():
+    summary = table1_summary()
+    summary["by_category"] = {f"{category}/{method}": {"accuracy": .5, "relevance_call_rate": .5}
+                              for category, _, _ in TABLE1_CATEGORIES for method in ("direct", "jev_joint")}
+    table = latex_category_table(summary)
+    assert "--" not in table and "has not been run" not in table
+    # Tied rows stay plain; only the strictly higher total is bold.
+    assert table.count("50.0") == 14 and r"\textbf{50.0}" not in table
+    assert r"Total & 3051 & 90.0 & \textbf{95.0}\\" in table
+    assert "Bold marks the higher accuracy when the two differ." in table
+    assert r"total accuracy excludes these 16 cases.}" in table
+
+
+@pytest.mark.parametrize("direct,jbfc,row", [
+    (.95, .9, r"Simple Python & 400 & \textbf{95.0} & 90.0\\"),
+    (.9, .95, r"Simple Python & 400 & 90.0 & \textbf{95.0}\\"),
+    (.9124, .9121, r"Simple Python & 400 & 91.2 & 91.2\\"),  # equal as shown: no bold
+    (.9, None, r"Simple Python & 400 & 90.0 & --\\"),
+], ids=["direct_higher", "jbfc_higher", "equal_as_shown", "missing"])
+def test_table1_bolds_only_the_strictly_higher_shown_accuracy(direct, jbfc, row):
+    summary = table1_summary()
+    summary["methods"] = {"direct": {"accuracy": .5}, "jev_joint": {"accuracy": .5}}
+    summary["by_category"] = {"simple_python/direct": {"accuracy": direct}, "simple_python/jev_joint": {"accuracy": jbfc}}
+    table = latex_category_table(summary)
+    assert row in table and r"Total & 3051 & 50.0 & 50.0\\" in table
+    assert ("Bold marks" in table) == (r"\textbf{9" in table)
+
+
+def test_unrun_table1_lists_all_examples_without_a_test_split():
+    table = latex_category_table()
+    assert r"Category & Examples & Direct & \textbf{JBFC}\\" in table
+    assert r"Simple Python & 400 & -- & --\\" in table and r"Total & 3051 & -- & --\\" in table
+    assert "Test" not in table and "2748" not in table
+    assert "$r=2$" in table and "these 16 cases" in table and "Generator" not in table
+    assert "-- means the experiment has not been run." in table and "Bold" not in table
+
+
+def test_table1_fills_only_categories_from_a_complete_all_example_run(tmp_path):
     paper = tmp_path / "paper.tex"
     paper_template(paper)
-    summary = {"status": "complete", "manifest": manifest,
-               "methods": {"direct": {"accuracy": .125}, "jev_joint": {"accuracy": .75}}}
-    update_paper(paper, summary)
+    update_table1(paper, table1_summary())
     source = paper.read_text()
-    main = source.split("% BEGIN AUTO RESULTS")[1].split("% END AUTO RESULTS")[0]
-    dev = source.split("% BEGIN AUTO DIAGNOSTICS")[1].split("% END AUTO DIAGNOSTICS")[0]
-    dev_accuracy = next(item["accuracy"] for item in selection["candidates"] if item["max_repairs"] == 2)
-    assert r"\textbf{JBFC} & 75.0" in main
-    assert "$r=2$" in main
-    assert f"$2^{{*}}$ & {dev_accuracy * 100:.1f}" in dev
-    assert "$3^{*}$" not in dev
-    assert "Dev Acc." in dev and "Accuracy excludes live relevance" in dev
+    table = source.split("% BEGIN AUTO CATEGORIES")[1].split("% END AUTO CATEGORIES")[0]
+    assert r"Simple Python & 400 & 90.8 & \textbf{92.5}\\" in table
+    assert r"Live relevance$^\dagger$ & 16 & 50.0 & --\\" in table
+    assert r"Total & 3051 & 90.0 & \textbf{95.0}\\" in table and r"Generator: \texttt{gpt-5-nano}." in table
+    assert "-- means the experiment has not been run." in table  # some cells are still empty
+    assert "old RESULTS" in source  # Table 2 needs all seven methods
+    with pytest.raises(ValueError, match="complete run"):
+        update_table1(paper, {**table1_summary(), "status": "partial"})
 
 
-def test_dev_table_uses_actual_valid_grid_but_custom_grid_cannot_fill_default_paper(selected_development_run):
-    from jev_fc.tuning import select_repair_budget
-
-    source, _, manifest = selected_development_run
-    selection = select_repair_budget(source, [0, 2, 5])
-    table = latex_budget_table(selection)
-    assert "$0$ &" in table and "$2^{*}$ &" in table and "$5$ &" in table
-    assert "$1$ &" not in table and "$3$ &" not in table and "$4$ &" not in table
-    manifest["repair_budget_selection"] = selection
-    assert not paper_protocol_matches(manifest)
+OTHER_PROTOCOLS = [{"split": "test"}, {"split": "dev"}, {"limit": 5}, {"max_repairs": 3}, {"max_repairs": True},
+                   {"replicates": 3}, {"replicates": True}, {"threshold": .9}, {"exhaustion_policy": "abstain"},
+                   {"synthetic": True}, {"llm_model": "gpt-5.4-mini-2026-03-17"}, {"reasoning_effort": "low"},
+                   {"llm_api_style": "responses"}, {"max_completion_tokens": 8192},
+                   {"prices_usd_per_million": {"llm_input": .75, "llm_cached_input": .075, "llm_output": 4.5,
+                                               "jev_input": .042}},
+                   {"ids": ["simple_python_0"]}, {"dataset_sha256": "tampered"}]
 
 
-def test_paper_rejects_manual_incompatible_forged_and_stale_selections(selected_development_run, tmp_path):
-    from jev_fc.tuning import _fingerprint
-
-    source, selection, manifest = selected_development_run
+@pytest.mark.parametrize("change", OTHER_PROTOCOLS + [{"methods": ["direct"]}])
+def test_table1_rejects_other_protocols_without_writing(tmp_path, change):
     paper = tmp_path / "paper.tex"
     paper_template(paper)
     original = paper.read_bytes()
-
-    def rejects(candidate):
-        assert not paper_protocol_matches(candidate)
-        with pytest.raises(ValueError, match="declared protocol"):
-            update_paper(paper, {"status": "complete", "manifest": candidate})
-        assert paper.read_bytes() == original
-
-    missing = deepcopy(manifest)
-    missing.pop("repair_budget_selection")
-    rejects(missing)
-    manual = deepcopy(manifest)
-    manual["max_repairs"] = 3
-    rejects(manual)
-    incompatible = deepcopy(manifest)
-    incompatible["workers"] += 1
-    rejects(incompatible)
-    forged = deepcopy(manifest)
-    forged_selection = forged["repair_budget_selection"]
-    forged_selection["candidates"][0]["accuracy"] = .999
-    # Even a newly computed outer hash cannot replace source verification.
-    forged_selection["selection_id"] = _fingerprint({k: v for k, v in forged_selection.items() if k != "selection_id"})
-    rejects(forged)
-
-    records = source / "records.jsonl"
-    records.write_bytes(records.read_bytes() + b"\n")
-    rejects(manifest)
-    with pytest.raises(ValueError, match="stale|source evidence"):
-        latex_budget_table(selection)
-
-
-def test_development_summary_cannot_populate_test_results(selected_development_run, tmp_path):
-    source, _, _ = selected_development_run
-    development = build_summary(source)
-    paper = tmp_path / "paper.tex"
-    paper_template(paper)
-    original = paper.read_bytes()
-    with pytest.raises(ValueError, match="complete test runs"):
-        update_paper(paper, development)
+    with pytest.raises(ValueError):
+        update_table1(paper, table1_summary(**change))
     assert paper.read_bytes() == original
-
-
-def test_manuscript_rejects_same_ids_but_modified_data_digest(tmp_path):
-    path = Path("data/bfcl/examples.jsonl")
-    if not path.exists():
-        pytest.skip("Requires prepared BFCL files")
-    _, test = stratified_split(load_examples(path), seed=1729)
-    summary = {"status": "complete", "manifest": {"ids": [r["id"] for r in test], "split": "test",
-                                                    "dataset_sha256": "tampered", "limit": None}}
-    with pytest.raises(ValueError, match="digest"):
-        update_paper(tmp_path / "paper.tex", summary)
-
-
-def test_manuscript_rejects_different_reasoning_setting(tmp_path):
-    path = Path("data/bfcl/examples.jsonl")
-    if not path.exists():
-        pytest.skip("Requires prepared BFCL files")
-    _, test = stratified_split(load_examples(path), seed=1729)
-    from jev_fc.pipeline import METHODS
-    manifest = {"ids": [r["id"] for r in test], "split": "test", "limit": None,
-                "dataset_sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "methods": METHODS,
-                "replicates": 3, "max_repairs": 3, "threshold": .8, "exhaustion_policy": "execute_last",
-                "split_seed": 1729, "llm_model": "gpt-5.4-mini-2026-03-17", "jev_model": "jev-1.13.0",
-                "reasoning_effort": "high", "temperature": None, "max_completion_tokens": 4096}
-    with pytest.raises(ValueError, match="declared protocol"):
-        update_paper(tmp_path / "paper.tex", {"status": "complete", "manifest": manifest})
 
 
 def test_table_separates_call_function_and_conditional_argument_accuracy():
@@ -649,6 +586,85 @@ def test_table_separates_call_function_and_conditional_argument_accuracy():
                                                    "arguments_accuracy_conditional": .75},
                                      "jev_joint_latest": {"accuracy": .5, "function_accuracy": .7,
                                                           "arguments_accuracy_conditional": .65}}})
-    assert r"\textbf{JBFC} & 60.0 & 80.0 & 75.0" in table
+    assert r"\textbf{JBFC} & \textbf{60.0} & \textbf{80.0} & \textbf{75.0}" in table
     assert r"\textbf{JBFC-L} & 50.0 & 70.0 & 65.0" in table
     assert "Argument accuracy" in table and "correct function and argument labels" in table
+
+
+
+def test_unrun_main_table_states_the_fixed_protocol():
+    table = latex_table()
+    assert "Methods on all BFCL examples, from one run with repair limit $r=2$." in table
+    assert "development" not in table and "test set" not in table
+    assert "Generator" not in table and "Bold" not in table and "-- means unavailable or unrun." in table
+    assert r"\textbf{JBFC-L} & -- & -- & -- & -- & --" in table
+
+
+def test_main_table_bolds_the_highest_accuracy_in_each_column():
+    methods = {"direct": {"accuracy": .5, "function_accuracy": .9, "mean_latency_s": 1.0, "mean_cost_usd": 1e-4},
+               "jev_joint": {"accuracy": .7, "function_accuracy": .9, "mean_latency_s": 3.0, "mean_cost_usd": 2e-4}}
+    table = latex_table({"methods": methods})
+    assert r"Direct & 50.0 & \textbf{90.0} & -- & 1.00 & 0.100 \\" in table  # tied highest: both bold
+    assert r"\textbf{JBFC} & \textbf{70.0} & \textbf{90.0} & -- & 3.00 & 0.200 \\" in table
+    assert "Bold marks the highest accuracy in each column." in table
+
+
+def test_old_test_split_protocol_cannot_match_paper():
+    from jev_fc.pipeline import METHODS
+    old = {**PAPER_SETTINGS, "split": "test", "replicates": 3, "methods": list(METHODS),
+           "prices_usd_per_million": dict(PAPER_PRICES)}
+    assert not paper_protocol_matches(old)
+    assert paper_protocol_matches({**old, "split": "all", "replicates": 1})
+
+
+def paper_summary(**changes):
+    from jev_fc.pipeline import METHODS
+    summary = table1_summary(**{"methods": list(METHODS), **changes})
+    summary["methods"] = {method: {"accuracy": .5, "function_accuracy": .6, "arguments_accuracy_conditional": .7,
+                                   "mean_latency_s": 2.0, "mean_cost_usd": 1e-4} for method in METHODS}
+    summary["methods"]["direct"]["accuracy"] = .9
+    summary["methods"]["jev_joint"]["accuracy"] = .95
+    return summary
+
+
+def test_seven_method_run_fills_tables_1_and_2_from_the_same_run(tmp_path):
+    paper = tmp_path / "paper.tex"
+    paper_template(paper)
+    update_paper(paper, paper_summary())
+    source = paper.read_text()
+    main = source.split("% BEGIN AUTO RESULTS")[1].split("% END AUTO RESULTS")[0]
+    categories = source.split("% BEGIN AUTO CATEGORIES")[1].split("% END AUTO CATEGORIES")[0]
+    assert r"Direct & 90.0 &" in main and r"\textbf{JBFC} & \textbf{95.0} &" in main
+    assert r"Generator: \texttt{gpt-5-nano}." in main and "$r=2$" in main
+    assert r"Total & 3051 & 90.0 & \textbf{95.0}\\" in categories
+    update_paper(paper)  # without a summary both tables return to their unrun form
+    source = paper.read_text()
+    assert r"Direct & -- & -- & -- & -- & -- \\" in source and r"Total & 3051 & -- & --\\" in source
+
+
+@pytest.mark.parametrize("change", OTHER_PROTOCOLS + [{"methods": ["direct", "jev_joint"]}])
+def test_paper_rejects_other_protocols_without_writing(tmp_path, change):
+    paper = tmp_path / "paper.tex"
+    paper_template(paper)
+    original = paper.read_bytes()
+    with pytest.raises(ValueError):
+        update_paper(paper, paper_summary(**change))
+    with pytest.raises(ValueError, match="complete run"):
+        update_paper(paper, {**paper_summary(), "status": "partial"})
+    assert paper.read_bytes() == original
+
+
+def test_report_command_routes_seven_method_runs_to_both_tables(monkeypatch):
+    from jev_fc import cli
+    from jev_fc.pipeline import METHODS
+
+    calls = []
+    monkeypatch.setattr(cli, "load_dotenv", lambda: None)
+    monkeypatch.setattr(cli, "update_table1", lambda paper, summary: calls.append(("table1", len(summary["manifest"]["methods"]))))
+    monkeypatch.setattr(cli, "update_paper", lambda paper, summary: calls.append(("paper", len(summary["manifest"]["methods"]))))
+    for methods in (["direct", "jev_joint"], list(METHODS)):
+        monkeypatch.setattr(cli, "build_summary", lambda _, methods=methods: {"status": "complete", "methods": {},
+                                                                              "manifest": {"methods": methods}})
+        monkeypatch.setattr("sys.argv", ["jev-fc", "report", "run-dir", "--paper", "paper.tex"])
+        assert cli.main() == 0
+    assert calls == [("table1", 2), ("paper", 7)]

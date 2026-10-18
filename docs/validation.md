@@ -117,3 +117,77 @@
 
 - 사용자 요청에 따라 Table 2를 기준 방법(Direct, Schema repair, Self-refine), **JBFC-F**, **JBFC-A**, **JBFC-L**, **JBFC** 순으로 바꿔 **JBFC**를 마지막 행에 두었습니다. 자동 표 생성 코드의 표시 순서(`TABLE_METHOD_ORDER`)를 바꿔 결과를 채울 때도 같은 순서를 유지하며, 실행 순서와 `METHODS`는 그대로입니다.
 - 원고의 자동 표 세 개가 생성 코드 출력과 일치합니다. 보고·실험 실행 테스트와 Ruff가 통과했고, 전체 테스트는 431개입니다. 다시 내보낸 PDF는 본문 4쪽·참고문헌 5쪽 시작 검사를 통과했고, 4쪽 외의 텍스트는 바뀌지 않았습니다.
+
+## Table 1: 전체 예제, r=2, 1회 (2026-10-17)
+
+- 사용자 요청에 따라 Table 1을 개발/테스트 분할 없이 준비된 3,051개 전체에서 Direct와 **JBFC**를 한 번 실행하고 수정 한도를 `r=2`로 고정한 표로 바꿨습니다. `Test` 열을 없애고 `Examples` 열로 바꿨으며, 결과를 채우면 캡션에 생성기 모델을 표시합니다.
+- `update_table1`은 완료된 `--split all` 실행(3,051개 ID·데이터 해시 일치, Direct와 **JBFC**, `r=2`, 1회, 임계값 0.8, `execute_last`)만 받아 Table 1만 채웁니다. 기존 `update_paper`는 테스트 실행으로 Table 2·3만 채우고 Table 1은 건드리지 않습니다. `jev-fc report RUN --paper paper/main.tex`는 실행 분할에 따라 둘 중 하나를 고릅니다.
+- `make table1`(`scripts/run_table1.sh`)은 Azure 배포 사전 점검(`scripts/preflight.py`), 전체 실행, Table 1 반영을 차례로 수행합니다.
+- 원고의 다른 부분(Abstract·Introduction·Method의 개발 데이터 선택 설명, 4.1의 분할, 4.2의 수정 한도 선택, Table 2·3)은 아직 이전 프로토콜을 따릅니다.
+
+## 잘리거나 필터된 생성 응답 (2026-10-17)
+
+- 첫 Table 1 실행(`gpt-5-nano`, 작업자 8개)이 6,102개 기록 중 164개에서 멈췄습니다. `live_irrelevance_883-883-0`의 **JBFC** 수정 단계에서 생성기 응답이 HTTP 200이었지만 출력 한도(`finish_reason=length`) 또는 콘텐츠 필터로 끝나 완전한 제안이 없었습니다. 이전 코드는 이를 API 오류로 보고 실행 전체를 멈췄습니다(요청 ID `07e930a7-ad5d-42e5-8798-86d632fa76d9`; 둘 중 어느 사유였는지는 기록되지 않았습니다).
+- 이제 출력 한도에서 잘린 응답(Chat·Azure `length`, Responses `max_output_tokens`, Anthropic `max_tokens`·`model_context_window_exceeded`), 제공자 필터에 걸린 응답(`content_filter`), 거절 응답(`refusal`)은 읽을 수 없는 제안(`calls=None`)으로 기록합니다. 사유는 `proposal.incomplete`, 고정 문구는 `parse_errors`에 남기고 토큰 사용량은 그대로 집계합니다. 부분 출력은 저장하지 않습니다.
+- 이런 제안은 no-call이 아닙니다. 무관 요청을 포함한 모든 카테고리에서 오답으로 채점합니다. Method의 규칙대로 **Jev** 요청 없이 로컬 피드백을 받아 남은 수정 기회를 쓰며, Direct에서는 그대로 최종 출력이 됩니다.
+- 요약에 `incomplete_proposal_n`(그런 응답 수)과 `incomplete_final_n`(최종 출력이 그런 경우)을 추가했습니다. `errors.jsonl`에는 LLM·**Jev** API 오류의 고정 문구(`message`)도 남깁니다. 그 밖의 API 오류(HTTP 오류, 형식 위반)는 이전처럼 실행을 멈춥니다. 필터가 요청을 막은 HTTP 400은 아래 절에서 바꿨습니다.
+- 오프라인 테스트 486개와 Ruff가 통과했습니다. 세 API 형식의 CLI 실행 테스트에서 잘린 최초 제안은 Direct 오답, **JBFC**는 한 번 수정 후 정답이 되고 실행은 오류 없이 끝납니다.
+- 코드 지문이 바뀌어 수정 전 출력 폴더로는 이어서 실행할 수 없습니다. 수정 반영 전에 같은 폴더로 재개한 실행은 2,047개 기록에서 다시 멈췄습니다. 이번에는 `live_simple_108-65-0`(고객 질의 10개를 네 배열 인자로 분류하는 요청)의 최초 제안 응답이 잘리거나 필터됐습니다(요청 ID `437b45b4-8372-4489-8020-5525f208cdc9`). 2,047개 기록에서 두 번 나왔으므로 전체 실행에서도 여러 번 나올 수 있습니다. 수정 전 코드의 부분 기록은 `results/table1_gpt-5-nano_r2_oldcode`로 옮겼고, 다음 `make table1 WORKERS=8`은 수정 후 코드로 처음부터 실행합니다.
+- 원고 반영 필요: 결과를 채울 때 4장에 잘리거나 필터된 응답을 읽을 수 없는 제안으로 기록해 오답으로 채점했다는 문장과 그 수를 함께 적어야 합니다.
+
+## 필터가 막은 요청 (2026-10-18)
+
+- 수정 후 코드로 새로 시작한 Table 1 실행은 6,102개 중 4,916개에서 HTTP 400으로 멈췄습니다(07:55, `live_irrelevance_368-81-29`의 **JBFC** 수정 요청, 요청 ID `70018edd-4dd0-4922-912a-7957da5fe809`). 같은 예제의 최초 요청은 통과했고 Direct는 no-call로 정답이었습니다. 이 예제의 사용자 메시지에는 ReAct 형식 지시문("Answer the following questions as best you can… Do not just provide an API Call")이 들어 있습니다. 그래서 수정 이력이 붙은 요청을 Azure 콘텐츠 필터(탈옥 방지)가 막은 것으로 보입니다. 당시 코드는 제공자 오류 본문을 남기지 않아 원인은 확정하지 못했습니다. 그때까지 잘린 응답은 0건이었습니다.
+- 이제 OpenAI 계열 형식에서 HTTP 400의 오류 코드가 `content_filter`(Azure 필터·탈옥 방지) 또는 `invalid_prompt`이면 실행을 멈추지 않습니다. 대신 읽을 수 없는 제안(`incomplete="prompt_filter"`)으로 기록합니다. 사용량은 응답에 없으므로 미상으로 남기고, 이런 기록이 있는 방법의 평균 비용도 미상이 됩니다(`cost_observed_n`으로 확인). Table 1의 정확도에는 영향이 없습니다.
+- 그 밖의 HTTP 오류는 계속 실행을 멈추며, 이제 제공자 오류 코드(정규식으로 확인한 짧은 식별자, `provider_code`)를 오류 문구와 `errors.jsonl`에 남깁니다. 오류 메시지 본문은 남기지 않습니다.
+- 오프라인 테스트 497개와 Ruff가 통과했습니다. CLI 실행 테스트(Chat, Responses)에서 수정 요청이 필터에 막히면 그 사례는 오답으로 끝나고 실행은 오류 없이 완료됩니다.
+- 멈춘 실행은 `results/table1_gpt-5-nano_r2_stopped_http400`으로 옮겼습니다. 코드 지문이 바뀌어 다음 `make table1 WORKERS=8`은 처음부터 실행합니다.
+
+## Table 1 결과: gpt-5-nano, 전체 3,051개, r=2 (2026-10-18)
+
+- 실행: `make table1 WORKERS=8`, 09:07–09:26(약 19분 30초). 생성기는 Azure 배포 `gpt-5-nano`(응답 모델 `gpt-5-nano-2025-08-07`, reasoning effort `none`, 최대 출력 4,096 토큰)이고, **Jev**는 `jev-1.13.0`, 임계값 0.8, `execute_last`, 작업자 8개입니다. 결과 폴더는 `results/table1_gpt-5-nano_r2`(`source_sha256` `c0f106ee0d4deb49…`, `config_id` `4da4790988e05957…`)입니다.
+- 6,102개 기록이 모두 완료됐고 API 오류는 0건입니다. 출력 한도에서 잘린 응답은 1건(`live_irrelevance_106-5-0`의 **JBFC** 1차 수정)이며, 다음 수정에서 정답이 됐습니다. 필터에 막힌 요청은 없었습니다.
+- 정확도(live relevance 16개 제외 3,035개): Direct 63.9%(1,938개), **JBFC** 73.1%(2,218개). 차이는 +9.2%p(사례 단위 paired bootstrap 95% 구간 8.1–10.4)입니다.
+
+| 카테고리 | 예제 | Direct | **JBFC** | **JBFC** 수정 / 퇴행 |
+|---|---:|---:|---:|---:|
+| Simple Python | 400 | 91.2 | 91.2 | 2 / 2 |
+| Multiple | 200 | 91.0 | 91.0 | 1 / 1 |
+| Irrelevance | 240 | 25.4 | 72.9 | 114 / 0 |
+| Live simple | 258 | 73.6 | 73.6 | 6 / 6 |
+| Live multiple | 1,053 | 68.3 | 70.8 | 35 / 9 |
+| Live irrelevance | 884 | 47.6 | 63.5 | 164 / 24 |
+| Live relevance | 16 | 87.5 | 87.5 | 0 / 0 |
+| 합계(live relevance 제외) | 3,035 | 63.9 | 73.1 | 322 / 42 |
+
+- 수정·퇴행은 공유한 최초 제안 대비 최종 결과가 오답→정답, 정답→오답으로 바뀐 사례 수입니다. 향상은 주로 호출하지 않아야 하는 사례(Irrelevance, Live irrelevance)에서 나왔습니다. Simple Python·Multiple·Live simple은 수정과 퇴행이 같은 수라 정확도가 같습니다.
+- **JBFC** 진단: 평균 수정 0.76회입니다. 1,779개는 수정 없이 수락됐고 228개는 1회, 1,044개는 2회 수정했습니다. 999개(32.7%)는 한도를 소진해 마지막 제안을 그대로 냈습니다. 최초 제안 기준 게이트 수락률은 58.4%, 수락 정밀도 91.3%, 오수락률 14.1%, 오거절률 16.6%입니다. 최초 제안 기준 Brier 점수는 함수 0.089, 인자 0.105입니다.
+- 비용과 지연: 요청 1,000개당 Direct $0.057, **JBFC** $0.224입니다(공유 최초 제안 포함, 약 4배). 평균 API 지연은 1.37초와 3.03초, p95는 2.21초와 6.25초입니다.
+- 원고: `jev-fc report`가 Table 1 블록만 채웠고, 기록에서 다시 계산한 카테고리·합계 값과 모두 일치합니다. 표 생성 코드를 두 가지 고쳤습니다(테스트 추가). 빈 칸이 없으면 "-- means the experiment has not been run." 문장을 넣지 않고, 사용자 요청에 따라 행마다 표시된 값이 더 높은 쪽을 굵게 표시합니다. 같은 값은 굵게 하지 않으며 캡션에 "Bold marks the higher accuracy when the two differ."를 넣습니다. 같은 요약으로 Table 1을 다시 썼으므로, 실행 매니페스트의 `source_sha256`은 이 표 수정 전 코드를 가리킵니다(바뀐 것은 `reporting.py`의 표 서식뿐이며 기록에는 영향이 없습니다).
+- PDF를 다시 만들었습니다. 본문 4쪽, 참고문헌 5쪽, Type 3 폰트 없음 검사를 통과했고 Table 1은 3쪽에 있습니다.
+- 원고에서 이전 프로토콜을 따르던 부분(4.1의 분할 설명과 "Model experiments have not been run.", 4.2의 생성기·3회 반복·수정 한도 선택, Table 2·3)은 아래 "논문 프로토콜 통일" 절에서 고쳤습니다.
+
+## Irrelevance Direct 재확인 (2026-10-18)
+
+- Table 1의 Irrelevance Direct 25.4%가 낮아 보인다는 의견에 따라, Irrelevance 240개에서 Direct만 같은 설정(`gpt-5-nano`, effort `none`)으로 다시 실행하는 `make irrelevance-check`(`scripts/run_irrelevance_check.sh`, 비교는 `scripts/compare_irrelevance.py`)를 추가했습니다. 결과는 `results/irrelevance_direct_*`에 따로 저장되며 논문 표를 바꾸지 않습니다. `CHECK_RUNS`로 반복 횟수를 정할 수 있고, `EFFORT` 옵션도 있지만 Direct와 **JBFC**의 설정을 같게 유지하기 위해 논문 실험에는 쓰지 않습니다.
+- 재실행 결과(`results/irrelevance_direct_gpt-5-nano_same_20261018_095413`)는 27.1%(65/240)입니다. Table 1 실행과 240개 중 206개에서 판단이 같았습니다(호출→안 함 19개, 안 함→호출 15개). 앞서 멈춘 두 실행의 같은 사례도 22.9%(205개), 18.4%(87개)였습니다. 낮은 정확도는 우연이나 코드 오류가 아니라 이 설정에서 모델이 하나뿐인 무관한 함수를 호출하는 성향으로 보입니다.
+
+## 논문 프로토콜 통일 (2026-10-18)
+
+- 사용자 결정: Table 2·3도 Table 1처럼 3,051개 전체, `r=2` 고정, 1회 실행으로 통일합니다. 개발/테스트 분할, 개발 데이터로 수정 한도 선택, 3회 반복을 논문에서 뺍니다. 고정된 Abstract·Introduction·Method는 사실과 달라진 문장만 고칩니다.
+- 원고: Abstract에서 수정 한도("fixed at two"), 예제 수(3,051개), 실험 미실행 문장을 Table 1 결과로 바꿨습니다. Introduction의 수정 한도 문장, Method의 "development-tuned in experiments"→"$r=2$ in experiments"만 바꿨고 나머지 고정 문장·수식·그림은 그대로입니다. Experiments는 분할·한도 선택 절과 식, Table 3(개발 선택표)를 빼고 생성기(`gpt-5-nano`, Azure Chat Completions, effort `none`, 4,096 토큰), 1회 실행, 잘린·필터된 응답 처리, 가격($0.05/$0.005/$0.40), 결과(4.4 Results)를 새 설정에 맞췄습니다. Study Limits와 Conclusion도 고쳤습니다.
+- 4.4 Results에 사용자 요청으로 **JBFC**가 이 데이터에서 잘 되는 이유를 기록 분석으로 적었습니다. Irrelevance는 함수가 하나뿐인데 Direct가 240개 중 179개에서 호출합니다. Jev 함수 질문의 확률 중앙값은 이 호출에 0.10, 최초 no-call 61개에 0.95로 잘 갈립니다. **JBFC**는 179개 중 165개를 거부했고, 피드백 뒤 생성기가 114개에서 호출을 거두었습니다. 그중 25개는 Jev가 no-call도 거부했지만 `execute_last`로 그대로 정답이 됐습니다. 최초 no-call은 하나도 잃지 않았습니다. Live irrelevance(평균 함수 2.3개)는 분리가 약하고(0.53 대 0.89), 거부된 호출 439개 중 164개만 no-call로 바뀌었으며, 정답 no-call 24개가 오거부 뒤 호출로 바뀌었습니다. 호출이 필요한 카테고리에서는 오답 최초 호출 455개 중 338개를 거부했지만 44개만 고치고 18개를 망가뜨렸습니다. 이진 판정은 틀렸다는 사실만 알려 주고 맞는 호출은 알려 주지 않으므로, 호출을 거두면 되는 no-call 문제에서 효과가 큽니다.
+- 코드: `PAPER_SETTINGS`를 새 프로토콜(split all, 1회, `r=2`, `gpt-5-nano`, `azure_chat_completions`, effort `none`, 4,096 토큰, 가격)로 바꾸고 Table 1·2가 같은 검사를 쓰게 했습니다. Table 2 캡션은 "all BFCL examples, one run, $r=2$"이고 열별 최고 정확도를 굵게 표시합니다. 일곱 방법 실행을 보고하면 Table 1·2를 같은 실행으로 함께 채웁니다(`update_paper`). 개발 선택표(`latex_budget_table`)와 그 검증 경로는 논문에서 뺐습니다. `make table2`(`scripts/run_table2.sh`, 21,357개 기록)를 추가하고 `make tune`·`make experiment`를 없앴습니다. 선택 도구(`jev_fc.tuning`, `scripts/run_suite.py`, `scripts/tune_repair_budget.py`)는 탐색용으로만 남기고 문서에 표시했습니다.
+- 지금의 Table 1 실행은 새 검사도 통과하며, 같은 요약으로 다시 채워도 Table 1이 바뀌지 않습니다. AGENTS.md, README, `docs/benchmarks.md`, `docs/apim-gateway.md`, `docs/repair-budget.md`를 새 프로토콜에 맞췄습니다.
+- 오프라인 테스트 522개와 Ruff가 통과했습니다. PDF는 본문 4쪽·참고문헌 5쪽 시작, Type 3 폰트 없음, 정의되지 않은 참조 없음을 확인했습니다.
+
+## Table 3 준비: 수정 한도 1·2·3·5·7 (2026-10-18)
+
+- 사용자 결정: Table 3은 **JBFC**만 넣고, Table 2 실행을 `r=7`까지 이어 돌려 만듭니다.
+- 두 모델 모두 `r`을 모르고 끝나기 전에는 함수를 실행하지 않으므로, 한도 `r`의 경로는 더 큰 한도 경로의 앞 `r+1`개 시도와 같습니다. `scripts/extend_run.py`는 `r=2`에서 수락된 **JBFC** 기록은 그대로 두고, 한도에 걸린 기록만 저장된 이력에서 이어 `r=7`까지 수정합니다. 저장된 시도는 같은 파이프라인으로 재생하며, 다시 만든 이력·스키마 검사·피드백·통과 여부가 기록과 다르면 멈춥니다. 원본 실행과 코드 해시(`source_sha256`)·모델·API·단가가 다르면 요청 전에 거부합니다.
+- `scripts/table3.py`는 `r=7` 기록을 1·2·3·5에서 잘라(`derive_policy_run`) 표를 만들고, `r=2`로 자른 결과가 Table 2의 **JBFC** 기록과 정확히 같은지 확인한 뒤 논문의 `% AUTO REPAIRS` 블록을 채웁니다. 원본 기록이 바뀌면 거부합니다. `make table3`(`scripts/run_table3.sh`)이 사전 점검, 이어 돌리기, 표 채우기를 차례로 합니다.
+- 실행 중인 Table 2와 코드 해시가 같아야 이어 돌릴 수 있으므로 `src/jev_fc`는 바꾸지 않고 스크립트와 테스트만 추가했습니다(현재 해시 `c167522df5f566dc`).
+- 원고: 4.2에 수정 한도 문단과 Table 3(미실행)을 넣었습니다. 4쪽을 지키려고 4.1·4.2·4.3·4.5의 문장을 줄였습니다(내용은 유지). PDF는 본문 4쪽·참고문헌 5쪽 시작, Type 3 폰트 없음을 확인했습니다.
+- 테스트: 이어 돌린 경로가 처음부터 큰 한도로 돌린 경로와 같은지, 기록과 다른 재생은 거부하는지, 한도에 걸린 기록만 새 요청을 보내는지, `r=1`로 자른 결과가 원본과 같은지, 재개 시 새 요청이 없는지, 다른 코드·설정은 요청 전에 거부하는지, 표 생성과 논문 설정 검사를 확인했습니다. 오프라인 테스트 530개와 Ruff가 통과했습니다.
+- 예상 비용: Table 1 실행 기준 `r=2`에서 한도에 걸린 **JBFC**는 약 1,000개(32.7%)이고, 시도당 약 $0.00018(이력이 늘어난 생성 + Jev)입니다. 최대 5회를 더 시도하므로 약 $0.6–0.9, `WORKERS=8`이면 약 25분입니다.
+

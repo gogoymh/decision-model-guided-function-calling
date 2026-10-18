@@ -19,10 +19,10 @@ from dotenv import load_dotenv
 
 from . import __version__
 from .benchmarks import BFCL_REVISION, DEFAULT_CATEGORIES, load_examples, prepare_bfcl
-from .jev import JevVerifier
-from .llm import FunctionCallingLLM
+from .jev import JevAPIError, JevVerifier
+from .llm import FunctionCallingLLM, LLMAPIError
 from .pipeline import METHODS, run_example
-from .reporting import build_summary, read_jsonl, token_cost, update_paper
+from .reporting import build_summary, read_jsonl, token_cost, update_paper, update_table1
 from .scoring import load_official_checker, score_example
 from .tuning import load_repair_budget_selection
 
@@ -230,10 +230,12 @@ def run(args):
             event = {"id": example["id"], "replicate": replicate,
                      "method": current_method, "error_type": type(exc).__name__,
                      "at": datetime.now(timezone.utc).isoformat()}
-            for field in ("status_code", "request_id", "attempts"):
+            for field in ("status_code", "request_id", "attempts", "provider_code"):
                 value = getattr(exc, field, None)
                 if value is not None:
                     event[field] = value
+            if isinstance(exc, (LLMAPIError, JevAPIError)):
+                event["message"] = str(exc)  # fixed, sanitized text of these API errors
             append("errors.jsonl", event)
             stop.set()
             raise
@@ -288,10 +290,11 @@ def main():
     experiment.add_argument("--workers", type=int, default=4)
     experiment.add_argument("--limit", type=int)
     experiment.add_argument("--resume", action="store_true")
-    report = sub.add_parser("report", help="Aggregate empirical traces, optionally populate manuscript table")
+    report = sub.add_parser("report", help="Aggregate empirical traces; with --paper, fill Tables 1-2 from a "
+                            "seven-method run on all examples, or Table 1 from a Direct/JBFC run")
     report.add_argument("run_dir")
     report.add_argument("--paper")
-    template = sub.add_parser("paper-template", help="Restore the unrun main-results table")
+    template = sub.add_parser("paper-template", help="Reset Tables 1 and 2 to their unrun form")
     template.add_argument("--paper", default="paper/main.tex")
     sub.add_parser("demo", help="Run an offline, synthetic bounded-repair demo (not benchmark results)")
     sub.add_parser("check-config", help="Validate API settings without making any network requests")
@@ -307,7 +310,12 @@ def main():
         elif args.command == "report":
             summary = build_summary(args.run_dir)
             if args.paper:
-                update_paper(args.paper, summary)
+                # A run with all seven methods fills Tables 1 and 2 from the same records;
+                # a Direct/JBFC run fills Table 1 only. Both check the paper's protocol.
+                if set(summary["manifest"].get("methods") or ()) == set(METHODS):
+                    update_paper(args.paper, summary)
+                else:
+                    update_table1(args.paper, summary)
             print(json.dumps({"status": summary["status"], "methods": summary["methods"]}, indent=2))
         elif args.command == "paper-template":
             update_paper(args.paper)

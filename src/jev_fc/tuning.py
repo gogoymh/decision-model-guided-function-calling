@@ -1,5 +1,8 @@
 """Select a repair limit from complete development traces, without API calls.
 
+Not part of the paper protocol since 2026-10-18: the paper fixes r=2 and runs every
+example once (make table1, make table2). Kept for optional exploration only.
+
 Selection is read-only. An artifact binds the choice to its complete source
 evidence; loading it repeats selection before it can configure a test run.
 The selected limit is based only on jev_joint (JBFC). It is shared by the test

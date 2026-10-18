@@ -46,3 +46,48 @@ def test_credentials_cannot_be_embedded_in_recorded_base_urls(url):
 def test_invalid_gateway_fails_without_echoing_value():
     with pytest.raises(ValueError, match="direct or apim"):
         gateway_mode("not-a-valid-mode")
+
+
+@pytest.mark.parametrize("azure_endpoint,explicit,expected", [
+    (None, None, "https://gateway.invalid"),
+    ("https://azure-gateway.invalid/", None, "https://azure-gateway.invalid"),
+    ("https://unused.invalid", "https://explicit.invalid/", "https://explicit.invalid"),
+])
+def test_azure_apim_root_precedence_and_jev_route_unchanged(monkeypatch, azure_endpoint, explicit, expected):
+    monkeypatch.setenv("APIM_BASE_URL", "https://gateway.invalid/")
+    monkeypatch.setenv("APIM_SUBSCRIPTION_KEY", "subscription-only")
+    monkeypatch.setenv("AZURE_API_KEY", "unused-azure-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "unused-provider-key")
+    monkeypatch.setenv("LLM_BASE_URL", "https://unused-provider.invalid")
+    if azure_endpoint is None:
+        monkeypatch.delenv("AZURE_ENDPOINT", raising=False)
+    else:
+        monkeypatch.setenv("AZURE_ENDPOINT", azure_endpoint)
+    config = resolve_api_config("openai", gateway="apim", base_url=explicit, azure_chat_completions=True)
+    assert config.base_url == expected
+    assert config.headers == {"api-key": "subscription-only", "Content-Type": "application/json"}
+    assert "subscription-only" not in repr(config)
+    assert resolve_api_config("typesafe", gateway="apim").base_url == "https://gateway.invalid/llm/typesafe"
+
+
+def test_azure_apim_does_not_fall_back_to_azure_or_provider_credentials(monkeypatch):
+    monkeypatch.delenv("APIM_SUBSCRIPTION_KEY", raising=False)
+    monkeypatch.setenv("AZURE_API_KEY", "unused-azure-key")
+    monkeypatch.setenv("LLM_API_KEY", "unused-provider-key")
+    with pytest.raises(ValueError, match="APIM_SUBSCRIPTION_KEY"):
+        resolve_api_config("openai", gateway="apim", azure_chat_completions=True)
+
+
+@pytest.mark.parametrize("provider,gateway", [("typesafe", "apim"), ("openai", "direct")])
+def test_azure_style_does_not_change_other_provider_or_direct_routing(provider, gateway):
+    with pytest.raises(ValueError, match="requires the OpenAI provider and API_GATEWAY=apim"):
+        resolve_api_config(provider, api_key="test-only", gateway=gateway, azure_chat_completions=True)
+
+
+@pytest.mark.parametrize("url", ["https://SECRET@gateway.invalid", "https://gateway.invalid?key=SECRET",
+                                  "https://gateway.invalid#SECRET"])
+def test_azure_endpoint_rejects_embedded_credentials_without_echo(monkeypatch, url):
+    monkeypatch.setenv("AZURE_ENDPOINT", url)
+    with pytest.raises(ValueError) as caught:
+        resolve_api_config("openai", api_key="test-only", gateway="apim", azure_chat_completions=True)
+    assert "SECRET" not in str(caught.value)

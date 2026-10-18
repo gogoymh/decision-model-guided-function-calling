@@ -179,6 +179,44 @@ def test_self_refine_uses_full_budget_without_verifier(example):
     assert result["dispatched"] is True
 
 
+def unreadable():
+    """What the generator adapter returns for a response cut off at the token limit."""
+    return {"calls": None, "parse_errors": ["The response reached the output token limit before a complete proposal."],
+            "incomplete": "length", "latency_s": 1.0, "usage": {"prompt_tokens": 100, "completion_tokens": 4096}}
+
+
+@pytest.mark.parametrize("method", ["schema_only", "jev_function", "jev_arguments", "jev_joint", "jev_joint_latest"])
+def test_unreadable_proposal_gets_local_feedback_without_jev_and_is_repaired(example, method):
+    requests = []
+
+    def handler(request):
+        requests.append(json.loads(request.content))
+        answers = {name: {"type": "noul", "noul": .99} for name in ("function_correct", "arguments_correct")}
+        return httpx.Response(200, json={"model": "jev-1.13.0", "answers": answers,
+                                         "usage": {"input_tokens": 10, "output_tokens": 0}})
+
+    generator = Generator([unreadable(), proposal()])
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        verifier = JevVerifier(api_key="test-only", base_url="https://mock-jev.invalid", gateway="direct",
+                               client=client, max_retries=0)
+        result = run_example(example, generator, None if method == "schema_only" else verifier,
+                             method=method, max_repairs=1)
+    first = result["trace"][0]
+    assert first["gate_pass"] is False and first["schema"]["well_formed"] is False
+    assert first["verification"].get("api_calls", 0) == 0
+    assert len(requests) == (0 if method == "schema_only" else 1)
+    assert requests == [] or requests[0]["state"]["proposed_calls"] == proposal()["calls"]
+    repair_history = generator.seen[1][1]
+    assert repair_history[-1]["calls"] is None and repair_history[-1]["feedback"]
+    assert result["accepted"] is True and result["repairs"] == 1
+    assert result["calls"] == proposal()["calls"]
+
+
+def test_direct_keeps_unreadable_proposal_as_final_output(example):
+    result = run_example(example, Generator([unreadable()]), method="direct", max_repairs=2)
+    assert result["calls"] is None and result["repairs"] == 0 and result["dispatched"] is True
+
+
 def test_verifier_api_failure_never_turns_into_execution(example):
     class BrokenVerifier:
         def verify(self, *_):

@@ -17,6 +17,8 @@ def clean_config(monkeypatch):
                 "LLM_INPUT_PRICE", "LLM_CACHED_INPUT_PRICE", "LLM_OUTPUT_PRICE",
                 "LLM_CACHE_WRITE_5M_PRICE", "LLM_CACHE_WRITE_1H_PRICE", "JEV_INPUT_PRICE"):
         monkeypatch.delenv(key, raising=False)
+    for key in ("AZURE_ENDPOINT", "AZURE_MODEL", "AZURE_OPENAI_API_VERSION", "AZURE_API_KEY"):
+        monkeypatch.delenv(key, raising=False)
 
 
 def test_check_config_never_calls_network_or_prints_key(monkeypatch, capsys):
@@ -41,6 +43,27 @@ def test_check_config_reports_missing_shared_key_without_calling(monkeypatch, ca
     assert check_config() == 1
     info = json.loads(capsys.readouterr().out)
     assert not info["llm_key_configured"] and not info["jev_key_configured"]
+
+
+def test_azure_check_config_reports_versioned_deployment_and_unchanged_jev(monkeypatch, capsys):
+    def no_network(*args, **kwargs):
+        raise AssertionError("Configuration check attempted a network request")
+    monkeypatch.setattr(httpx.Client, "request", no_network)
+    monkeypatch.setenv("API_GATEWAY", "apim")
+    monkeypatch.setenv("APIM_BASE_URL", "https://gateway.invalid")
+    monkeypatch.setenv("AZURE_ENDPOINT", "https://azure-gateway.invalid")
+    monkeypatch.setenv("APIM_SUBSCRIPTION_KEY", "private-azure-config-key")
+    monkeypatch.setenv("LLM_API_STYLE", "azure_chat_completions")
+    monkeypatch.setenv("LLM_MODEL", "gpt-5-nano")
+    monkeypatch.setenv("AZURE_MODEL", "unused-deployment")
+    assert check_config() == 0
+    output = capsys.readouterr().out
+    assert "private-azure-config-key" not in output
+    info = json.loads(output)
+    assert info["network_requests"] == 0
+    assert info["llm_api_style"] == "azure_chat_completions"
+    assert info["llm_endpoint"] == "https://azure-gateway.invalid/openai/deployments/gpt-5-nano/chat/completions?api-version=2024-12-01-preview"
+    assert info["jev_endpoint"] == "https://gateway.invalid/llm/typesafe/v1/systemone"
 
 
 def test_nondefault_models_do_not_inherit_openai_reference_prices():

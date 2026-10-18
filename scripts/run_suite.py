@@ -1,5 +1,8 @@
 """Choose a repair budget on development data, then run the paired test suite.
 
+Not part of the paper protocol since 2026-10-18: the paper fixes r=2 and runs every
+example once (make table1, make table2). Kept for optional exploration only.
+
 Development selection always happens first. Optional test-prefix reports only
 describe smaller stopping caps; they never choose the budget. No keys are
 embedded here. --resume requires matching code, data, models and configuration.

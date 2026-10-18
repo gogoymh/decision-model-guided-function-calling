@@ -18,6 +18,24 @@ from jev_fc.pipeline import METHODS
 from jev_fc.reporting import build_summary, read_jsonl, update_paper
 
 
+def cut_off_generation(style):
+    """A 200 response stopped at the output token limit in the middle of a call."""
+    if style == "responses":
+        return {"model": "offline-model-resolved", "status": "incomplete",
+                "incomplete_details": {"reason": "max_output_tokens"},
+                "output": [{"type": "function_call", "name": "calculate_triangle_area", "arguments": '{"base": 1',
+                            "call_id": "call_0", "status": "incomplete"}],
+                "usage": {"input_tokens": 100, "output_tokens": 4096, "input_tokens_details": {"cached_tokens": 0}}}
+    if style == "anthropic_messages":
+        return {"type": "message", "role": "assistant", "model": "claude-offline-model-resolved",
+                "stop_reason": "max_tokens", "content": [{"type": "text", "text": "Partial"}],
+                "usage": {"input_tokens": 100, "output_tokens": 4096}}
+    return {"model": "offline-model", "choices": [{"finish_reason": "length", "message": {
+        "role": "assistant", "content": None, "tool_calls": [{"id": "call_0", "type": "function", "function": {
+            "name": "calculate_triangle_area", "arguments": '{"base": 1'}}]}}],
+        "usage": {"prompt_tokens": 100, "completion_tokens": 4096}}
+
+
 @pytest.fixture
 def offline_run(tmp_path, monkeypatch, request):
     api_style = getattr(request, "param", "chat_completions")
@@ -50,6 +68,7 @@ def offline_run(tmp_path, monkeypatch, request):
     data_path = tmp_path / "tiny.jsonl"
     data_path.write_text("".join(json.dumps(row) + "\n" for row in selected))
     observed = {"llm": [], "jev": [], "histories": [], "fail_next_jev": False, "fail_next_llm": False,
+                "incomplete_next": {}, "filter_prompt": {},
                 "api_style": api_style, "gateway": gateway,
                 "repairs_until_correct": 1,
                 "subscription_key": "integration-subscription-before-rotation", "auth_providers": set()}
@@ -97,6 +116,12 @@ def offline_run(tmp_path, monkeypatch, request):
             assert rounds[0] >= 1
             assert all(set(step) == {"round", "calls", "feedback"} for step in history)
         observed["histories"].append((example_id, deepcopy(history)))
+        if observed["incomplete_next"].get(example_id):
+            observed["incomplete_next"][example_id] -= 1
+            return httpx.Response(200, json=cut_off_generation(style))
+        if len(history) in observed["filter_prompt"].get(example_id, ()):
+            return httpx.Response(400, headers={"apim-request-id": "req-llm-filtered"}, json={"error": {
+                "code": "content_filter", "message": "PRIVATE_FILTER_MESSAGE", "param": "prompt", "status": 400}})
         calls = deepcopy(oracle_calls[example_id])
         if style != "anthropic_messages":
             assert body["tool_choice"] == "auto"
@@ -255,6 +280,62 @@ def test_latest_and_cumulative_use_same_initial_but_different_second_repair_cont
     assert read_jsonl(directory / "records.jsonl") == rows
 
 
+@pytest.mark.parametrize("offline_run", ["chat_completions", "responses", "anthropic_messages"], indirect=True)
+def test_cut_off_generation_is_scored_wrong_repaired_and_counted_without_stopping(offline_run):
+    args, observed, _ = offline_run
+    observed["incomplete_next"]["irrelevance_0"] = 1
+    cli.run(args)
+    directory = Path(args.output)
+    assert not (directory / "errors.jsonl").exists()
+    rows = read_jsonl(directory / "records.jsonl")
+    assert len(rows) == 6 and len(observed["llm"]) == 6 and len(observed["jev"]) == 5
+    pair = {row["method"]: row for row in rows if row["id"] == "irrelevance_0"}
+    direct, joint = pair["direct"], pair["jev_joint"]
+    # The shared initial proposal is unreadable: never a correct no-call.
+    assert direct["calls"] is None and direct["trace"][0]["proposal"]["incomplete"] == "length"
+    assert direct["score"]["correct"] is False
+    assert direct["accounting"]["complete"] is True and direct["accounting"]["llm_output"] == 4096
+    first = joint["trace"][0]
+    assert first["proposal"] == direct["trace"][0]["proposal"]
+    assert first["verification"]["api_calls"] == 0 and first["gate_pass"] is False
+    repair_histories = [history for key, history in observed["histories"] if key == "irrelevance_0"]
+    assert repair_histories[1][0]["calls"] is None
+    assert joint["repairs"] == 1 and joint["accepted"] is True and joint["score"]["correct"] is True
+    summary = build_summary(directory)
+    assert summary["status"] == "complete" and summary["api_error_events"] == 0
+    assert summary["methods"]["direct"]["accuracy"] == 0
+    assert (summary["methods"]["direct"]["incomplete_proposal_n"], summary["methods"]["direct"]["incomplete_final_n"]) == (1, 1)
+    assert (summary["methods"]["jev_joint"]["incomplete_proposal_n"], summary["methods"]["jev_joint"]["incomplete_final_n"]) == (1, 0)
+    assert summary["methods"]["direct"]["mean_cost_usd"] is not None
+    assert_saved_files_have_no_credentials(directory)
+
+
+@pytest.mark.parametrize("offline_run", ["chat_completions", "responses"], indirect=True)
+def test_prompt_rejected_by_filter_during_repair_is_scored_wrong_without_stopping(offline_run):
+    args, observed, _ = offline_run
+    observed["filter_prompt"]["simple_python_0"] = {1}
+    cli.run(args)
+    directory = Path(args.output)
+    assert not (directory / "errors.jsonl").exists()
+    rows = read_jsonl(directory / "records.jsonl")
+    assert len(rows) == 6 and len(observed["llm"]) == 5 and len(observed["jev"]) == 4
+    joint = next(row for row in rows if row["id"] == "simple_python_0" and row["method"] == "jev_joint")
+    filtered = joint["trace"][1]
+    assert filtered["proposal"]["incomplete"] == "prompt_filter" and filtered["proposal"]["usage"] == {}
+    assert filtered["verification"]["api_calls"] == 0 and filtered["gate_pass"] is False
+    assert joint["exhausted"] is True and joint["calls"] is None and joint["score"]["correct"] is False
+    assert joint["accounting"]["tokens_complete"] is False
+    summary = build_summary(directory)
+    assert summary["status"] == "complete" and summary["api_error_events"] == 0
+    joint_summary = summary["methods"]["jev_joint"]
+    assert (joint_summary["incomplete_proposal_n"], joint_summary["incomplete_final_n"]) == (1, 1)
+    assert joint_summary["cost_observed_n"] == 2 and joint_summary["mean_cost_usd"] is None
+    assert summary["methods"]["direct"]["mean_cost_usd"] is not None
+    for path in directory.iterdir():
+        assert "PRIVATE_FILTER_MESSAGE" not in path.read_text()
+    assert_saved_files_have_no_credentials(directory)
+
+
 def test_partial_resume_keeps_completed_method_and_shared_initial(offline_run):
     args, observed, _ = offline_run
     observed["fail_next_jev"] = True
@@ -294,7 +375,7 @@ def test_report_refuses_smoke_or_synthetic_results_as_manuscript(offline_run, tm
     paper = tmp_path / "paper.tex"
     source = "% BEGIN AUTO RESULTS\n--\n% END AUTO RESULTS\n"
     paper.write_text(source)
-    with pytest.raises(ValueError, match="complete test runs"):
+    with pytest.raises(ValueError, match="declared protocol"):
         update_paper(paper, summary)
     assert paper.read_text() == source
     manifest_path = Path(args.output) / "manifest.json"
@@ -576,7 +657,8 @@ def test_apim_sanitized_http_errors_and_partial_resume_after_key_rotation(offlin
     assert error["attempts"] == 1
     assert error["error_type"] == ("LLMAPIError" if failing_provider == "llm" else "JevAPIError")
     assert error["method"] == ("initial" if failing_provider == "llm" else "jev_joint")
-    assert set(error) == {"id", "replicate", "method", "error_type", "at", "status_code", "request_id", "attempts"}
+    assert set(error) == {"id", "replicate", "method", "error_type", "at", "status_code", "request_id", "attempts", "message"}
+    assert error["message"].startswith("LLM HTTP 403" if failing_provider == "llm" else "Jev HTTP 401")
     assert len(saved_records) == (0 if failing_provider == "llm" else 1)
     assert build_summary(directory)["status"] == "partial"
     assert_saved_files_have_no_credentials(directory)
@@ -596,3 +678,71 @@ def test_apim_sanitized_http_errors_and_partial_resume_after_key_rotation(offlin
     assert summary["manifest"]["config_id"] == manifest_before["config_id"]
     assert summary["methods"]["jev_joint"]["accuracy"] == 1
     assert_saved_files_have_no_credentials(directory)
+
+
+def _script(name):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[1] / "scripts" / f"{name}.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_extension_continues_only_exhausted_jbfc_rows_and_cuts_back_to_the_source(offline_run, monkeypatch, tmp_path):
+    args, observed, _ = offline_run
+    extend_run, table3 = _script("extend_run"), _script("table3")
+    monkeypatch.setattr(extend_run, "load_dotenv", lambda *_: None)
+    observed["repairs_until_correct"] = 3  # wrong until the history reaches round 3
+    cli.run(args)  # r=1: two calls end exhausted, the no-call is accepted at once
+    source = Path(args.output)
+    before = len(observed["llm"]), len(observed["jev"]), len(observed["histories"])
+    out = tmp_path / "extended"
+    argv = [str(source), "--max-repairs", "4", "--output", str(out), "--workers", "1",
+            "--data", args.data, "--checker", args.checker]
+    summary = extend_run.main(argv)
+    assert summary["status"] == "complete" and summary["manifest"]["extends"]["max_repairs"] == 1
+    rows = {row["id"]: row for row in read_jsonl(out / "records.jsonl")}
+    assert rows["irrelevance_0"]["extended"] is False and rows["irrelevance_0"]["repairs"] == 0
+    for example_id in ("simple_python_0", "multiple_0"):
+        row = rows[example_id]
+        assert row["extended"] is True and row["accepted"] is True and row["repairs"] == 3
+        assert row["score"]["correct"] is True and row["max_repairs"] == 4
+    # Only attempts 2 and 3 of the two exhausted rows made new requests.
+    assert (len(observed["llm"]) - before[0], len(observed["jev"]) - before[1]) == (4, 4)
+    new = [[step["round"] for step in history] for _, history in observed["histories"][before[2]:]]
+    assert sorted(new) == [[1, 2], [1, 2], [1, 2, 3], [1, 2, 3]]
+    # Cutting the r=4 trajectories at r=1 reproduces the source rows exactly.
+    summaries = table3.derive_limits(out, limits=(1, 2, 4))
+    table3.check_matches_source(out, source)
+    assert summaries[1]["methods"]["jev_joint"]["accuracy"] == build_summary(source)["methods"]["jev_joint"]["accuracy"]
+    assert summaries[4]["methods"]["jev_joint"]["accuracy"] == 1
+    # Resuming the complete extension makes no new requests.
+    after = len(observed["llm"]), len(observed["jev"])
+    extend_run.main(argv + ["--resume"])
+    assert (len(observed["llm"]), len(observed["jev"])) == after
+    # A changed source can no longer back the table.
+    (source / "records.jsonl").write_bytes((source / "records.jsonl").read_bytes() + b"\n")
+    with pytest.raises(ValueError, match="changed after the extension"):
+        table3.check_extension(out)
+    assert_saved_files_have_no_credentials(out)
+
+
+def test_extension_refuses_other_code_or_settings_before_requests(offline_run, monkeypatch, tmp_path):
+    args, observed, _ = offline_run
+    extend_run = _script("extend_run")
+    monkeypatch.setattr(extend_run, "load_dotenv", lambda *_: None)
+    cli.run(args)
+    before = len(observed["llm"]), len(observed["jev"])
+    argv = [args.output, "--max-repairs", "3", "--output", str(tmp_path / "x"), "--workers", "1",
+            "--data", args.data, "--checker", args.checker]
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "low")
+    with pytest.raises(ValueError, match="reasoning_effort"):
+        extend_run.main(argv)
+    monkeypatch.setenv("LLM_REASONING_EFFORT", "none")
+    monkeypatch.setattr(cli, "_source_hash", lambda: "other-code")
+    with pytest.raises(ValueError, match="different code"):
+        extend_run.main(argv)
+    with pytest.raises(ValueError, match="larger"):
+        extend_run.main([args.output, "--max-repairs", "1", "--output", str(tmp_path / "y")])
+    assert (len(observed["llm"]), len(observed["jev"])) == before
+    assert not (tmp_path / "x").exists()

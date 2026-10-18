@@ -26,12 +26,13 @@ Responses 요청에는 `strict: false`를 명시합니다. 이를 생략하면 A
 ```bash
 make check-config
 make smoke
-make experiment
+make table1 WORKERS=8   # Table 1: Direct와 JBFC
+make table2 WORKERS=8   # Table 1·2: 일곱 방법
 ```
 
 `check-config`는 네트워크 요청 없이 실제 경로, API 형식, 모델, 키 설정 여부와 단가 설정만 확인합니다. 키 값은 출력하지 않습니다. 키가 없으면 경로를 보여준 뒤 종료 코드 1을 반환합니다. `smoke`부터 실제 요청과 비용이 발생합니다. 가이드는 사용 가능한 모델 목록이나 프로젝트 권한을 보장하지 않으므로 실제 계정·모델 접근은 이 단계에서 확인해야 합니다.
 
-기본값은 `LLM_API_STYLE=responses`, `LLM_MODEL=gpt-5.4-mini-2026-03-17`, `TYPESAFE_MODEL=jev-1.13.0`입니다. 모델을 바꾸면 개발 데이터에서 프롬프트와 임계값을 다시 검토하고 새 실행 경로를 사용하세요.
+코드 기본값은 `LLM_API_STYLE=responses`, `LLM_MODEL=gpt-5.4-mini-2026-03-17`, `TYPESAFE_MODEL=jev-1.13.0`입니다. 논문 표를 만드는 `make table1`·`make table2`는 Azure 배포 경로(`LLM_API_STYLE=azure_chat_completions`, `gpt-5-nano`, reasoning effort `none`)를 직접 지정합니다. 모델을 바꾸면 새 실행 경로를 사용하세요.
 
 Anthropic을 사용하려면 다음을 설정합니다. 모델 ID는 프로젝트에서 사용할 수 있는 실제 값으로 지정합니다.
 
@@ -47,7 +48,7 @@ LLM_OUTPUT_PRICE=<출력 단가>
 
 캐시 쓰기가 보고되면 `LLM_CACHE_WRITE_5M_PRICE`와 `LLM_CACHE_WRITE_1H_PRICE`도 필요합니다. API 응답이 쓰기 수명이나 필요한 사용량을 제공하지 않거나 필요한 단가가 없으면 비용을 미상으로 표시합니다. 새 템플릿의 빈 단가는 기본 OpenAI 모델에만 공개 기준 단가로 해석됩니다. 다른 모델에는 GPT 단가를 자동 적용하지 않습니다. 기존 `.env`에 단가 숫자가 이미 있으면 명시적 설정으로 취급하므로 모델을 바꿀 때 함께 수정하세요.
 
-`make experiment`는 다른 모델·프로토콜도 실험과 요약까지 완료합니다. 현재 원고는 기본 APIM/Responses 프로토콜을 기술하므로 다른 설정의 결과는 논문에 자동 삽입하지 않습니다. 별도로 논문의 실험 조건을 바꾼 뒤 반영해야 합니다. `uv run python scripts/run_suite.py --skip-paper`는 기본 프로토콜에서도 논문 반영을 생략합니다.
+`make table1`·`make table2`는 다른 배포(`MODEL=...`)로도 실험과 요약까지 완료합니다. 원고는 `gpt-5-nano`·Azure Chat Completions·`r=2`·전체 예제·1회 실행을 기술하므로 다른 설정의 결과는 논문 표에 자동 삽입하지 않습니다. 별도로 논문의 실험 조건을 바꾼 뒤 반영해야 합니다.
 
 ## 기록과 오류
 

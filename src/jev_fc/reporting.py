@@ -21,46 +21,46 @@ LABELS = {"direct": "Direct", "schema_only": "Schema repair", "self_refine": "Se
 TABLE_METHOD_ORDER = ("direct", "schema_only", "self_refine", "jev_function", "jev_arguments",
                       "jev_joint_latest", "jev_joint")
 
+# The paper's protocol for Tables 1 and 2: every prepared example, one run, a fixed
+# repair limit, and the declared models and interface. Nothing is tuned on these data.
+PAPER_REPAIRS = 2
 PAPER_SETTINGS = {
-    "replicates": 3, "threshold": .8,
-    "exhaustion_policy": "execute_last", "split_seed": 1729,
-    "llm_model": "gpt-5.4-mini-2026-03-17", "jev_model": "jev-1.13.0",
-    "reasoning_effort": "none", "temperature": None, "max_completion_tokens": 4096,
-    "llm_provider": "openai", "llm_api_style": "responses", "llm_gateway": "apim",
-    "jev_gateway": "apim",
+    "split": "all", "limit": None, "synthetic": False, "replicates": 1, "max_repairs": PAPER_REPAIRS,
+    "threshold": .8, "exhaustion_policy": "execute_last",
+    "llm_model": "gpt-5-nano", "jev_model": "jev-1.13.0", "reasoning_effort": "none", "temperature": None,
+    "max_completion_tokens": 4096, "llm_provider": "openai", "llm_api_style": "azure_chat_completions",
+    "llm_gateway": "apim", "jev_gateway": "apim",
 }
-PAPER_REPAIR_GRID = (0, 1, 2, 3, 4, 5)
+# USD per million tokens for gpt-5-nano and Jev, as stated in the paper.
+PAPER_PRICES = {"llm_input": .05, "llm_cached_input": .005, "llm_output": .4, "jev_input": .042}
+TABLE1_METHODS = ("direct", "jev_joint")
 
 
-def paper_protocol_matches(manifest):
-    """Whether a run uses the paper's declared model/interface protocol.
+def paper_protocol_matches(manifest, methods=METHODS):
+    """Whether a run follows the paper's protocol and includes the given methods.
 
-    Recheck the development selection and its source records. Test dataset
-    identity and completeness are additionally checked by update_paper.
+    Table 2 needs all seven methods; Table 1 needs Direct and JBFC. Example IDs
+    and the data digest are checked separately against the prepared dataset.
     """
-    prices = manifest.get("prices_usd_per_million", {})
-    methods = manifest.get("methods")
-    if (not isinstance(prices, dict) or not isinstance(methods, (list, tuple))
-        or len(methods) != len(METHODS) or set(methods) != set(METHODS)
-        or manifest.get("split") != "test" or manifest.get("limit") is not None
-        or not all(manifest.get(k) == v for k, v in PAPER_SETTINGS.items())
-        or not all(prices.get(k) == v for k, v in {
-            "llm_input": .75, "llm_cached_input": .075, "llm_output": 4.5, "jev_input": .042,
-        }.items())):
-        return False
-    selection = manifest.get("repair_budget_selection")
-    if (not isinstance(selection, dict) or selection.get("grid") != list(PAPER_REPAIR_GRID)
-        or selection.get("selection_rule") != "max_dev_accuracy_then_smallest_budget"
-        or isinstance(manifest.get("max_repairs"), bool)
-        or not isinstance(manifest.get("max_repairs"), int)
-        or selection.get("selected_max_repairs") != manifest["max_repairs"]):
-        return False
-    from .tuning import validate_repair_budget_selection
-    try:
-        validate_repair_budget_selection(selection, test_config=manifest)
-    except (ValueError, OSError, KeyError, TypeError):
-        return False
-    return True
+    prices = manifest.get("prices_usd_per_million")
+    run_methods = manifest.get("methods")
+    return (isinstance(prices, dict) and isinstance(run_methods, (list, tuple))
+            and len(run_methods) == len(set(run_methods)) and set(methods) <= set(run_methods) <= set(METHODS)
+            and not any(isinstance(manifest.get(key), bool) for key in ("replicates", "max_repairs"))
+            and all(key in manifest and manifest[key] == value for key, value in PAPER_SETTINGS.items())
+            and manifest["synthetic"] is False
+            and all(prices.get(key) == value for key, value in PAPER_PRICES.items()))
+
+
+def _check_all_examples(manifest):
+    """The run must cover every prepared example of the pinned dataset."""
+    from .benchmarks import load_examples
+    canonical_path = Path(__file__).resolve().parents[2] / "data/bfcl/examples.jsonl"
+    canonical = load_examples(canonical_path)
+    if len(canonical) != 3051 or sorted(manifest.get("ids") or []) != sorted(e["id"] for e in canonical):
+        raise ValueError("The manuscript requires all 3,051 canonical example IDs; a subset cannot populate it.")
+    if manifest.get("dataset_sha256") != hashlib.sha256(canonical_path.read_bytes()).hexdigest():
+        raise ValueError("Manuscript data digest differs from the canonical prepared BFCL dataset.")
 
 
 def read_jsonl(path: str | Path) -> list[dict]:
@@ -210,6 +210,9 @@ def summarize_group(rows):
         "cost_observed_n": sum(r.get("accounting", {}).get("complete", False) for r in rows),
         "mean_llm_proposals": avg([len(r["trace"]) for r in rows]),
         "mean_jev_requests": avg([sum(t["verification"].get("api_calls", 0) for t in r["trace"]) for r in rows]),
+        # Generator responses cut off, filtered or refused; each was an unreadable proposal.
+        "incomplete_proposal_n": sum(bool(t["proposal"].get("incomplete")) for r in rows for t in r["trace"]),
+        "incomplete_final_n": sum(bool(r["trace"][-1]["proposal"].get("incomplete")) for r in rows),
         "brier_function": avg(brier_function), "brier_arguments": avg(brier_arguments),
         "brier_function_n": len(brier_function), "brier_arguments_n": len(brier_arguments),
         "verified_candidates_n": len(verifications),
@@ -447,118 +450,152 @@ def derive_policy_run(source_dir, output_dir, max_repairs=None, exhaustion_polic
     return build_summary(output_dir)
 
 
+def _bold_best(column):
+    """Bold the highest shown value in a column; values tied for highest are all bold."""
+    shown = [float(cell) for cell in column if cell != "--"]
+    if len(shown) < 2:
+        return column, False
+    best = max(shown)
+    return [rf"\textbf{{{cell}}}" if cell != "--" and float(cell) == best else cell for cell in column], True
+
+
 def latex_table(summary=None):
+    """Table 2: the seven methods on all prepared examples (one run, fixed repair limit)."""
     def fmt(value, scale=1, precision=2):
         return "--" if value is None else f"{value * scale:.{precision}f}"
     lines = [r"\begin{table}[t]", r"\centering\small", r"\setlength{\tabcolsep}{2.7pt}",
              r"\begin{tabular}{lrrrrr}", r"\toprule", r"Method & Call & Func. & Args. & Sec. & USD/1k \\", r"\midrule"]
+    rows = []
     for method in TABLE_METHOD_ORDER:
         values = (summary or {}).get("methods", {}).get(method, {})
+        rows.append([fmt(values.get("accuracy"), 100, 1), fmt(values.get("function_accuracy"), 100, 1),
+                     fmt(values.get("arguments_accuracy_conditional"), 100, 1), fmt(values.get("mean_latency_s")),
+                     fmt(values.get("mean_cost_usd"), 1000, 3)])
+    missing = any("--" in row for row in rows)
+    bolded = False
+    for column in range(3):  # accuracy columns: higher is better
+        cells, bold = _bold_best([row[column] for row in rows])
+        bolded = bolded or bold
+        for row, cell in zip(rows, cells):
+            row[column] = cell
+    for method, row in zip(TABLE_METHOD_ORDER, rows):
         label = LABELS[method]
         if label.startswith("JBFC"):
             label = r"\textbf{" + label + "}"
-        lines.append(label + " & " + " & ".join([
-            fmt(values.get("accuracy"), 100, 1), fmt(values.get("function_accuracy"), 100, 1),
-            fmt(values.get("arguments_accuracy_conditional"), 100, 1), fmt(values.get("mean_latency_s")), fmt(values.get("mean_cost_usd"), 1000, 3)]) + r" \\")
-    limit = "The repair limit is chosen on development data."
-    manifest = (summary or {}).get("manifest", {})
-    if manifest and paper_protocol_matches(manifest):
-        limit = f"Repair methods use $r={manifest['max_repairs']}$, chosen on development data."
+        lines.append(label + " & " + " & ".join(row) + r" \\")
+    model = (summary or {}).get("manifest", {}).get("llm_model")
+    generator = rf" Generator: \texttt{{{_tex_escape(model)}}}." if model else ""
+    best = " Bold marks the highest accuracy in each column." if bolded else ""
+    unrun = " -- means unavailable or unrun." if missing else ""
     lines.extend([r"\bottomrule", r"\end{tabular}",
-                  r"\caption{Methods on the BFCL test set. " + limit
-                  + r" Call and function accuracy (\%) exclude live relevance. Argument accuracy (\%) uses calls with the correct function and argument labels. -- means unavailable or unrun.}",
+                  rf"\caption{{Methods on all BFCL examples, from one run with repair limit $r={PAPER_REPAIRS}$."
+                  + generator + best
+                  + r" Call and function accuracy (\%) exclude live relevance. Argument accuracy (\%) uses calls with the correct function and argument labels."
+                  + unrun + "}",
                   r"\label{tab:main}", r"\end{table}"])
     return "\n".join(lines)
 
 
+# Table 1 shows Direct and JBFC by category, from the same protocol as Table 2.
+TABLE1_REPAIRS = PAPER_REPAIRS
+TABLE1_CATEGORIES = (("simple_python", "Simple Python", 400), ("multiple", "Multiple", 200),
+                     ("irrelevance", "Irrelevance", 240), ("live_simple", "Live simple", 258),
+                     ("live_multiple", "Live multiple", 1053), ("live_irrelevance", "Live irrelevance", 884),
+                     ("live_relevance", r"Live relevance$^\dagger$", 16))
+
+
+def _tex_escape(text):
+    special = {"\\": r"\textbackslash{}", "_": r"\_", "%": r"\%", "&": r"\&", "#": r"\#", "$": r"\$",
+               "{": r"\{", "}": r"\}", "~": r"\textasciitilde{}", "^": r"\textasciicircum{}"}
+    return "".join(special.get(char, char) for char in str(text))
+
+
+def _replace_block(source, marker, content):
+    begin, finish = f"% BEGIN AUTO {marker}", f"% END AUTO {marker}"
+    if source.count(begin) != 1 or source.count(finish) != 1:
+        raise ValueError(f"Manuscript must have exactly one pair of automatic {marker} markers.")
+    prefix, rest = source.split(begin)
+    _, suffix = rest.split(finish)
+    return prefix + begin + "\n" + content + "\n" + finish + suffix
+
+
+def _bold_higher(cells):
+    """Bold the strictly higher of two shown values; ties and missing values stay plain."""
+    if "--" in cells or float(cells[0]) == float(cells[1]):
+        return cells, False
+    best = 0 if float(cells[0]) > float(cells[1]) else 1
+    return [rf"\textbf{{{cell}}}" if index == best else cell for index, cell in enumerate(cells)], True
+
+
 def latex_category_table(summary=None):
-    categories = [("simple_python", "Simple Python", 400, 360), ("multiple", "Multiple", 200, 180),
-                  ("irrelevance", "Irrelevance", 240, 216), ("live_simple", "Live simple", 258, 233),
-                  ("live_multiple", "Live multiple", 1053, 948), ("live_irrelevance", "Live irrelevance", 884, 796),
-                  ("live_relevance", r"Live relevance$^\dagger$", 16, 15)]
-    lines = [r"\begin{table}[t]", r"\centering\small", r"\setlength{\tabcolsep}{2.4pt}",
-             r"\begin{tabular}{lrrrr}", r"\toprule", r"Category & All & Test & Direct & \textbf{JBFC}\\", r"\midrule"]
-    for category, label, full, test in categories:
+    """Table 1: Direct and JBFC accuracy on all prepared examples (one run, fixed repair limit)."""
+    lines = [r"\begin{table}[t]", r"\centering\small", r"\setlength{\tabcolsep}{4pt}",
+             r"\begin{tabular}{lrrr}", r"\toprule", r"Category & Examples & Direct & \textbf{JBFC}\\", r"\midrule"]
+    missing = bolded = False
+    for category, label, count in TABLE1_CATEGORIES:
         cells = []
         for method in ("direct", "jev_joint"):
             values = (summary or {}).get("by_category", {}).get(f"{category}/{method}", {})
             accuracy = values.get("relevance_call_rate" if category == "live_relevance" else "accuracy")
             cells.append("--" if accuracy is None else f"{accuracy * 100:.1f}")
-        lines.append(f"{label} & {full} & {test} & " + " & ".join(cells) + r"\\")
+        missing = missing or "--" in cells
+        cells, bold = _bold_higher(cells)
+        bolded = bolded or bold
+        lines.append(f"{label} & {count} & " + " & ".join(cells) + r"\\")
     total = [(summary or {}).get("methods", {}).get(m, {}).get("accuracy") for m in ("direct", "jev_joint")]
-    lines += [r"\midrule", "Total & 3051 & 2748 & " + " & ".join("--" if x is None else f"{100*x:.1f}" for x in total) + r"\\",
+    missing = missing or None in total
+    total, bold = _bold_higher(["--" if x is None else f"{100*x:.1f}" for x in total])
+    bolded = bolded or bold
+    model = (summary or {}).get("manifest", {}).get("llm_model")
+    generator = rf" Generator: \texttt{{{_tex_escape(model)}}}." if model else ""
+    best = " Bold marks the higher accuracy when the two differ." if bolded else ""
+    # The note on empty cells appears only while some cell is still empty.
+    unrun = " -- means the experiment has not been run." if missing else ""
+    lines += [r"\midrule", "Total & 3051 & " + " & ".join(total) + r"\\",
               r"\bottomrule", r"\end{tabular}",
-              r"\caption{BFCL example counts and test accuracy (\%). Counts describe the prepared data. $^\dagger$Live relevance checks only whether a call is present; total accuracy excludes these 15 cases. -- means the experiment has not been run.}",
+              rf"\caption{{BFCL example counts and accuracy (\%) on all examples, from one run with repair limit $r={TABLE1_REPAIRS}$."
+              + generator + best
+              + r" $^\dagger$Live relevance checks only whether a call is present; total accuracy excludes these 16 cases."
+              + unrun + "}",
               r"\label{tab:categories}", r"\end{table}"]
     return "\n".join(lines)
 
 
-def latex_budget_table(selection=None):
-    """Report development-only budget selection, never test-budget selection."""
-    candidates, selected = {}, None
-    grid = PAPER_REPAIR_GRID
-    if selection is not None:
-        from .tuning import validate_repair_budget_selection
-        selection = validate_repair_budget_selection(selection)
-        grid, selected = selection["grid"], selection["selected_max_repairs"]
-        candidates = {row["max_repairs"]: row for row in selection["candidates"]}
+def table1_protocol_matches(manifest):
+    """Whether a run can fill Table 1: Direct and JBFC under the paper's protocol."""
+    return paper_protocol_matches(manifest, TABLE1_METHODS)
 
-    def fmt(value, scale=1, precision=2):
-        return "--" if value is None else f"{value * scale:.{precision}f}"
 
-    lines = [r"\begin{table}[t]", r"\centering\small", r"\setlength{\tabcolsep}{3pt}",
-             r"\begin{tabular}{lrrrr}", r"\toprule", r"$r$ & Dev Acc. (\%) & Repairs & Sec. & USD/1k\\", r"\midrule"]
-    for budget in grid:
-        values = candidates.get(budget, {})
-        label = f"${budget}^{{*}}$" if budget == selected else f"${budget}$"
-        lines.append(label + " & " + " & ".join([
-            fmt(values.get("accuracy"), 100, 1), fmt(values.get("mean_repairs")),
-            fmt(values.get("mean_latency_s")), fmt(values.get("mean_cost_usd"), 1000, 3),
-        ]) + r"\\")
-    selected_note = r" $^{*}$ marks the selected limit." if selected is not None else ""
-    lines += [r"\bottomrule", r"\end{tabular}",
-              r"\caption{Development data choose the repair limit for \textbf{JBFC}. We choose the highest call accuracy; ties choose the smaller limit. Accuracy excludes live relevance."
-              + selected_note + r" -- means no result is available or the experiment has not been run.}",
-              r"\label{tab:diagnostics}", r"\end{table}"]
-    return "\n".join(lines)
+def update_table1(paper_path: str | Path, summary: dict | None = None):
+    """Fill only Table 1 from a complete all-example run; the other tables stay as they are."""
+    if summary is not None:
+        if summary.get("status") != "complete":
+            raise ValueError("Only a complete run can populate Table 1.")
+        if not table1_protocol_matches(summary["manifest"]):
+            raise ValueError("Table 1 needs Direct and JBFC on all examples (--split all), one run, r=2, "
+                             "threshold 0.8, execute_last and the paper's model settings and prices.")
+        _check_all_examples(summary["manifest"])
+    path = Path(paper_path)
+    path.write_text(_replace_block(path.read_text(), "CATEGORIES", latex_category_table(summary)))
 
 
 def update_paper(paper_path: str | Path, summary: dict | None = None):
-    selection = None
+    """Fill Tables 1 and 2 from one complete seven-method run on all examples.
+
+    Both tables then come from the same records, so their Direct and JBFC values
+    agree. Without a summary, both tables are reset to their unrun form.
+    """
     if summary is not None:
-        if summary["status"] != "complete" or summary["manifest"]["split"] != "test":
-            raise ValueError("Only complete test runs may populate the manuscript; keep dev/smoke outputs separate.")
-        if summary["manifest"].get("limit"):
-            raise ValueError("A limited smoke run cannot populate the manuscript's main table.")
-        from .benchmarks import load_examples, stratified_split
-        canonical_path = Path(__file__).resolve().parents[2] / "data/bfcl/examples.jsonl"
-        canonical = load_examples(canonical_path)
-        _, test = stratified_split(canonical, seed=1729)
+        if summary.get("status") != "complete":
+            raise ValueError("Only a complete run can populate the manuscript; keep partial or smoke outputs separate.")
         manifest = summary["manifest"]
-        if set(manifest["ids"]) != {e["id"] for e in test} or len(test) != 2748:
-            raise ValueError("The manuscript requires all 2,748 canonical test IDs; a custom subset cannot populate it.")
-        if manifest["dataset_sha256"] != hashlib.sha256(canonical_path.read_bytes()).hexdigest():
-            raise ValueError("Manuscript data digest differs from the canonical prepared BFCL dataset.")
         if not paper_protocol_matches(manifest):
-            raise ValueError("Run differs from the manuscript's declared protocol or lacks a valid development repair-limit selection.")
-        selection = manifest["repair_budget_selection"]
+            raise ValueError("Run differs from the manuscript's declared protocol: all seven methods on all "
+                             "examples, one run, r=2, threshold 0.8, execute_last, and the paper's models and prices.")
+        _check_all_examples(manifest)
     path = Path(paper_path)
     source = path.read_text()
-    start, end = "% BEGIN AUTO RESULTS", "% END AUTO RESULTS"
-    if source.count(start) != 1 or source.count(end) != 1:
-        raise ValueError("Manuscript must have exactly one pair of automatic-results markers.")
-    before, remainder = source.split(start)
-    _, after = remainder.split(end)
-    source = before + start + "\n" + latex_table(summary) + "\n" + end + after
-    for marker, content in [("CATEGORIES", latex_category_table(summary))]:
-        begin, finish = f"% BEGIN AUTO {marker}", f"% END AUTO {marker}"
-        if begin in source and finish in source:
-            prefix, rest = source.split(begin)
-            _, suffix = rest.split(finish)
-            source = prefix + begin + "\n" + content + "\n" + finish + suffix
-    begin, finish = "% BEGIN AUTO DIAGNOSTICS", "% END AUTO DIAGNOSTICS"
-    if begin in source and finish in source:
-        prefix, rest = source.split(begin)
-        _, suffix = rest.split(finish)
-        source = prefix + begin + "\n" + latex_budget_table(selection) + "\n" + finish + suffix
+    source = _replace_block(source, "RESULTS", latex_table(summary))
+    if "% BEGIN AUTO CATEGORIES" in source or "% END AUTO CATEGORIES" in source:
+        source = _replace_block(source, "CATEGORIES", latex_category_table(summary))
     path.write_text(source)
