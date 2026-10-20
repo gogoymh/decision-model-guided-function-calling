@@ -32,6 +32,8 @@
   <a href="#reproduce-the-paper"><b>Reproduce</b></a>
 </p>
 
+Current paper: **[paper/main.pdf](paper/main.pdf)** · source: **[paper/main.tex](paper/main.tex)** · [Overleaf comment resolutions](docs/overleaf-comment-resolution-2026-10-20.md). The manuscript uses DMFC; the library and recorded experiment IDs retain JBFC names.
+
 LLMs call the wrong function, invent argument values, and call tools when no tool applies. A JSON schema cannot catch that, because a wrong call can be perfectly well formed. **JBFC** puts a verifier between the model and your code. [Jev](https://typesafe.ai) answers two yes/no questions about every proposed call: *is this the right function?* and *are these the right arguments?* When a check fails, the same model gets the verdicts back and repairs the call. Only a call that passes runs.
 
 ```python
@@ -257,7 +259,24 @@ jbfc.JBFC(
 ## Results
 
 > [!NOTE]
-> A small study, not a benchmark claim: two generators (`gpt-5-nano` and the larger `gpt-5.4-mini`, reasoning effort `none`) and one verifier (`jev-1.13.0`) on 3,051 single-turn examples from seven BFCL categories, at most three repairs, Jev threshold 0.5, and the first proposal kept when none passes. Direct and JBFC ran three times per generator and the category numbers are their means; the method comparison and the repair-limit curve come from the first run. The repair limit, the threshold and the rule for a loop without a passing proposal were chosen after seeing results on these same examples (thresholds 0.8, 0.7 and 0.5; the first or the last proposal); nothing else was tuned. Within a run, the methods of one generator share each example's first proposal. Intervals and caveats are in the [paper](paper/main.pdf).
+> Three generators from two providers (`gpt-5-nano`, `gpt-5.4-mini`, and `claude-sonnet-5-5`) and one verifier (`jev-1.13.0`) were evaluated on BFCL and an exploratory API-Bank first-call adaptation. Each generator has three paired Direct/DMFC runs with shared initial candidates, at most three repairs, threshold 0.5, and the first proposal kept if none passes. BFCL accuracy uses 3,035 cases from the 3,051-case subset; API-Bank uses 156 cases with a fixed 53-tool catalog and adapted exact match, without executing functions. BFCL settings were selected after inspecting these examples, and API-Bank's input instruction was refined after exploratory outcomes. These results do not establish a uniform gain or execution success. Intervals, timing, cost, and limitations are in the [current paper](paper/main.pdf).
+
+Current Table 1, mean accuracy (%) over three runs:
+
+| Benchmark | Generator | Direct | DMFC |
+|---|---|---:|---:|
+| BFCL | GPT-5-nano | 64.1 | 74.8 |
+| BFCL | GPT-5.4-mini | 81.1 | 82.1 |
+| BFCL | Claude Sonnet 5.5 | 88.3 | 87.0 |
+| API-Bank (adapted, exploratory) | GPT-5-nano | 60.0 | 66.5 |
+| API-Bank (adapted, exploratory) | GPT-5.4-mini | 78.2 | 79.5 |
+| API-Bank (adapted, exploratory) | Claude Sonnet 5.5 | 86.3 | 87.2 |
+
+Claude loses 1.3 points on BFCL; its 0.9-point API-Bank gain has a paired interval that includes zero. Other verifier families and independent confirmation of API-Bank remain future work.
+
+### Original BFCL GPT breakdown and ablations
+
+The charts and detailed analyses below preserve the original BFCL GPT experiments. They do not include the added Claude or API-Bank runs. Category values are three-run means; method and repair-limit plots use the first GPT-5-nano run.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-categories-dark.png">
@@ -288,9 +307,9 @@ jbfc.JBFC(
 Continuing the first `gpt-5-nano` run raised call accuracy from 74.6% at three repairs (the default) to 76.7% at ten, at 1.9 times the cost. Every newly correct answer came from a later proposal that passed, most of them (59 of 70) on requests where no tool applies. Even at ten repairs, JBFC stayed below Direct with `gpt-5.4-mini` (76.7% against 81.1% on average). Three repairs was chosen on the first run at threshold 0.8, where each further point cost about four times as much.
 
 <details>
-<summary><b>All numbers as tables</b></summary>
+<summary><b>Original BFCL GPT analyses as tables</b></summary>
 
-Mean of three runs per generator (the paper's Table 1; total: mean ± standard deviation across runs):
+Original GPT category breakdown, mean of three runs per generator (total: mean ± standard deviation across runs). The current paper's Table 1 uses the six-row summary above:
 
 | Category | Examples | `gpt-5-nano` Direct | `gpt-5-nano` JBFC | `gpt-5.4-mini` Direct | `gpt-5.4-mini` JBFC |
 |---|---:|---:|---:|---:|---:|
@@ -303,7 +322,7 @@ Mean of three runs per generator (the paper's Table 1; total: mean ± standard d
 | **Total** (excl. 16 live relevance) | 3,035 | 64.1 ± 0.3 | 74.8 ± 0.3 | 81.1 ± 0.2 | **82.1** ± 0.1 |
 | USD / 1k requests | | 0.056 | 0.210 | 0.703 | 1.137 |
 
-When no proposal passes, JBFC returns the first one; returning the last instead (the paper's Table 3; mean of three runs, same requests):
+Historical first-versus-last fallback analysis on BFCL GPT runs, mean of three runs with the same requests. JBFC returns the first proposal when none passes; the last-proposal alternative is shown below. This is no longer a numbered table in the current paper:
 
 | Generator | Direct | JBFC, last proposal | JBFC, first proposal (default) | First − last (points, 95% CI) |
 |---|---:|---:|---:|---:|
@@ -351,21 +370,23 @@ Yes. Call `jbfc.verify(...)` on the tool calls your framework produces, or let `
 Not yet. JBFC decides one step at a time: a single call or no call, the setting it was evaluated on.
 
 **Which models have been benchmarked?**
-`gpt-5-nano` and `gpt-5.4-mini` (Azure OpenAI), each with and without Jev, three runs each. JBFC raised both models' accuracy in every run, the small model's by much more; see [Results](#results). The other adapters follow each provider's documented API and are covered by offline tests.
+`gpt-5-nano`, `gpt-5.4-mini`, and Claude Sonnet 5.5, each with Direct and DMFC over three runs on BFCL and the exploratory API-Bank adaptation. The verifier is Jev in every comparison. Effects vary by generator and benchmark; see [Results](#results). Other provider adapters are covered by offline tests, not these benchmark results.
 
 **When does JBFC help?**
-When the model's mistakes are ones Jev can tell apart. In our runs that meant a small model calling tools that do not apply: Jev flagged those calls clearly and the model withdrew them. A stronger model made fewer such mistakes and gained one point, and only because a loop without a passing proposal keeps the model's first answer: letting the last repair replace it lowered that model's accuracy, as Jev's rejections of correct no-calls turned them into calls. Measure on your own traffic before using it with a strong model; `verify()` returns verdicts without changing what your agent does.
+The largest BFCL gain came from GPT-5-nano withdrawing unnecessary calls. GPT-5.4-mini gained one point, while Claude lost 1.3 points because accepted revisions introduced more errors than they fixed. API-Bank's adapted evaluation showed smaller gains for all three generators, with Claude's interval including zero. Measure on your own traffic; `verify()` returns verdicts without revising the call.
 
 ## Limits
 
 - **One decision per step.** JBFC decides a single call or no call. `call()` and `run()` take text messages, so give earlier tool results back to the model as text; `verify()` also accepts tool-call and tool-result messages.
-- **A verifier is a model too.** Jev can accept a wrong call or reject a right one; accepted calls were about 85% correct in the paper's runs, not 100%. With `gpt-5.4-mini`, letting an unverified repair replace the first answer did more harm than good, which is why the first proposal is kept by default.
+- **A verifier is a model too.** Jev can accept a wrong call or reject a right one; accepted calls were about 85% correct in the original GPT-5-nano BFCL runs. Claude's BFCL accuracy decreased after accepted revisions, even with the first-proposal fallback.
 - **Cost and latency.** Each proposal costs one generator call and one Jev call; with at most three repairs, that is up to four of each.
-- **Evidence so far.** Two models and mostly English requests; three runs of Direct and JBFC, one of the other methods. JBFC raised both models' accuracy in every run, but the threshold, the rule for a loop without a passing proposal and the repair limit were chosen after seeing results on these same examples.
+- **Evidence so far.** Three generators, two providers, one verifier, and mostly English requests; Direct/DMFC have three runs per generator and benchmark, while the other methods have one GPT-5-nano BFCL run. BFCL settings were chosen after inspecting evaluated examples. API-Bank has 156 exploratory test cases, no validated no-call negatives, and an input instruction revised after prior outcomes. This study does not evaluate end-to-end execution success.
 
 ## Reproduce the paper
 
-The current manuscript uses **DMFC** for the general framework; the implementation and recorded experiment IDs retain JBFC/Jev naming. The 2026-10-20 reviewer revision preserves the imported Abstract and Introduction, integrates related work into Methodology, and fits four total pages including references. It is an author-facing review copy: the frozen Introduction still contains xxx and an unrun multiple-verifier claim. Previous sources and PDFs are saved under [paper/versions/](paper/versions/).
+Read **[paper/main.pdf](paper/main.pdf)** for the current manuscript and edit **[paper/main.tex](paper/main.tex)** as its source entry point. The Abstract is inline in `main.tex`; active sections are loaded from `paper/sec/`. `paper/sec/abstract.tex` is unused, and `paper/sigconf*.tex` files are ACM template examples.
+
+The 2026-10-20 Overleaf revision updates the Abstract and Introduction, integrates related work into Methodology, and includes BFCL plus exploratory API-Bank results for three generators and one verifier. It fits four total pages including references. The manuscript uses DMFC; implementation and recorded experiment IDs retain JBFC/Jev naming. This is an author-facing copy; anonymous submission formatting remains to check. See [comment resolutions](docs/overleaf-comment-resolution-2026-10-20.md) and [paper build notes](paper/README.md). Previous sources and PDFs are saved under [paper/versions/](paper/versions/).
 
 The experiment code lives in [`src/jev_fc`](src/jev_fc) and the manuscript in [`paper/main.tex`](paper/main.tex). JBFC's loop in the library *is* `jev_fc.pipeline.run_example`, and offline tests check that the library sends the same prompts as the experiments. The runs started at threshold 0.8 with the last proposal returned; the paper's numbers come from rerunning the Jev methods at threshold 0.5 from the same first proposals and keeping the first proposal when none passes (`make final`).
 
@@ -382,12 +403,14 @@ make r3            # r=3: raise the Table 2 run and add JBFC to gpt-5.4-mini (th
 make repeat        # runs 2-3 of Direct and JBFC for both models (threshold 0.8)
 make threshold THRESHOLD=0.5   # JBFC again at threshold 0.5 from every run's first proposals (docs/threshold.md)
 make t05           # JBFC-F, JBFC-A and JBFC-L at 0.5, and JBFC at 0.5 continued to r=10 (Table 2, Figure 2)
-make final         # the paper's runs (threshold 0.5, first proposal kept; no API calls): Tables 1-3 and Figure 2
+make final         # derive recorded results; preserve combined Table 1, update Table 2 and Figure 2
 make paper         # rebuild paper/main.pdf
 python scripts/analyze_results.py results/final/gpt-5-nano_run1   # the first run's numbers quoted in Results
 ```
 
-The paper's runs used an Azure OpenAI deployment of `gpt-5-nano` behind an Azure API Management gateway. Jev went through the same gateway until it stopped serving it; later requests, including every threshold-0.5 run behind the paper's tables, call TypeSafe directly with `TYPESAFE_API_KEY` (same model; recorded in each run's manifest). The final rule needs no new requests: the loop runs the same way, and `make final` only picks the first proposal of trajectories that never passed. See [`docs/apim-gateway.md`](docs/apim-gateway.md). With `WORKERS=8`, Table 2 took about two hours and $2.4 at list prices, extending it to ten repairs about 30 minutes and $1.4, the `gpt-5.4-mini` Direct run (`make compare`) about 8 minutes and $2.2, `make r3` about 26 minutes and $3.6, `make repeat` about 47 minutes and $12, `make threshold THRESHOLD=0.5` about 28 minutes and $5.4, and `make t05` about 32 minutes and $1.7. Completed records are reused when a run resumes. Run notes and checks are in [`docs/validation.md`](docs/validation.md).
+The added Claude and API-Bank runs use `scripts/run_additional_evaluation.py`; their fixed plans, amendments, and completed summaries are under [`docs/evaluation/`](docs/evaluation/). [`scripts/additional_paper_tables.py`](scripts/additional_paper_tables.py) validates historical and added grids before producing the combined Table 1. The [additional evaluation protocol](docs/overleaf-extra-evaluation-protocol.md) explains the adapted API-Bank score and exploratory input changes. These runs are separate from the historical BFCL traces described below.
+
+The historical BFCL GPT runs used an Azure OpenAI deployment of `gpt-5-nano` behind an Azure API Management gateway. Jev went through the same gateway until it stopped serving it; later requests, including every threshold-0.5 run behind the paper's tables, call TypeSafe directly with `TYPESAFE_API_KEY` (same model; recorded in each run's manifest). The final rule needs no new requests: the loop runs the same way, and `make final` only picks the first proposal of trajectories that never passed. See [`docs/apim-gateway.md`](docs/apim-gateway.md). With `WORKERS=8`, Table 2 took about two hours and $2.4 at list prices, extending it to ten repairs about 30 minutes and $1.4, the `gpt-5.4-mini` Direct run (`make compare`) about 8 minutes and $2.2, `make r3` about 26 minutes and $3.6, `make repeat` about 47 minutes and $12, `make threshold THRESHOLD=0.5` about 28 minutes and $5.4, and `make t05` about 32 minutes and $1.7. Completed records are reused when a run resumes. Run notes and checks are in [`docs/validation.md`](docs/validation.md).
 
 <details>
 <summary><b>Repository layout</b></summary>
