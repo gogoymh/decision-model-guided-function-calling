@@ -235,14 +235,25 @@ def test_rules_table():
     assert r"\label{tab:rules}" in table and "mean of three runs" in table
 
 
-def test_main_fills_the_paper(root, monkeypatch):
+@pytest.mark.parametrize("split_source", [False, True])
+def test_main_fills_the_paper(root, monkeypatch, split_source):
     monkeypatch.setattr(final_tables, "ROOT", root)
     paper = root / "main.tex"
     blocks = "".join(f"% BEGIN AUTO {name}\nUNFILLED\n% END AUTO {name}\n" for name in
                      ("CATEGORIES", "RESULTS", "REPAIRS", "RULES"))
-    paper.write_text(blocks)
+    target = paper
+    if split_source:
+        (root / "sec").mkdir()
+        target = root / "sec/experiment_setting_and_results.tex"
+        paper.write_text(r"\title{Decision-Model-Guided Function Calling}" + "\n"
+                         + r"\input{sec/experiment_setting_and_results}" + "\n")
+        original_main = paper.read_text()
+    target.write_text(blocks)
     report = final_tables.main(["--paper", str(paper), "--json", str(root / "final.json")])
-    text = paper.read_text()
+    text = target.read_text()
+    if split_source:
+        assert paper.read_text() == original_main
+        assert r"\textbf{DMFC}" in text and "JBFC" not in text
     assert "UNFILLED" not in text and r"\label{tab:rules}" in text and r"\label{tab:categories}" in text
     assert r"\label{tab:main}" in text and r"\label{fig:repairs}" in text
     assert json.loads((root / "final.json").read_text())["settings"]["threshold"] == .5

@@ -431,11 +431,20 @@ def latex_rules(report):
 def update_paper(paper, final, figure, rules, costs):
     path = Path(paper)
     source = path.read_text()
+    method_name = "JBFC"
+    section_input = r"\input{sec/experiment_setting_and_results}"
+    if section_input in source and "% BEGIN AUTO CATEGORIES" not in source:
+        # The ACM draft keeps measured tables in its experiment section; leave the supplied front matter alone.
+        method_name = "DMFC" if "Decision-Model-Guided Function Calling" in source else "JBFC"
+        path = path.parent / "sec" / "experiment_setting_and_results.tex"
+        source = path.read_text()
     source = _replace_block(source, "CATEGORIES", table1_repeat.latex_table1(
         final["gpt-5-nano"], final["gpt-5.4-mini"], costs=[column["mean"] for column in costs]))
     source = _replace_block(source, "RESULTS", paper_tables.latex_table2(final["gpt-5-nano"][0]))
     source = _replace_block(source, "REPAIRS", table3.latex_repairs_figure(figure))
     source = _replace_block(source, "RULES", latex_rules(rules))
+    if method_name == "DMFC":
+        source = source.replace(r"\textbf{JBFC", r"\textbf{DMFC")
     path.write_text(source)
 
 

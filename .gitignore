@@ -16,6 +16,9 @@ paper/*.out
 paper/*.fls
 paper/*.fdb_latexmk
 paper/*.synctex.gz
+paper/*.bbl
+paper/*.blg
+paper/*.cut
 
 # Copies the Claude desktop app saves from chat attachments
 Claude outputs/

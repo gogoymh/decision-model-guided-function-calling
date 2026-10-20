@@ -1,5 +1,22 @@
 # Research repository instructions
 
+## ACM manuscript migration (user instruction, 2026-10-20)
+
+The user supplied the WWW 2027 ACM draft and asked to preserve its existing content,
+fill only missing material from the previous manuscript, and save the old version.
+This supersedes the wording freeze and manuscript naming rules below for this migration.
+The new abstract, Introduction, author list, red draft passages and template content stay as supplied.
+`paper/main.tex` now uses the supplied `acmart.cls` and `sec/` inputs. Copied manuscript sections
+use **DMFC**, **DMFC-F**, **DMFC-A**, and **DMFC-L**; verifier identifiers, library names,
+experiment method IDs, recorded trajectories and results remain unchanged.
+The prior source, PDF and bibliography are archived under `paper/versions/2026-10-18-jbfc/`.
+`make final` fills the experiment section through the main entry point and adapts its display labels.
+Build with `make paper`; validate this preserved draft with `make verify` (ACM draft mode).
+The original strict four-body-page check remains available directly with `scripts/verify_paper.py`.
+The draft retains incomplete claims and ACM sample metadata; do not present it as submission-ready.
+The native editor cannot load the local multi-file ACM project fully; keep it open and use the
+installed LaTeX export path when native compilation fails for the supplied class/project files.
+
 Keep paper/main.tex and the implementation consistent. The paper's final settings (user decisions
 2026-10-18): repair limit r=3, Jev threshold 0.5 for both checks, and the first proposal when no proposal
 passes within the limit (rule keep_first). The runs were made at threshold 0.8 returning the last proposal:

@@ -91,4 +91,4 @@ paper:
 	python3 scripts/build_paper.py
 
 verify:
-	uv run python scripts/verify_paper.py paper/main.pdf
+	uv run python scripts/verify_paper.py paper/main.pdf --format acm-draft
