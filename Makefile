@@ -30,7 +30,7 @@ smoke:
 # and r=2: make table2, table3 and compare, then make r3 raises them to r=3 and make repeat adds runs 2 and 3.
 # The final settings (threshold 0.5, the first proposal when none passes; user decision 2026-10-18) rerun the
 # Jev methods from the same first proposals (make threshold THRESHOLD=0.5, make t05); make final derives the
-# paper's runs and fills its tables. Only make final changes paper/main.tex.
+# paper's runs and fills its tables. make final updates the measured experiment section and plot.
 # Direct and JBFC only, r=2 (6,102 records): a cheaper standalone run, not used by the tables.
 table1:
 	MODEL="$(MODEL)" WORKERS="$(WORKERS)" bash scripts/run_table1.sh
@@ -80,7 +80,7 @@ irrelevance-check:
 	MODEL="$(MODEL)" WORKERS="$(WORKERS)" REPLICATES="$(CHECK_RUNS)" EFFORT="$(EFFORT)" bash scripts/run_irrelevance_check.sh
 
 # The paper at its final settings: derive the final runs from the recorded ones (threshold 0.5 reruns, the first
-# proposal when none passes; no API calls) into results/final, then fill Tables 1-3 and Figure 2. Numbers:
+# candidate when none passes; no API calls) into results/final, then update short-format Tables 1-2 and Figure 2. Numbers:
 # results/final/final.json. Rebuild the PDF next (make paper).
 final:
 	uv run python scripts/final_tables.py --paper paper/main.tex > /dev/null
@@ -91,4 +91,4 @@ paper:
 	python3 scripts/build_paper.py
 
 verify:
-	uv run python scripts/verify_paper.py paper/main.pdf --format acm-draft
+	uv run python scripts/verify_paper.py paper/main.pdf --format acm-short

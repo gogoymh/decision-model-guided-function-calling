@@ -1,5 +1,25 @@
 # Research repository instructions
 
+## Reviewer revision (user instruction, 2026-10-20)
+
+The user asked to resolve PDF feedback outside the Abstract and Introduction.
+Those two source passages remain byte-identical to the imported draft; their red
+draft text, xxx, and unrun multi-verifier claim require a later author revision.
+Other manuscript wording and layout may be polished within the actual study scope.
+The active manuscript integrates related work into Methodology and uses two tables
+plus the first-page mechanism comparison and measured accuracy/API-time figure.
+The WWW 2027 short-paper budget is four TOTAL pages including references and appendix,
+superseding the old four-body-page rule below. make verify uses acm-short;
+original and acm-draft remain available for historical versions.
+The author-facing review PDF uses sigconf,nonacm to avoid sample conference metadata.
+Before submission, prepare a separate anonymous/review version and check track relevance.
+The imported pre-revision source/PDF is preserved at paper/versions/2026-10-20-acm-import/.
+make final preserves the compact table captions/layout and updates the measured plot
+including p95; it still derives runs from recorded data only. On this checkout, the
+historical full derivation encounters absolute cache paths from the original host.
+Do not rewrite raw manifests or run new API experiments just to regenerate the paper;
+verified existing final summaries can feed final_tables.update_paper directly.
+
 ## ACM manuscript migration (user instruction, 2026-10-20)
 
 The user supplied the WWW 2027 ACM draft and asked to preserve its existing content,

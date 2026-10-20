@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -261,3 +262,65 @@ def test_main_fills_the_paper(root, monkeypatch, split_source):
     labels = report["history_labels"]
     assert labels["jev_s_per_check"] == pytest.approx(.5) and labels["generator_s_per_proposal"] == pytest.approx(1)
     assert labels["jev_usd_per_1k_checks"] == pytest.approx(50 * .042 / 1000)
+
+
+def test_main_preserves_acm_short_layout_and_exports_tail_latency(root, monkeypatch):
+    monkeypatch.setattr(final_tables, "ROOT", root)
+    paper = root / "paper" / "main.tex"
+    section = paper.parent / "sec" / "experiment_setting_and_results.tex"
+    section.parent.mkdir(parents=True)
+    paper.write_text(r"\title{Decision-Model-Guided Function Calling}" + "\n"
+                     + r"\input{sec/experiment_setting_and_results}" + "\n")
+    original_main = paper.read_text()
+    source = final_tables.ACM_SHORT + "\nAUTHOR PROSE\n"
+    for name, header in (("CATEGORIES", "Generator & Method & Accuracy & API s & USD/1k"),
+                         ("RESULTS", "Method & Call & Func. & Args. & API s & USD/1k")):
+        source += (f"% BEGIN AUTO {name}\n" + r"\begin{table}[t]" + "\n"
+                   + r"\centering\footnotesize\setlength{\tabcolsep}{3.5pt}" + "\n"
+                   + r"\begin{tabular}{llrrr}" + "\n" + header + "\\\\\n"
+                   + r"\midrule" + "\nSTALE DATA\n" + r"\bottomrule" + "\n"
+                   + r"\end{tabular}" + "\n" + rf"\caption{{Custom {name} caption.}}" + "\n"
+                   + r"\end{table}" + f"\n% END AUTO {name}\n")
+    source += "% BEGIN AUTO REPAIRS\n" + r"\input{sec/repair_tradeoff}" + "\n% END AUTO REPAIRS\nFALLBACK PROSE\n"
+    section.write_text(source)
+    plot = section.parent / "repair_tradeoff.tex"
+    plot_source = "AUTHOR PLOT LAYOUT\n"
+    for color in ("tradeoffaccuracy", "tradeoffmean", "tradeofftail"):
+        plot_source += rf"\addplot[color={color}, mark=*, thick] coordinates {{(1,0) (10,0)}};" + "\n"
+    plot_source += (r"\caption{Custom plot caption.}" + "\n"
+                    + r"\Description{Call accuracy rises from 0.0 to 0.0 percent. "
+                    r"Mean API time rises from 0.00 to 0.00 seconds, and the 95th percentile rises from "
+                    r"0.00 to 0.00 seconds.}" + "\n")
+    plot.write_text(plot_source)
+    raw_before = {path: final_tables._sha256(path) for path in (root / "results").glob("*/records.jsonl")}
+
+    report = final_tables.main(["--paper", str(paper), "--json", str(root / "short.json")])
+
+    output = section.read_text()
+    assert paper.read_text() == original_main
+    # Only measured rows change: prose, font, spacing, column headers and captions remain exact.
+    def strip_rows(text):
+        return re.sub(r"(\\midrule\n).*?(\n\\bottomrule)", r"\1DATA\2", text, flags=re.DOTALL)
+
+    assert strip_rows(output) == strip_rows(source)
+    assert "STALE DATA" not in output and "% BEGIN AUTO RULES" not in output
+    assert r"\textbf{DMFC}" in output and "JBFC" not in output
+    assert len(re.findall(r" & Direct & ", output)) == 2
+    assert r"Direct & 60.0$\pm$0.0 & 1.50" in output
+    assert r"\textbf{DMFC} & \textbf{80.0}$\pm$0.0 & 4.50" in output
+    updated_plot = plot.read_text()
+    assert "AUTHOR PLOT LAYOUT" in updated_plot and r"\caption{Custom plot caption.}" in updated_plot
+    assert report["figure2"][10]["p95_latency_s"] == pytest.approx(16.5)
+    assert report["table2"]["methods"]["jev_joint"]["p95_latency_s"] is not None
+    assert "(10,16.500000)" in updated_plot and "to 16.50 seconds" in updated_plot
+    assert raw_before == {path: final_tables._sha256(path) for path in raw_before}
+
+
+def test_measured_tradeoff_rejects_missing_p95():
+    figure = {limit: {"methods": {"jev_joint": {"accuracy": .75, "mean_latency_s": 2,
+                                               "p95_latency_s": 5}}} for limit in final_tables.table3.LIMITS}
+    figure[3]["methods"]["jev_joint"]["p95_latency_s"] = None
+    source = "\n".join(rf"\addplot[color={color}, thick] coordinates {{(1,0)}};"
+                       for color in ("tradeoffaccuracy", "tradeoffmean", "tradeofftail"))
+    with pytest.raises(ValueError, match="p95_latency_s"):
+        final_tables.measured_tradeoff(source, figure)

@@ -365,6 +365,8 @@ When the model's mistakes are ones Jev can tell apart. In our runs that meant a 
 
 ## Reproduce the paper
 
+The current manuscript uses **DMFC** for the general framework; the implementation and recorded experiment IDs retain JBFC/Jev naming. The 2026-10-20 reviewer revision preserves the imported Abstract and Introduction, integrates related work into Methodology, and fits four total pages including references. It is an author-facing review copy: the frozen Introduction still contains xxx and an unrun multiple-verifier claim. Previous sources and PDFs are saved under [paper/versions/](paper/versions/).
+
 The experiment code lives in [`src/jev_fc`](src/jev_fc) and the manuscript in [`paper/main.tex`](paper/main.tex). JBFC's loop in the library *is* `jev_fc.pipeline.run_example`, and offline tests check that the library sends the same prompts as the experiments. The runs started at threshold 0.8 with the last proposal returned; the paper's numbers come from rerunning the Jev methods at threshold 0.5 from the same first proposals and keeping the first proposal when none passes (`make final`).
 
 ```bash

@@ -18,12 +18,17 @@ self-refine always return their last proposal. Derived runs go to results/final/
 returning the last proposal, for Table 3, to results/final/last/).
 
 Usage: python scripts/final_tables.py [--paper paper/main.tex] [--json results/final/final.json]
+
+The ACM short-paper format keeps a four-row main table, the seven-method ablation table,
+and a separate accuracy/mean/p95 repair plot. Its author-edited captions and layout are
+preserved; the original inline manuscript and the earlier ACM draft keep their full tables.
 """
 
 import argparse
 import csv
 import hashlib
 import json
+import re
 import statistics
 import sys
 from copy import deepcopy
@@ -66,6 +71,7 @@ SAME_PER_MODEL = ("llm_model", "reasoning_effort", "prices_usd_per_million")
 # Provenance of the run a derived run is taken from; the derived run records its parts instead.
 NOT_COPIED = ("config_id", "created_at", "extends", "added", "rethreshold", "reused", "workers")
 FIGURE_RUN = f"results/table3_gpt-5-nano_r10_t{THRESHOLD:g}"
+ACM_SHORT = "% MANUSCRIPT FORMAT: ACM SHORT"
 
 
 def rerun(model, run):
@@ -428,6 +434,81 @@ def latex_rules(report):
     return "\n".join(lines)
 
 
+def compact_main_rows(final, costs, method_name="DMFC"):
+    """Four main-result rows: per-run mean accuracy and sample s.d., mean API seconds, known-usage cost."""
+    cost_by_column = {column["column"]: column["mean"] for column in costs}
+    lines = []
+    for model in MODELS:
+        spreads = [table1_repeat.spread([summary["methods"][method]["accuracy"] for summary in final[model]])
+                   for method in ("direct", "jev_joint")]
+        cells, _ = paper_tables._bold_top([paper_tables._cell(item["mean"]) for item in spreads])
+        for index, method in enumerate(("direct", "jev_joint")):
+            spread = spreads[index]
+            accuracy = cells[index]
+            if spread["sd"] is not None:
+                accuracy += rf"$\pm${100 * spread['sd']:.1f}"
+            latency = table1_repeat.spread([summary["methods"][method].get("mean_latency_s")
+                                           for summary in final[model]])["mean"]
+            label = rf"\texttt{{{_tex_escape(model)}}}" if index == 0 else ""
+            method_label = "Direct" if method == "direct" else rf"\textbf{{{method_name}}}"
+            lines.append(f"{label} & {method_label} & {accuracy} & "
+                         + paper_tables._cell(latency, 1, 2) + " & "
+                         + paper_tables._cell(cost_by_column[f"{model}/{method}"], 1000, 3) + r"\\")
+    return "\n".join(lines)
+
+
+def _table_rows(source):
+    match = re.search(r"\\midrule\s*\n(.*?)\s*\\bottomrule", source, re.DOTALL)
+    if not match:
+        raise ValueError("A measured table needs midrule and bottomrule row delimiters.")
+    return match.group(1)
+
+
+def _replace_table_rows(source, name, rows):
+    """Replace only a marked table's measured rows, retaining its edited caption, header, and layout."""
+    block = re.search(rf"(% BEGIN AUTO {name}\s*\n)(.*?)(\n% END AUTO {name})", source, re.DOTALL)
+    if not block:
+        raise ValueError(f"Missing AUTO {name} block.")
+    table, count = re.subn(r"(\\midrule\s*\n).*?(\n\\bottomrule)",
+                          lambda match: match.group(1) + rows + match.group(2), block.group(2),
+                          count=1, flags=re.DOTALL)
+    if count != 1:
+        raise ValueError(f"AUTO {name} needs midrule and bottomrule row delimiters.")
+    return source[:block.start(2)] + table + source[block.end(2):]
+
+
+def measured_tradeoff(source, figure):
+    """Update the short-paper plot's three measured series while retaining its caption and layout."""
+    series = (("tradeoffaccuracy", "accuracy", 100, 4),
+              ("tradeoffmean", "mean_latency_s", 1, 6),
+              ("tradeofftail", "p95_latency_s", 1, 6))
+    for color, key, scale, digits in series:
+        values = [(limit, figure[limit]["methods"]["jev_joint"].get(key)) for limit in table3.LIMITS]
+        if any(value is None for _, value in values):
+            raise ValueError(f"The measured repair plot requires {key} at every repair limit.")
+        coordinates = " ".join(f"({limit},{value * scale:.{digits}f})" for limit, value in values)
+        pattern = rf"(\\addplot\[color={color},[^\]]*\]\s*coordinates\s*\{{)[^}}]*(\}};)"
+        source, count = re.subn(pattern, lambda match: match.group(1) + coordinates + match.group(2),
+                                source, count=1)
+        if count != 1:
+            raise ValueError(f"The repair plot needs one {color} coordinate series.")
+    # Keep the accessible description's endpoint values in sync without changing its prose.
+    first = figure[min(table3.LIMITS)]["methods"]["jev_joint"]
+    last = figure[max(table3.LIMITS)]["methods"]["jev_joint"]
+    descriptions = (
+        (r"(Call accuracy rises from )\d+(?:\.\d+)?( to )\d+(?:\.\d+)?( percent)",
+         first["accuracy"] * 100, last["accuracy"] * 100, 1),
+        (r"(Mean API time rises from )\d+(?:\.\d+)?( to )\d+(?:\.\d+)?( seconds)",
+         first["mean_latency_s"], last["mean_latency_s"], 2),
+        (r"(the 95th percentile rises from )\d+(?:\.\d+)?( to )\d+(?:\.\d+)?( seconds)",
+         first["p95_latency_s"], last["p95_latency_s"], 2),
+    )
+    for pattern, low, high, digits in descriptions:
+        source = re.sub(pattern, lambda match: (match.group(1) + f"{low:.{digits}f}" + match.group(2)
+                                                + f"{high:.{digits}f}" + match.group(3)), source)
+    return source
+
+
 def update_paper(paper, final, figure, rules, costs):
     path = Path(paper)
     source = path.read_text()
@@ -438,6 +519,21 @@ def update_paper(paper, final, figure, rules, costs):
         method_name = "DMFC" if "Decision-Model-Guided Function Calling" in source else "JBFC"
         path = path.parent / "sec" / "experiment_setting_and_results.tex"
         source = path.read_text()
+    if ACM_SHORT in source:
+        # Only regenerate data: the short-paper captions, headings and plot layout are author-edited.
+        source = _replace_table_rows(source, "CATEGORIES", compact_main_rows(final, costs, method_name))
+        result_rows = _table_rows(paper_tables.latex_table2(final["gpt-5-nano"][0]))
+        if method_name == "DMFC":
+            result_rows = result_rows.replace(r"\textbf{JBFC", r"\textbf{DMFC")
+        source = _replace_table_rows(source, "RESULTS", result_rows)
+        repairs = re.search(r"% BEGIN AUTO REPAIRS\s*\n(.*?)\n% END AUTO REPAIRS", source, re.DOTALL)
+        if not repairs or repairs.group(1).strip() != r"\input{sec/repair_tradeoff}":
+            raise ValueError("ACM SHORT's REPAIRS block must input sec/repair_tradeoff.")
+        plot = path.parent / "repair_tradeoff.tex"
+        plot_source = measured_tradeoff(plot.read_text(), figure)
+        plot.write_text(plot_source)
+        path.write_text(source)
+        return
     source = _replace_block(source, "CATEGORIES", table1_repeat.latex_table1(
         final["gpt-5-nano"], final["gpt-5.4-mini"], costs=[column["mean"] for column in costs]))
     source = _replace_block(source, "RESULTS", paper_tables.latex_table2(final["gpt-5-nano"][0]))
@@ -460,7 +556,7 @@ def table1_report(final):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--paper", help="fill Tables 1-3 and Figure 2 of this manuscript")
+    parser.add_argument("--paper", help="update this manuscript's measured tables and repair plot")
     parser.add_argument("--json", help=f"report file (default {OUT}/final.json)")
     args = parser.parse_args(argv)
     built = build(ROOT)
@@ -479,6 +575,7 @@ def main(argv=None):
         "table2": {"run_dir": nano_run1["run_dir"], "parts": nano_run1["manifest"]["derived"]["parts"],
                    "methods": {m: {k: v.get(k) for k in ("accuracy", "function_accuracy",
                                                           "arguments_accuracy_conditional", "mean_latency_s",
+                                                          "p95_latency_s",
                                                           "mean_cost_usd", "mean_repairs", "mean_llm_proposals",
                                                           "coverage", "accepted_precision", "exhaustion_rate",
                                                           "incomplete_proposal_n")}
@@ -486,7 +583,7 @@ def main(argv=None):
                    "paired_vs_direct": nano_run1["paired_vs_direct"],
                    "history_ablation": nano_run1["history_ablation"]},
         "figure2": {r: {k: s["methods"]["jev_joint"].get(k) for k in ("accuracy", "function_accuracy", "mean_repairs",
-                                                                       "exhaustion_rate", "mean_latency_s",
+                                                                       "exhaustion_rate", "mean_latency_s", "p95_latency_s",
                                                                        "mean_cost_usd", "coverage",
                                                                        "accepted_precision")}
                     for r, s in figure.items()},
@@ -499,7 +596,7 @@ def main(argv=None):
     target.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
     if args.paper:
-        print(f"Tables 1-3 and Figure 2 in {args.paper} now use threshold {THRESHOLD:g} and the first proposal "
+        print(f"Measured tables and repair plot in {args.paper} now use threshold {THRESHOLD:g} and the first proposal "
               "when none passes; rebuild the PDF.", file=sys.stderr)
     return report
 

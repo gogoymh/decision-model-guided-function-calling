@@ -1,0 +1,152 @@
+%%
+%% This is file `sigconf.tex',
+%% generated with the docstrip utility.
+\documentclass[sigconf]{acmart}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
+
+\setcopyright{acmlicensed}
+\copyrightyear{2018}
+\acmYear{2018}
+\acmDOI{XXXXXXX.XXXXXXX}
+
+\acmConference[Conference acronym 'XX]{Make sure to enter the correct
+  conference title from your rights confirmation email}{June 03--05,
+  2018}{Woodstock, NY}
+\acmISBN{978-1-4503-XXXX-X/2018/06}
+
+% Text color support
+\usepackage{xcolor}
+
+% Dependencies for the framework, algorithm, and measured-result plots migrated from the prior manuscript.
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots}
+\setlength{\emergencystretch}{1em}
+
+
+\begin{document}
+\title{Decision-Model-Guided Function Calling with Cumulative Verification Feedback}
+
+\author{Minhyeong Yu}
+% \authornote{Both authors contributed equally to this research.}
+\affiliation{%
+  \institution{Enhans}
+  \city{Seoul}
+  \country{South Korea}}
+\email{minhyeong@enhans.ai}
+
+
+\author{Wonduk Seo}
+\correspondingauthor
+\affiliation{%
+  \institution{University College London}
+  \city{London}
+  \country{United Kingdom}}
+\email{wonduk.seo.26@ucl.ac.uk}
+
+% \author{Valerie B\'eranger}
+% \affiliation{%
+%   \institution{Inria Paris-Rocquencourt}
+%   \city{Rocquencourt}
+%   \country{France}
+% }
+
+
+\renewcommand{\shortauthors}{Trovato et al.}
+
+\begin{abstract}
+\input{sec/abstract}
+
+Reliable function calling requires Large Language Models (LLMs) to choose appropriate functions and generate arguments that match user intent. However, even syntactically valid calls can be semantically wrong, for instance by selecting the wrong function or producing mismatched arguments. Prior work uses verification and iterative refinement, but it remains difficult to efficiently carry verification feedback forward across attempts. In this paper, propose \textbf{Decision-Model-Guided Function Calling (DMFC)}, an inference-time framework that verifies function selection and argument correctness with separate binary judgments and then refines calls using cumulative feedback from previously rejected candidates without executing external tools. \textcolor{red}{On Berkeley Function Calling Leaderboard (BFCL), DMFC improves accuracy from 64.1\% to 74.8\% with GPT-5-nano and from 81.1\% to 82.1\% with GPT-5.4-mini. Retaining verification history further outperforms using only the latest feedback by 1.1 percentage points} highlighting the value of cumulative verification for reliable function calling.
+\end{abstract}
+
+
+\begin{CCSXML}
+<ccs2012>
+ <concept>
+  <concept_id>00000000.0000000.0000000</concept_id>
+  <concept_desc>Do Not Use This Code, Generate the Correct Terms for Your Paper</concept_desc>
+  <concept_significance>500</concept_significance>
+ </concept>
+ <concept>
+  <concept_id>00000000.00000000.00000000</concept_id>
+  <concept_desc>Do Not Use This Code, Generate the Correct Terms for Your Paper</concept_desc>
+  <concept_significance>300</concept_significance>
+ </concept>
+ <concept>
+  <concept_id>00000000.00000000.00000000</concept_id>
+  <concept_desc>Do Not Use This Code, Generate the Correct Terms for Your Paper</concept_desc>
+  <concept_significance>100</concept_significance>
+ </concept>
+ <concept>
+  <concept_id>00000000.00000000.00000000</concept_id>
+  <concept_desc>Do Not Use This Code, Generate the Correct Terms for Your Paper</concept_desc>
+  <concept_significance>100</concept_significance>
+ </concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Do Not Use This Code~Generate the Correct Terms for Your Paper}
+\ccsdesc[300]{Do Not Use This Code~Generate the Correct Terms for Your Paper}
+\ccsdesc{Do Not Use This Code~Generate the Correct Terms for Your Paper}
+\ccsdesc[100]{Do Not Use This Code~Generate the Correct Terms for Your Paper}
+
+%%
+%% Keywords. The author(s) should pick words that accurately describe
+%% the work being presented. Separate the keywords with commas.
+\keywords{Do, Not, Use, This, Code, Put, the, Correct, Terms, for,
+  Your, Paper}
+%% A "teaser" image appears between the author and affiliation
+%% information and the body of the document, and typically spans the
+%% page.
+\begin{teaserfigure}
+ \includegraphics[width=\textwidth]{sampleteaser}
+  \caption{Seattle Mariners at Spring Training, 2010.}
+  \Description{Enjoying the baseball game from the third-base
+  seats. Ichiro Suzuki preparing to bat.}
+  \label{fig:teaser}
+\end{teaserfigure}
+
+\received{20 February 2007}
+\received[revised]{12 March 2009}
+\received[accepted]{5 June 2009}
+
+\maketitle
+
+
+
+\section{Introduction}
+\input{sec/introduction}
+
+% \section{Problem Definition}
+% \input{sec/problem_definition}
+
+\section{Related Work}
+\input{sec/related_work}
+
+\section{Methodology}
+\input{sec/framework}
+\input{sec/methodology}
+
+\section{Experiment Setting \& Results}
+\input{sec/experiment_setting_and_results}
+
+\section{Conclusion}
+\input{sec/conclusion}
+
+\begin{acks}
+\input{sec/acknowledgements}
+\end{acks}
+
+\clearpage
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

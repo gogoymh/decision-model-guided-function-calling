@@ -1,0 +1,62 @@
+\subsection{Task Definition}
+Let $x$ be the user request, $\mathcal{F}$ the available functions, and $G$ the generating LLM. A proposal is $c_t=(f_t,a_t)$, with function $f_t$ and arguments $a_t$, or $c_t=\varnothing$ for no call. We study single-call-or-no-call decisions.\footnote{We treat single-turn decisions as the basic unit of function calling. Parallel calling combines multiple such decisions, while multi-turn interactions repeat them with updated context. We therefore evaluate the verification and repair loop on this basic unit and exclude parallel and multi-turn settings from this study.} Local code checks readability, function availability, required arguments, and types. Write $S(c_t)=1$ when these checks pass.
+
+\subsection{Propose and Check a Call}
+\paragraph{Binary verification: \textbf{DMFC}.}
+For each readable proposal, one \textit{Jev} request checks the function choice and, when a call is present, its arguments:
+\begin{align}
+ c_t&=G(H_t,x,\mathcal{F}),\\
+ p_f^{(t)}&=J_f(x,\mathcal{F},c_t),\qquad
+ p_a^{(t)}=J_a(x,\mathcal{F},c_t).
+\end{align}
+Here $H_t$ contains earlier proposals and feedback and is initially empty. The function \texttt{Noul} question asks whether the function choice, including no call, fits the request. The argument question checks required values, their support in the request, and their parameter roles. For no call, it is skipped and $p_a^{(t)}$ is undefined. A selected function with missing arguments still receives both checks. Both must pass for a call.
+
+\subsection{Accept or Repair a Call}
+Acceptance requires the schema check and all required \textit{Jev} checks to pass on the same proposal. The acceptance rule is
+\begin{equation}
+ A_t=\begin{cases}
+ S(c_t)\,\mathbf{1}[p_f^{(t)}\geq\tau_f], & c_t=\varnothing,\\
+ S(c_t)\,\mathbf{1}[p_f^{(t)}\geq\tau_f]\,
+ \mathbf{1}[p_a^{(t)}\geq\tau_a], & \text{otherwise}.
+ \end{cases}
+\label{eq:gate}
+\end{equation}
+\texttt{Noul} returns the probability of yes, with no separate confidence field~\cite{typesafe2026noul,typesafe2026confidence}. We use $\tau_f=\tau_a=0.5$, chosen after runs at 0.8 and 0.7 (Section~\ref{sec:data}).
+
+\begin{algorithm}[t]
+\caption{\textbf{DMFC}: verification and prompt repair}
+\label{alg:jbfc}
+\footnotesize
+\begin{algorithmic}[1]
+\Require Request $x$, functions $\mathcal{F}$, generator $G$, \textit{Jev} $J$,
+\Statex \hspace{\algorithmicindent}repair limit $r$, thresholds $\tau_f,\tau_a$
+\State $H\gets[\,]$
+\For{$t=0,\ldots,r$}
+  \State $c\gets G(\mathrm{Prefix}(H,x),\mathcal{F})$
+  \State $(s,e,\mathrm{readable})\gets\mathrm{SchemaCheck}(c,\mathcal{F})$
+  \State $p_f,p_a\gets\mathrm{null},\mathrm{null}$
+  \If{$\mathrm{readable}$}
+    \State $Q\gets\{\mathrm{function}\}$
+    \State \textbf{if} $c\ne\varnothing$ \textbf{then} $Q\gets Q\cup\{\mathrm{arguments}\}$
+    \State $(p_f,p_a)\gets J(x,\mathcal{F},c,Q)$
+  \EndIf
+  \State $A\gets\mathrm{Accept}(s,c,p_f,p_a,\tau_f,\tau_a)$ \Comment{Eq.~\ref{eq:gate}}
+  \State $d\gets\mathrm{Feedback}(e,p_f,p_a,\tau_f,\tau_a,c)$
+  \State \textbf{if} $A=1$ \textbf{or} $t=r$ \textbf{then break}
+  \State $H\gets H\mathbin{\Vert}[(c,d)]$
+\EndFor
+\State \Return $c$ \textbf{if} $A=1$ \textbf{else} $c_0$ \Comment{$c_0$: first proposal}
+\end{algorithmic}
+\end{algorithm}
+
+\paragraph{Feedback before the user request.}
+$H_t$ stores earlier records. The current record $(c_t,d_t)$ pairs proposal $c_t$ with feedback $d_t$ (probabilities, pass/fail flags, thresholds, and local errors). No-call skips the argument check. After rejection, if repairs remain, $\Vert$ adds $[(c_t,d_t)]$, a list containing this one record, to the end of $H_t$:
+\begin{equation}
+ H_{t+1}=H_t\mathbin{\Vert}[(c_t,d_t)].
+\end{equation}
+The LLM reads this history before the unchanged request and can change both function and arguments. Schemas remain available; system instructions stay separate.
+
+Algorithm~\ref{alg:jbfc} rechecks up to $r+1$ proposals: the first plus repairs ($r=3$ by default and in experiments). Its \texttt{Prefix} function places JSON records, oldest first, before unchanged original messages. Empty history adds no prefix. Records include round numbers and mark proposals as not executed. Here $s=S(c)$ and $e$ lists local errors. Readable proposals receive \textit{Jev} checks even if their schema fails; unreadable ones receive local feedback. \textit{Jev} never receives history. Unasked $p_a$ stays null. Null required probabilities cannot pass the gate; invalid API responses stop the run. Reference answers stay out of model requests. API errors stop the run after transport retries, separate from repairs.
+
+\subsection{Final Proposal}
+When a proposal passes all applicable checks, we return it. If the repair limit is reached first, we return the first proposal, so a repair replaces the generator's answer only once it passes (Table~\ref{tab:rules} compares returning the last). We score the final proposal against the benchmark answers without running the function.

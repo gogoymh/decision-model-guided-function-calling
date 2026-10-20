@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _run(command, paper_dir):
-    result = subprocess.run(command, cwd=paper_dir, capture_output=True, text=True)
+    result = subprocess.run(command, cwd=paper_dir, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode:
         print((result.stdout + result.stderr)[-6000:])
         raise SystemExit(result.returncode)

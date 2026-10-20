@@ -1,21 +1,14 @@
 %%
 %% This is file `sigconf.tex',
 %% generated with the docstrip utility.
-\documentclass[sigconf]{acmart}
+\documentclass[sigconf,nonacm]{acmart}
 
 \AtBeginDocument{%
   \providecommand\BibTeX{{%
     Bib\TeX}}}
 
-\setcopyright{acmlicensed}
-\copyrightyear{2018}
-\acmYear{2018}
-\acmDOI{XXXXXXX.XXXXXXX}
-
-\acmConference[Conference acronym 'XX]{Make sure to enter the correct
-  conference title from your rights confirmation email}{June 03--05,
-  2018}{Woodstock, NY}
-\acmISBN{978-1-4503-XXXX-X/2018/06}
+\setcopyright{none}
+\settopmatter{printacmref=false,printccs=false,printfolios=true}
 
 % Text color support
 \usepackage{xcolor}
@@ -23,6 +16,7 @@
 % Dependencies for the framework, algorithm, and measured-result plots migrated from the prior manuscript.
 \usepackage{algorithm}
 \usepackage{algpseudocode}
+\usepackage{tabularx}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning}
 \usepackage{pgfplots}
@@ -59,7 +53,7 @@
 % }
 
 
-\renewcommand{\shortauthors}{Trovato et al.}
+\renewcommand{\shortauthors}{Yu and Seo}
 
 \begin{abstract}
 \input{sec/abstract}
@@ -68,57 +62,12 @@ Reliable function calling requires Large Language Models (LLMs) to choose approp
 \end{abstract}
 
 
-\begin{CCSXML}
-<ccs2012>
- <concept>
-  <concept_id>00000000.0000000.0000000</concept_id>
-  <concept_desc>Do Not Use This Code, Generate the Correct Terms for Your Paper</concept_desc>
-  <concept_significance>500</concept_significance>
- </concept>
- <concept>
-  <concept_id>00000000.00000000.00000000</concept_id>
-  <concept_desc>Do Not Use This Code, Generate the Correct Terms for Your Paper</concept_desc>
-  <concept_significance>300</concept_significance>
- </concept>
- <concept>
-  <concept_id>00000000.00000000.00000000</concept_id>
-  <concept_desc>Do Not Use This Code, Generate the Correct Terms for Your Paper</concept_desc>
-  <concept_significance>100</concept_significance>
- </concept>
- <concept>
-  <concept_id>00000000.00000000.00000000</concept_id>
-  <concept_desc>Do Not Use This Code, Generate the Correct Terms for Your Paper</concept_desc>
-  <concept_significance>100</concept_significance>
- </concept>
-</ccs2012>
-\end{CCSXML}
+\keywords{function calling, decision models, verification, in-context learning}
 
-\ccsdesc[500]{Do Not Use This Code~Generate the Correct Terms for Your Paper}
-\ccsdesc[300]{Do Not Use This Code~Generate the Correct Terms for Your Paper}
-\ccsdesc{Do Not Use This Code~Generate the Correct Terms for Your Paper}
-\ccsdesc[100]{Do Not Use This Code~Generate the Correct Terms for Your Paper}
-
-%%
-%% Keywords. The author(s) should pick words that accurately describe
-%% the work being presented. Separate the keywords with commas.
-\keywords{Do, Not, Use, This, Code, Put, the, Correct, Terms, for,
-  Your, Paper}
-%% A "teaser" image appears between the author and affiliation
-%% information and the body of the document, and typically spans the
-%% page.
-\begin{teaserfigure}
- \includegraphics[width=\textwidth]{sampleteaser}
-  \caption{Seattle Mariners at Spring Training, 2010.}
-  \Description{Enjoying the baseball game from the third-base
-  seats. Ichiro Suzuki preparing to bat.}
-  \label{fig:teaser}
-\end{teaserfigure}
-
-\received{20 February 2007}
-\received[revised]{12 March 2009}
-\received[accepted]{5 June 2009}
+\input{sec/framework}
 
 \maketitle
+\raggedbottom
 
 
 
@@ -128,11 +77,7 @@ Reliable function calling requires Large Language Models (LLMs) to choose approp
 % \section{Problem Definition}
 % \input{sec/problem_definition}
 
-\section{Related Work}
-\input{sec/related_work}
-
 \section{Methodology}
-\input{sec/framework}
 \input{sec/methodology}
 
 \section{Experiment Setting \& Results}
@@ -146,6 +91,7 @@ Reliable function calling requires Large Language Models (LLMs) to choose approp
 \end{acks}
 
 \clearpage
+\balance
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{references}
 

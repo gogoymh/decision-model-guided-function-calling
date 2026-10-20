@@ -1,60 +1,38 @@
-\begin{figure*}[t]
+\begin{teaserfigure}
 \centering
 \resizebox{\textwidth}{!}{%
-\begin{tikzpicture}[>=Stealth,font=\fontsize{8}{9}\selectfont,
- box/.style={draw=black!60,rounded corners=2pt,align=center,inner sep=4pt,minimum height=0.72cm},
- panel/.style={draw=black!55,rounded corners=2pt},
- flow/.style={->,thick,draw=black!75},
- feedback/.style={->,thick,draw=blue!65!black}]
-\node[anchor=west,font=\fontsize{9}{10}\selectfont] at (0,1.05) {\textbf{(a) Main framework:} Decision-Model-Guided Function Calling (\textbf{DMFC})};
-\node[box,text width=2.4cm] (request) at (1.35,0) {User request $x$\\Functions $\mathcal{F}$};
-\node[box,text width=2.6cm,fill=blue!5] (prompt) at (4.5,0) {Feedback history $H_t$\\with user request $x$};
-\node[box,text width=2.7cm] (llm) at (7.65,0) {LLM generates $c_t$\\Function + arguments};
-\node[box,text width=3.1cm,fill=orange!7] (judge) at (11.15,0) {\textit{Jev}: function + arguments\\Local schema check};
-\node[box,text width=2.7cm] (final) at (15.0,0) {Stop: pass OR limit\\Return final proposal};
-\draw[flow] (request)--(prompt);
-\draw[flow] (prompt)--(llm);
-\draw[flow] (llm)--node[above,font=\fontsize{7}{8}\selectfont] {$c_t$}(judge);
-\draw[flow] (judge)--(final);
-\draw[->,dashed,draw=black!60] (request.north)--(1.35,0.65)--(11.15,0.65)--(judge.north);
-\node[fill=white,inner sep=2pt] at (6.3,0.65) {\textit{Jev} input: request $x$, functions $\mathcal{F}$, current call $c_t$};
-\draw[feedback] (judge.south)--(11.15,-0.7)--(4.5,-0.7)--(prompt.south);
-\node[fill=white,inner sep=2pt,text=blue!65!black] at (7.8,-0.7) {Rejected + repairs left: append $(c_t,d_t)$};
-
-\node[anchor=west,font=\fontsize{9}{10}\selectfont\bfseries] at (0,-1.12) {(b) Cumulative prompt example};
-\node[anchor=west] at (0,-1.48) {Tools at every attempt: \texttt{book\_flight(origin, destination)}; \texttt{book\_hotel(city)}.};
-\node[font=\bfseries] at (2.65,-1.85) {Initial prompt: $H_0=\varnothing$};
-\node[font=\bfseries] at (8.3,-1.85) {Repair 1 prompt: $H_1$};
-\node[font=\bfseries] at (13.95,-1.85) {Repair 2 prompt: $H_2$};
-
-\foreach \x in {0,5.65,11.3} {
-  \begin{scope}
-    \clip[rounded corners=2pt] (\x,-2.05) rectangle (\x+5.3,-4.54);
-    \fill[black!2] (\x,-2.05) rectangle (\x+5.3,-4.54);
-    \fill[blue!8] (\x,-3.79) rectangle (\x+5.3,-4.54);
-  \end{scope}
-  \draw[panel] (\x,-2.05) rectangle (\x+5.3,-4.54);
-  \draw[draw=black!35] (\x,-3.79)--(\x+5.3,-3.79);
-  \node[anchor=north west,text width=4.95cm,inner sep=0pt] at (\x+0.17,-3.90) {\textbf{Original user request (unchanged)}\\Book a flight from Seoul to Tokyo.};
-}
-\node[anchor=north west,text width=4.95cm,inner sep=0pt] at (0.17,-2.19) {\textbf{No revision history}\\Only the original user request.};
-\node[anchor=north west,text width=4.95cm,inner sep=0pt] at (5.82,-2.19) {\textbf{Prefix (NOT executed; oldest first)}\\
-\texttt{1: book\_hotel(Tokyo)}\\
-\texttt{\phantom{1: }f=0.12 FAIL; a=0.94 PASS}};
-\node[anchor=north west,text width=4.95cm,inner sep=0pt] at (11.47,-2.19) {\textbf{Prefix (NOT executed; oldest first)}\\
-\texttt{1: book\_hotel(Tokyo)}\\
-\texttt{\phantom{1: }f=0.12 FAIL; a=0.94 PASS}\\
-\texttt{2: book\_flight(Tokyo, Seoul)}\\
-\texttt{\phantom{2: }f=0.96 PASS; a=0.18 FAIL}};
-\foreach \x in {2.65,8.3,13.95} {\draw[flow] (\x,-4.54)--(\x,-4.77);}
-\node[box,text width=4.98cm,minimum height=1.05cm,fill=orange!7] at (2.65,-5.29) {\texttt{book\_hotel(Tokyo)}\\$p_f=0.12$ FAIL; $p_a=0.94$ PASS\\\textbf{Rejected: function check fails}};
-\node[box,text width=4.98cm,minimum height=1.05cm,fill=orange!7] at (8.3,-5.29) {\texttt{book\_flight(Tokyo, Seoul)}\\$p_f=0.96$ PASS; $p_a=0.18$ FAIL\\\textbf{Rejected: argument check fails}};
-\node[box,text width=4.98cm,minimum height=1.05cm,fill=green!7] at (13.95,-5.29) {\texttt{book\_flight(Seoul, Tokyo)}\\$p_f=0.97$ PASS; $p_a=0.95$ PASS\\\textbf{Accepted: both checks pass}};
-\draw[feedback] (5.3,-3.03)--(5.65,-3.03);
-\draw[feedback] (10.95,-3.03)--(11.3,-3.03);
-\node[anchor=west] at (0,-6.18) {Illustrative scores; not measured results. $\tau_f=\tau_a=0.5$; schema checks pass. Calls and feedback are condensed ($f=p_f$, $a=p_a$).};
+\begin{tikzpicture}[>=Stealth,font=\fontsize{7.5}{8.5}\selectfont,
+ box/.style={draw=black!50,rounded corners=2pt,align=center,inner sep=2.5pt,minimum height=0.52cm},
+ flow/.style={->,semithick,draw=black!70},
+ feedback/.style={->,semithick,draw=blue!70!black}]
+\node[anchor=west,align=left,font=\bfseries] at (0,2.30) {Direct /\\Schema repair};
+\node[box,text width=3.8cm] (baseprompt) at (4.52,2.30) {User request + functions};
+\node[box,text width=1.85cm] (basegen) at (7.87,2.30) {LLM candidate};
+\node[box,text width=3.10cm] (basecheck) at (10.84,2.30) {Direct: unchecked\\Schema: local validation};
+\node[box,text width=3.36cm] (basereturn) at (14.64,2.30) {Direct: return initial candidate\\Schema: revise on errors};
+\draw[flow] (baseprompt)--(basegen);
+\draw[flow] (basegen)--(basecheck);
+\draw[flow] (basecheck)--(basereturn);
+\node[anchor=west,align=left,font=\bfseries] at (0,1.35) {Generic\\self-review};
+\node[box,text width=3.8cm] (selfprompt) at (4.52,1.35) {Request + functions\\+ repair history};
+\node[box,text width=1.85cm] (selfgen) at (7.87,1.35) {LLM candidate\\or revision};
+\node[box,text width=3.10cm] (selfcheck) at (10.84,1.35) {Generic self-review\\Fixed $r$ repairs};
+\node[box,text width=3.36cm] (selfreturn) at (14.64,1.35) {Return final candidate};
+\draw[flow] (selfprompt)--(selfgen);
+\draw[flow] (selfgen)--(selfcheck);
+\draw[flow] (selfcheck)--(selfreturn);
+\node[anchor=west,font=\bfseries,text=blue!70!black] at (0,0.41) {DMFC};
+\node[box,text width=3.8cm,fill=blue!6] (prompt) at (4.52,0.41) {All history before unchanged\\request + functions};
+\node[box,text width=1.85cm,fill=blue!6] (generator) at (7.87,0.41) {LLM candidate\\or revision};
+\node[box,text width=3.10cm,fill=blue!6] (judge) at (10.84,0.41) {Decision model + schema\\Function / arguments};
+\node[box,text width=3.36cm,fill=blue!6] (gate) at (14.64,0.41) {Checks pass: accept\\Limit: return initial};
+\draw[flow] (prompt)--(generator);
+\draw[flow] (generator)--(judge);
+\draw[flow] (judge)--(gate);
+\draw[feedback] (gate.south)--(14.64,-0.18)--(4.52,-0.18)--(prompt.south);
+\node[fill=white,inner sep=1.5pt,text=blue!70!black] at (9.58,-0.18) {Rejected + repairs left: append candidate + actual verdicts (oldest first)};
 \end{tikzpicture}}
-\caption{\textbf{DMFC} and cumulative prompt feedback. Top: the LLM reads earlier calls and judgments ($H_t$), then the original request ($x$), and generates a call ($c_t$) with a function and arguments. Failed checks add a record for another attempt. Bottom: growing history precedes the unchanged request; new calls appear below. Argument checks concern the proposed function. No function runs during repair.}
-\Description{Function-call generation, binary verification, and cumulative feedback over three illustrative attempts.}
+\caption{Comparison of evaluated mechanisms (schematic; not measured results). \textbf{DMFC} retains all rejected candidates and actual verdicts before the unchanged request, checks arguments only for a call, and executes no external function during repair.}
+\Description{Three rows compare Direct and schema repair, generic self-review, and DMFC. DMFC uses separate decision-model judgments for function choice and applicable arguments plus local schema validation, and feeds rejected candidates and their actual verdicts back before the unchanged user request.}
 \label{fig:loop}
-\end{figure*}
+\end{teaserfigure}
