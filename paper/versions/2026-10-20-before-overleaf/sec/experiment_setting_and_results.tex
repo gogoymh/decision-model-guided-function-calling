@@ -1,0 +1,62 @@
+% MANUSCRIPT FORMAT: ACM SHORT
+\subsection{Evaluation and Implementation}
+\label{sec:data}
+We evaluate 3,051 BFCL examples: simple Python (400), multiple (200), irrelevance (240), live simple (258), live multiple (1,053), live irrelevance (884), and live relevance (16). The AST checker compares names and arguments with allowed answers, not execution success. Irrelevance requires no call. Live relevance scores call presence only and is excluded from the 3,035-example main accuracy. Multiple means selecting among available functions; parallel, multi-turn, web-search, memory, and execution tasks are excluded.
+
+Generators are \texttt{gpt-5-nano-2025-08-07} and \texttt{gpt-5.4-mini} (snapshot 2026-03-17), with reasoning effort \texttt{none} and a 4,096-token output limit. The decision model is \texttt{jev-1.13.0}; $r=3$ and $\tau_f=\tau_a=0.5$. These settings were chosen on the evaluated examples after thresholds 0.8/0.7 and last-candidate fallback; there is no held-out tuning set. Filtered or truncated generations count as incorrect.
+
+\paragraph{Compared methods.}
+All methods share initial candidates. \emph{Direct} returns the initial call; \emph{Schema repair} uses local errors; \emph{Self-refine} uses the generator's generic self-review for all $r$ repairs, an adaptation rather than a reproduction of Self-Refine~\cite{madaan2023selfrefine}. \textbf{DMFC-F} uses only function feedback and its acceptance gate; \textbf{DMFC-A} uses only argument feedback and its gate. Both compute applicable judgments but expose and require only their designated judgment, plus schema validation; DMFC-A accepts no call on schema alone. \textbf{DMFC-L} retains only the latest rejected candidate and feedback. Full \textbf{DMFC} retains all records. F/A isolate the two checks; L isolates history retention with the same thresholds, budget, and initial calls.
+
+\subsection{Main Experiment}
+% BEGIN AUTO CATEGORIES
+\begin{table}[t]
+\centering\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{llrrr}
+\toprule
+Generator & Method & Accuracy (\%) & API s & USD/1k\\
+\midrule
+\texttt{gpt-5-nano} & Direct & 64.1$\pm$0.3 & 1.48 & 0.056\\
+ & \textbf{DMFC} & \textbf{74.8}$\pm$0.3 & 2.81 & 0.210\\
+\texttt{gpt-5.4-mini} & Direct & 81.1$\pm$0.2 & 1.30 & 0.703\\
+ & \textbf{DMFC} & \textbf{82.1}$\pm$0.1 & 1.98 & 1.137\\
+\bottomrule
+\end{tabular}
+\caption{Main results: mean of three runs, $r=3$. Accuracy is mean $\pm$ sample s.d. on 3,035 examples; mean API time and cost use 3,051 requests. Bold compares methods within each generator.}
+\label{tab:categories}
+\end{table}
+% END AUTO CATEGORIES
+Table~\ref{tab:categories} separates generator effects from verification effects. DMFC improves mean accuracy by 10.7 points with \texttt{gpt-5-nano} (paired 95\% interval 9.7--11.6) and 1.0 with \texttt{gpt-5.4-mini} (0.5--1.5). The smaller model's largest category gain is on Irrelevance, 27.2\% to 78.2\%: preventing unnecessary calls drives much of the improvement. The larger generator's Direct baseline remains more accurate than DMFC with the smaller generator; verification does not erase the generator-quality gap.
+
+\subsection{Ablation and Latency}
+% BEGIN AUTO RESULTS
+\begin{table}[t]
+\centering\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lrrrrr}
+\toprule
+Method & Call & Func. & Args. & API s & USD/1k\\
+\midrule
+Direct & 63.8 & 74.8 & 81.2 & 1.30 & 0.056 \\
+Schema repair & 65.8 & 76.4 & 81.8 & 1.36 & 0.059 \\
+Self-refine & 70.0 & 80.3 & 82.2 & 5.47 & 0.265 \\
+\textbf{DMFC-F} & 73.2 & 84.5 & 81.4 & 2.24 & 0.172 \\
+\textbf{DMFC-A} & 72.5 & 82.6 & \textbf{82.7} & 2.21 & 0.169 \\
+\textbf{DMFC-L} & 73.5 & 84.3 & 82.2 & 2.60 & 0.203 \\
+\textbf{DMFC} & \textbf{74.6} & \textbf{85.3} & 82.1 & 2.61 & 0.211 \\
+\bottomrule
+\end{tabular}
+\caption{Ablation: one \texttt{gpt-5-nano} run, $r=3$. Call/function accuracy (\%) excludes live relevance. Arguments are scored only when the function is correct; bold marks each accuracy column's maximum.}
+\label{tab:main}
+\end{table}
+% END AUTO RESULTS
+In Table~\ref{tab:main}, both checks outperform either alone on call accuracy. Full history beats latest-only feedback by 1.1 points (95\% interval 0.4--1.7), with similar mean API time (2.61 vs.\ 2.60~s). DMFC-A's higher conditional argument score does not imply better overall calls because the scored subsets differ.
+
+% BEGIN AUTO REPAIRS
+\input{sec/repair_tradeoff}
+% END AUTO REPAIRS
+Figure~\ref{fig:latency} cuts one continued trajectory at each repair limit; these are not independent runs. Increasing $r$ from 3 to 10 raises accuracy from 74.6\% to 76.7\%, mean API time from 2.61 to 4.29~s, and p95 from 6.83 to 17.72~s; cost grows from \$0.211 to \$0.399 per 1,000 requests. The smaller accuracy gains therefore come with a larger latency tail.
+
+\paragraph{Fallback and measurement limits.}
+Returning the initial rather than the last unaccepted candidate changes mean accuracy by $+1.37$ points (95\% interval 0.93--1.82) for \texttt{gpt-5.4-mini}, but $-0.35$ ($-0.68$ to $-0.03$) for \texttt{gpt-5-nano}. API time sums generation and verification durations, excluding retry waits, scoring, and external-tool execution. Cost includes shared initial generation, growing-history generation, and verification; one filtered response without usage is excluded from cost. Intervals use 2,000 paired example-ID bootstrap samples (seed 1729). Two generators, one decision model, one ablation run, mostly English requests, public-data contamination, ten retained annotation errors, and tuning on evaluation examples limit generalization. Acceptance can introduce errors and is reported separately from correctness.

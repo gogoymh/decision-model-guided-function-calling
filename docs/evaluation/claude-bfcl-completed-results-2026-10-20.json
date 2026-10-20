@@ -1,0 +1,41 @@
+{
+  "model": "claude-sonnet-5-5",
+  "status": "complete",
+  "records": 18306,
+  "accuracy": {
+    "direct": {
+      "mean": 0.8830313014827018,
+      "sample_sd": 0.0029285648821467955
+    },
+    "jev_joint": {
+      "mean": 0.8702910488742449,
+      "sample_sd": 0.0027632609830662304
+    }
+  },
+  "paired_dmfc_minus_direct": {
+    "n_paired_ids": 3035,
+    "n_paired_records": 9105,
+    "delta": -0.012740252608456891,
+    "ci95": [
+      -0.018121911037891267,
+      -0.007248764415156508
+    ]
+  },
+  "mean_api_s": {
+    "direct": 2.5462195165846953,
+    "jev_joint": 4.161688916511173
+  },
+  "known_usage_usd_per_1k": {
+    "direct": 4.167657704918033,
+    "jev_joint": 6.664725559562842
+  },
+  "unknown_cost_n": {
+    "direct": 3,
+    "jev_joint": 3
+  },
+  "api_error_events": 2,
+  "manifest_sha256": "e66687c9e77acfa3bd6d582f0fd029fd88c8d3ddf30e0a74e608ab77c307e136",
+  "records_sha256": "d44954872b91b6694b2fc6197fea90c3a2131f0cbaf129b01386e35c38b094df",
+  "summary_sha256": "d3bbca8621c62fedb9a50e4bda5ae6caf36b38b055e0178dc4e8fade9155ec4e",
+  "time_cost_scope": "completed persisted attempts; excludes failed unsaved repair work; mixed concurrency8then32"
+}

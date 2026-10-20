@@ -1,6 +1,6 @@
 # Overleaf follow-up evaluation protocol
 
-Status: **pending model experiments**. Primary-source metadata, upstream data counts, schemas, and adaptation risks were inspected offline on 2026-10-20. No new generator/verifier request or benchmark tool execution was made for this protocol. Preparation of an input manifest does not constitute an experimental result.
+Status: **all planned three-repeat generator experiments complete; independently validated combined export complete**. Primary-source metadata, upstream data counts, schemas, and adaptation risks were inspected offline on 2026-10-20. Additional generator/verifier requests began only after committing the protocol; benchmark functions are never executed. Preparation of an input manifest does not constitute an experimental result.
 
 ## Recommended second benchmark
 
@@ -71,6 +71,18 @@ First evaluate Direct and full DMFC on BFCL and the adapted API-Bank test set, t
 - There are no gold no-call cases in this adaptation. Report its empty-call rate as an error rate, and evaluate unnecessary-call prevention on BFCL irrelevance cases separately.
 - Measure API processing duration and full wall time separately. Report retry waits, tool execution exclusion, provider caching, concurrency, tokenizer/runtime/hardware, and serving route. For open-weight models, leave cost unavailable unless an explicit measured compute-cost basis exists.
 
+## Input compatibility amendment before comparative outcomes
+
+Claude Sonnet 5.5 rejects conversations ending in an assistant message as unsupported assistant prefill. Many official API-Bank first-call prefixes have that shape. The initial API-Bank attempts are retained as interface pilots and excluded from final comparisons without inspecting their scores. A separate, hashed adapter appends the same neutral user instruction to every API-Bank example for every generator: “Predict the next API call for the preceding conversation using the available functions. Do not execute any function.” Original messages, tool catalog, labels, family splits, normalization, and scorer stay unchanged. The amendment and adapted manifest were committed before the comparative relaunch. BFCL inputs and its Claude run are unchanged.
+
+The final API-Bank inputs are at data/apibank-firstcall-user-turn; final outputs use results/additional/apibank_userturn_MODEL. The preserved pilot paths omit userturn. Price estimates describe complete-record standalone inference and exclude abandoned repair work after interface failures; they are not provider invoice totals.
+
+## Candidate-output amendment after exploratory outcomes
+
+The first common instruction caused GPT-5.4-mini to describe proposed calls in prose while returning no native tool call. These outcomes were inspected, so this prompt choice is exploratory. All original and user-turn outputs remain preserved, and none is silently replaced or included in the final candidate-interface table. The second adapter starts from the original audited inputs and appends one identical instruction for all three generators: “Produce the next function-call candidate for the preceding conversation using the native structured tool-call interface. A tool-call candidate is only a proposal: the evaluator will not execute functions. Use only documented parameters and values supported by the conversation.” Native tool choice remains auto; there is no forced gold function or extraction from arbitrary prose.
+
+The format was verified on the first four fixed development cases (one repetition) for all three generators before the three-repeat comparative relaunch. This check concerns native-call output; thresholds, budget, fallback, catalog, labels, and family split remain fixed. The final candidate input is data/apibank-firstcall-candidate and its outputs use results/additional/apibank_candidate_MODEL. Even though the final candidate runs use the declared 156 test cases, describe the added benchmark experiment as exploratory because earlier outcomes informed an interface amendment.
+
 ## Additional generator families
 
 Generator generalization is different from changing the decision/verifier model. Keep Jev fixed for the generator-family comparison; for verifier-family comparison, keep the generator and initial proposals fixed.
@@ -92,4 +104,4 @@ Sources: [Claude Sonnet 5.5 official overview](https://platform.claude.com/docs/
 2. **Function and argument errors are distinct**: use F/A ablations plus a paired error decomposition. Conditional argument scores have different denominators when function selection changes, so they cannot establish superiority in full-call correctness by themselves.
 3. **Cumulative feedback versus latest only**: compare DMFC with DMFC-L under identical prompts apart from retained history, thresholds, initial candidates, and budget. Differences arise at the second repair; `r <= 1` cannot establish the value of cumulative history. Supplement accuracy with token/time overhead. Do not state that earlier work always discards history; this is a specific ablation question.
 
-The added benchmark and generator arms stay **planned/pending** in author notes until complete validated runs exist. Only then update the abstract/Introduction's benchmark list, multi-model claims, and quantitative summary.
+All API-Bank candidate-interface arms and the Claude BFCL continuation are complete. Only validated complete records feed manuscript tables. Only then update the abstract/Introduction's benchmark list, multi-model claims, and quantitative summary.

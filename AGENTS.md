@@ -1,5 +1,21 @@
 # Research repository instructions
 
+## Overleaf feedback revision (user instruction, 2026-10-20)
+
+The user supplied additional Overleaf screenshot comments and asked to resolve them.
+This explicitly permits targeted Abstract/Introduction edits, superseding the earlier
+freeze for this revision. Explain the three study questions with citations and current
+evidence, align the summary with no-call handling and cumulative repair, remove xxx and
+unrun multi-verifier claims, and distinguish completed BFCL results from pending
+cross-benchmark/cross-provider experiments. Preserve all measured results and core run
+hashes. The pre-Overleaf source/PDF is archived at
+paper/versions/2026-10-20-before-overleaf (commit 927e895).
+Screenshots 2 and 3 truncate comments after show more; do not invent their hidden text.
+
+The additional matrix has three generators from two provider families and one verifier. New runs are separate from historical BFCL traces. API-Bank is an exploratory first-call exact-match adaptation with a fixed 53-tool catalog, family-grouped 48 development/156 test cases, and no no-call negatives. Its common native-candidate instruction was refined after format-pilot outcomes; preserve those pilots and disclose that history. Four development cases checked interface output. Never describe the added test set as untouched confirmation. Claude BFCL keeps every canonical case, counts known native schema rejection as unreadable/incorrect, and preserves the 8-worker prefix before a 32-worker continuation. Report concurrency and failed-unsaved-attempt limitations; stored standalone cost is not an invoice total.
+
+The combined main table uses scripts/additional_paper_tables.py and the marker COMBINED MAIN TABLE: V1. It requires all historical and new completed grids, hashes, cached initials, source traces, gates, offline scores, and accounting. make final preserves this six-row table and continues to regenerate the existing single-run ablation and latency figure. Do not overwrite the combined benchmark results with the legacy four-row table.
+
 ## Reviewer revision (user instruction, 2026-10-20)
 
 The user asked to resolve PDF feedback outside the Abstract and Introduction.

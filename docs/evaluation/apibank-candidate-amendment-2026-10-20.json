@@ -6,5 +6,20 @@
   "new_common_input": "Append exact native structured call candidate instruction to original dialogue prefixes for all three generators. Keep tool_choice auto and all original messages, labels, catalog, split, scorer, threshold and repairs unchanged.",
   "development_verification": "Verify native-call interface on development examples before final three-repeat execution; no outcome-driven threshold or fallback tuning.",
   "adapter_sha256": "cf65ac793653604ff2f3ee9e83d2c62123a2d2c9b3a671cd23151d800d438eb7",
-  "adapted_manifest_sha256": "a931e2c5ad3c854c5638145d273da3e7925ff3261072340c5a8a9464bc7953fd"
+  "adapted_manifest_sha256": "a931e2c5ad3c854c5638145d273da3e7925ff3261072340c5a8a9464bc7953fd",
+  "development_verification_completed": {
+    "examples": 4,
+    "replicates": 1,
+    "models": [
+      "gpt-5-nano",
+      "gpt-5.4-mini",
+      "claude-sonnet-5-5"
+    ],
+    "native_call_records_direct": [
+      3,
+      4,
+      4
+    ],
+    "status": "supported interface for all3; no threshold/fallback changes"
+  }
 }

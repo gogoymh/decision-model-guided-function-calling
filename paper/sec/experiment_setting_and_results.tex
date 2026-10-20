@@ -1,35 +1,27 @@
 % MANUSCRIPT FORMAT: ACM SHORT
-\subsection{Evaluation and Implementation}
-\label{sec:data}
-We evaluate 3,051 BFCL examples: simple Python (400), multiple (200), irrelevance (240), live simple (258), live multiple (1,053), live irrelevance (884), and live relevance (16). The AST checker compares names and arguments with allowed answers, not execution success. Irrelevance requires no call. Live relevance scores call presence only and is excluded from the 3,035-example main accuracy. Multiple means selecting among available functions; parallel, multi-turn, web-search, memory, and execution tasks are excluded.
-
-Generators are \texttt{gpt-5-nano-2025-08-07} and \texttt{gpt-5.4-mini} (snapshot 2026-03-17), with reasoning effort \texttt{none} and a 4,096-token output limit. The decision model is \texttt{jev-1.13.0}; $r=3$ and $\tau_f=\tau_a=0.5$. These settings were chosen on the evaluated examples after thresholds 0.8/0.7 and last-candidate fallback; there is no held-out tuning set. Filtered or truncated generations count as incorrect.
-
-\paragraph{Compared methods.}
-All methods share initial candidates. \emph{Direct} returns the initial call; \emph{Schema repair} uses local errors; \emph{Self-refine} uses the generator's generic self-review for all $r$ repairs, an adaptation rather than a reproduction of Self-Refine~\cite{madaan2023selfrefine}. \textbf{DMFC-F} uses only function feedback and its acceptance gate; \textbf{DMFC-A} uses only argument feedback and its gate. Both compute applicable judgments but expose and require only their designated judgment, plus schema validation; DMFC-A accepts no call on schema alone. \textbf{DMFC-L} retains only the latest rejected candidate and feedback. Full \textbf{DMFC} retains all records. F/A isolate the two checks; L isolates history retention with the same thresholds, budget, and initial calls.
-
-\subsection{Main Experiment}
 % BEGIN AUTO CATEGORIES
-\begin{table}[t]
+% COMBINED MAIN TABLE: V1
+\begin{table*}[t]
 \centering\footnotesize
-\setlength{\tabcolsep}{3.5pt}
-\begin{tabular}{llrrr}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}llrrrr@{}}
 \toprule
-Generator & Method & Accuracy (\%) & API s & USD/1k\\
+Benchmark & Generator & Direct (\%) & \textbf{DMFC} (\%) & API s (D / M) & USD/1k (D / M)\\
 \midrule
-\texttt{gpt-5-nano} & Direct & 64.1$\pm$0.3 & 1.48 & 0.056\\
- & \textbf{DMFC} & \textbf{74.8}$\pm$0.3 & 2.81 & 0.210\\
-\texttt{gpt-5.4-mini} & Direct & 81.1$\pm$0.2 & 1.30 & 0.703\\
- & \textbf{DMFC} & \textbf{82.1}$\pm$0.1 & 1.98 & 1.137\\
+BFCL & nano & $64.1\pm0.3$ & $\mathbf{74.8}\pm0.3$ & 1.48 / 2.81 & 0.056 / 0.210\\
+BFCL & mini & $81.1\pm0.2$ & $\mathbf{82.1}\pm0.1$ & 1.30 / 1.98 & 0.703 / 1.137\\
+BFCL & Sonnet 5.5 & $\mathbf{88.3}\pm0.3$ & $87.0\pm0.3$ & 2.55 / 4.16 & 4.168 / 6.665\\
+\midrule
+API-Bank$^{\dagger}$ & nano & $60.0\pm2.4$ & $\mathbf{66.5}\pm1.9$ & 2.38 / 4.46 & 0.043 / 0.783\\
+API-Bank$^{\dagger}$ & mini & $78.2\pm0.6$ & $\mathbf{79.5}\pm0.6$ & 1.49 / 2.03 & 0.814 / 1.460\\
+API-Bank$^{\dagger}$ & Sonnet 5.5 & $86.3\pm0.4$ & $\mathbf{87.2}\pm0.0$ & 1.81 / 2.79 & 20.827 / 24.580\\
 \bottomrule
 \end{tabular}
-\caption{Main results: mean of three runs, $r=3$. Accuracy is mean $\pm$ sample s.d. on 3,035 examples; mean API time and cost use 3,051 requests. Bold compares methods within each generator.}
+\caption{Direct/DMFC accuracy: mean $\pm$ sample s.d. of three runs, $r=3$; bold compares methods per row. API seconds and USD/1k are Direct/DMFC pairs. BFCL: 3,035 accuracy cases, 3,051 time/cost cases; $^{\dagger}$API-Bank: 156 cases, exploratory adapted exact match. Time includes generation/verification only; cost omits 7 records with unavailable usage/prices. \textemdash\ means unavailable.}
 \label{tab:categories}
-\end{table}
+\end{table*}
 % END AUTO CATEGORIES
-Table~\ref{tab:categories} separates generator effects from verification effects. DMFC improves mean accuracy by 10.7 points with \texttt{gpt-5-nano} (paired 95\% interval 9.7--11.6) and 1.0 with \texttt{gpt-5.4-mini} (0.5--1.5). The smaller model's largest category gain is on Irrelevance, 27.2\% to 78.2\%: preventing unnecessary calls drives much of the improvement. The larger generator's Direct baseline remains more accurate than DMFC with the smaller generator; verification does not erase the generator-quality gap.
 
-\subsection{Ablation and Latency}
 % BEGIN AUTO RESULTS
 \begin{table}[t]
 \centering\footnotesize
@@ -51,6 +43,24 @@ Self-refine & 70.0 & 80.3 & 82.2 & 5.47 & 0.265 \\
 \label{tab:main}
 \end{table}
 % END AUTO RESULTS
+
+\subsection{Evaluation and Implementation}
+\label{sec:data}
+We evaluate 3,051 BFCL examples: simple Python (400), multiple (200), irrelevance (240), live simple (258), live multiple (1,053), live irrelevance (884), and live relevance (16). The AST checker compares names and arguments with allowed answers, not execution success. Irrelevance requires no call. Live relevance scores call presence only and is excluded from the 3,035-example main accuracy. Multiple means selecting among available functions; parallel, multi-turn, web-search, memory, and execution tasks are excluded.
+
+Generators are \texttt{gpt-5-nano} (2025-08-07), \texttt{gpt-5.4-mini} (2026-03-17), and \texttt{claude-sonnet-5-5}. GPT uses reasoning effort \texttt{none}; Claude receives no thinking override. All use a 4,096-token output cap and automatic, nonparallel native tool choice. The decision model is \texttt{jev-1.13.0}; $r=3$ and $\tau_f=\tau_a=0.5$. These settings were chosen on the evaluated examples after thresholds 0.8/0.7 and last-candidate fallback; there is no held-out tuning set. Filtered or truncated generations count as incorrect.
+
+For transfer, we adapt API-Bank~\cite{li2023apibank} to first-call prediction: retain dialogue prefixes before their first API turn and supply a fixed 53-API catalog, independent of gold calls. Eight gold/schema conflicts are excluded before inference, leaving 204 cases grouped into development (48) and test (156). A common user instruction requests a native call candidate without execution. We score API names and type-normalized arguments; this exact-match adaptation differs from API-Bank's native execution score. The BFCL settings transfer unchanged. Four development cases verify the interface, without tuning thresholds or fallback; the prompt was revised after inspecting earlier test outcomes, so this evaluation is exploratory.
+
+\paragraph{Compared methods.}
+All methods share initial candidates. \emph{Direct} returns the initial call; \emph{Schema repair} uses local errors; \emph{Self-refine} uses the generator's generic self-review for all $r$ repairs, an adaptation rather than a reproduction of Self-Refine~\cite{madaan2023selfrefine}. \textbf{DMFC-F} uses only function feedback and its acceptance gate; \textbf{DMFC-A} uses only argument feedback and its gate. Both compute applicable judgments but expose and require only their designated judgment, plus schema validation; DMFC-A accepts no call on schema alone. \textbf{DMFC-L} retains only the latest rejected candidate and feedback. Full \textbf{DMFC} retains all records. F/A isolate the two checks; L isolates history retention with the same thresholds, budget, and initial calls.
+
+\subsection{Main Experiment}
+Table~\ref{tab:categories} shows BFCL gains of 10.7 points for nano (paired 95\% interval 9.7--11.6) and 1.0 for mini (0.5--1.5). Nano's largest category gain is on Irrelevance, 27.2\% to 78.2\%, driven by withholding unnecessary calls. Claude instead loses 1.3 points (interval $-1.8$ to $-0.7$): across three runs, repair fixes 58 initial errors but introduces 174 after accepted revisions. Its mean API time rises from 2.55 to 4.16~s.
+
+API-Bank gains are 6.4 points for nano (interval 3.8--9.4), 1.3 for mini (0.2--2.6), and 0.9 for Claude (0.0--2.6). Claude's interval includes zero. These mixed effects do not establish a uniform benefit across generators or end-to-end tool-use success.
+
+\subsection{Ablation and Latency}
 In Table~\ref{tab:main}, both checks outperform either alone on call accuracy. Full history beats latest-only feedback by 1.1 points (95\% interval 0.4--1.7), with similar mean API time (2.61 vs.\ 2.60~s). DMFC-A's higher conditional argument score does not imply better overall calls because the scored subsets differ.
 
 % BEGIN AUTO REPAIRS
@@ -59,4 +69,4 @@ In Table~\ref{tab:main}, both checks outperform either alone on call accuracy. F
 Figure~\ref{fig:latency} cuts one continued trajectory at each repair limit; these are not independent runs. Increasing $r$ from 3 to 10 raises accuracy from 74.6\% to 76.7\%, mean API time from 2.61 to 4.29~s, and p95 from 6.83 to 17.72~s; cost grows from \$0.211 to \$0.399 per 1,000 requests. The smaller accuracy gains therefore come with a larger latency tail.
 
 \paragraph{Fallback and measurement limits.}
-Returning the initial rather than the last unaccepted candidate changes mean accuracy by $+1.37$ points (95\% interval 0.93--1.82) for \texttt{gpt-5.4-mini}, but $-0.35$ ($-0.68$ to $-0.03$) for \texttt{gpt-5-nano}. API time sums generation and verification durations, excluding retry waits, scoring, and external-tool execution. Cost includes shared initial generation, growing-history generation, and verification; one filtered response without usage is excluded from cost. Intervals use 2,000 paired example-ID bootstrap samples (seed 1729). Two generators, one decision model, one ablation run, mostly English requests, public-data contamination, ten retained annotation errors, and tuning on evaluation examples limit generalization. Acceptance can introduce errors and is reported separately from correctness.
+API time sums generation and verification, excluding retry waits, scoring, and tool execution. Cost includes initial and repair generation plus verification; unknown usage is omitted from known-cost means. Failed unsaved repair work is excluded, so costs are not invoice totals. Intervals bootstrap example IDs 2,000 times (seed 1729), averaging repetitions per ID. BFCL settings and API-Bank's input amendment followed inspected outcomes. API-Bank has only 156 test cases and no validated no-call negatives. Three generators, one verifier, single-run ablations, English-dominated public data, and ten retained BFCL annotation errors limit generalization. Native schema rejections count as incorrect. Claude BFCL concurrency changed from 8 to 32 with prefixes preserved; API times do not establish provider speed rankings. Acceptance and correctness remain separate.

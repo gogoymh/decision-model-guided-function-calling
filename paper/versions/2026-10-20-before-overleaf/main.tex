@@ -1,0 +1,98 @@
+%%
+%% This is file `sigconf.tex',
+%% generated with the docstrip utility.
+\documentclass[sigconf,nonacm]{acmart}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
+
+\setcopyright{none}
+\settopmatter{printacmref=false,printccs=false,printfolios=true}
+
+% Text color support
+\usepackage{xcolor}
+
+% Dependencies for the framework, algorithm, and measured-result plots migrated from the prior manuscript.
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{tabularx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots}
+\setlength{\emergencystretch}{1em}
+
+
+\begin{document}
+\title{Decision-Model-Guided Function Calling with Cumulative Verification Feedback}
+
+\author{Minhyeong Yu}
+% \authornote{Both authors contributed equally to this research.}
+\affiliation{%
+  \institution{Enhans}
+  \city{Seoul}
+  \country{South Korea}}
+\email{minhyeong@enhans.ai}
+
+
+\author{Wonduk Seo}
+\correspondingauthor
+\affiliation{%
+  \institution{University College London}
+  \city{London}
+  \country{United Kingdom}}
+\email{wonduk.seo.26@ucl.ac.uk}
+
+% \author{Valerie B\'eranger}
+% \affiliation{%
+%   \institution{Inria Paris-Rocquencourt}
+%   \city{Rocquencourt}
+%   \country{France}
+% }
+
+
+\renewcommand{\shortauthors}{Yu and Seo}
+
+\begin{abstract}
+\input{sec/abstract}
+
+Reliable function calling requires Large Language Models (LLMs) to choose appropriate functions and generate arguments that match user intent. However, even syntactically valid calls can be semantically wrong, for instance by selecting the wrong function or producing mismatched arguments. Prior work uses verification and iterative refinement, but it remains difficult to efficiently carry verification feedback forward across attempts. In this paper, propose \textbf{Decision-Model-Guided Function Calling (DMFC)}, an inference-time framework that verifies function selection and argument correctness with separate binary judgments and then refines calls using cumulative feedback from previously rejected candidates without executing external tools. \textcolor{red}{On Berkeley Function Calling Leaderboard (BFCL), DMFC improves accuracy from 64.1\% to 74.8\% with GPT-5-nano and from 81.1\% to 82.1\% with GPT-5.4-mini. Retaining verification history further outperforms using only the latest feedback by 1.1 percentage points} highlighting the value of cumulative verification for reliable function calling.
+\end{abstract}
+
+
+\keywords{function calling, decision models, verification, in-context learning}
+
+\input{sec/framework}
+
+\maketitle
+\raggedbottom
+
+
+
+\section{Introduction}
+\input{sec/introduction}
+
+% \section{Problem Definition}
+% \input{sec/problem_definition}
+
+\section{Methodology}
+\input{sec/methodology}
+
+\section{Experiment Setting \& Results}
+\input{sec/experiment_setting_and_results}
+
+\section{Conclusion}
+\input{sec/conclusion}
+
+\begin{acks}
+\input{sec/acknowledgements}
+\end{acks}
+
+\clearpage
+\balance
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

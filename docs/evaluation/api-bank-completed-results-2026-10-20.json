@@ -1,0 +1,117 @@
+{
+  "recorded_at_utc": "2026-10-20T10:47:47.739198+00:00",
+  "scope": "API-Bank exploratory native-candidate first-call transfer;156testcases,3repetitions",
+  "models": {
+    "gpt-5-nano": {
+      "config_id": "67952562c3d1a819f59bbbcb5aaa680fd44523b49f7ea1291924c6b926820246",
+      "status": "complete",
+      "records": 936,
+      "means": {
+        "direct": {
+          "accuracy_mean": 0.6004273504273504,
+          "accuracy_sample_sd": 0.024268839084616533
+        },
+        "jev_joint": {
+          "accuracy_mean": 0.6645299145299145,
+          "accuracy_sample_sd": 0.01850481632018031
+        }
+      },
+      "paired_dmfc_minus_direct": {
+        "n_paired_ids": 156,
+        "n_paired_records": 468,
+        "delta": 0.0641025641025641,
+        "ci95": [
+          0.03846153846153846,
+          0.09401709401709402
+        ]
+      },
+      "mean_api_s": {
+        "direct": 2.38181795140106,
+        "jev_joint": 4.460071170223856
+      },
+      "known_usage_usd_per_1k": {
+        "direct": 0.04272767094017095,
+        "jev_joint": 0.7827967051282052
+      },
+      "unknown_cost_n": {
+        "direct": 0,
+        "jev_joint": 0
+      },
+      "api_error_events": 0
+    },
+    "gpt-5.4-mini": {
+      "config_id": "b5f4b745e576d8a9514cb3efa5760f313d9015b94ff4621dc1436cf0e81b30a0",
+      "status": "complete",
+      "records": 936,
+      "means": {
+        "direct": {
+          "accuracy_mean": 0.782051282051282,
+          "accuracy_sample_sd": 0.0064102564102563875
+        },
+        "jev_joint": {
+          "accuracy_mean": 0.7948717948717948,
+          "accuracy_sample_sd": 0.006410256410256443
+        }
+      },
+      "paired_dmfc_minus_direct": {
+        "n_paired_ids": 156,
+        "n_paired_records": 468,
+        "delta": 0.01282051282051282,
+        "ci95": [
+          0.0021367521367521365,
+          0.02564102564102564
+        ]
+      },
+      "mean_api_s": {
+        "direct": 1.486652515657842,
+        "jev_joint": 2.0283169702658603
+      },
+      "known_usage_usd_per_1k": {
+        "direct": 0.8137105769230768,
+        "jev_joint": 1.4598443846153848
+      },
+      "unknown_cost_n": {
+        "direct": 0,
+        "jev_joint": 0
+      },
+      "api_error_events": 0
+    },
+    "claude-sonnet-5-5": {
+      "config_id": "4b7dad4df264f1a70ecf2705bd660f40bfe3877b6fc8a86fd9369afb9712e443",
+      "status": "complete",
+      "records": 936,
+      "means": {
+        "direct": {
+          "accuracy_mean": 0.8632478632478633,
+          "accuracy_sample_sd": 0.0037009632640361135
+        },
+        "jev_joint": {
+          "accuracy_mean": 0.8717948717948718,
+          "accuracy_sample_sd": 0.0
+        }
+      },
+      "paired_dmfc_minus_direct": {
+        "n_paired_ids": 156,
+        "n_paired_records": 468,
+        "delta": 0.008547008547008546,
+        "ci95": [
+          0.0,
+          0.02564102564102564
+        ]
+      },
+      "mean_api_s": {
+        "direct": 1.8062929916262733,
+        "jev_joint": 2.7928448363375686
+      },
+      "known_usage_usd_per_1k": {
+        "direct": 20.827081196581197,
+        "jev_joint": 24.5804657051282
+      },
+      "unknown_cost_n": {
+        "direct": 0,
+        "jev_joint": 0
+      },
+      "api_error_events": 0
+    }
+  }
+}
