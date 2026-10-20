@@ -1,0 +1,10 @@
+{
+  "amended_at_utc": "2026-10-20T10:11:00Z",
+  "reason": "Claude Sonnet 5.5 rejects conversation ending in an assistant turn as unsupported prefill; API-Bank source prefixes often end in assistant messages.",
+  "outcomes_inspected": false,
+  "existing_api_bank_runs": "Preserved as interface pilots; excluded from final comparative results, regardless of their outcomes.",
+  "new_common_input": "Append an identical neutral next-call instruction as a user message for every API-Bank example and every generator. Keep all original conversation messages, fixed catalog, labels, split and scoring unchanged.",
+  "bfcl_run": "Unaffected and continued without rerun.",
+  "adapter_sha256": "b57323339b3c0059aa6e6cc795fda0bc855086cb851160432a64b7d3a754e794",
+  "adapted_manifest_sha256": "00b13e4d2dac6301922b127f14c94fcac1f14cef5b8a216a2a8338bff0170241"
+}

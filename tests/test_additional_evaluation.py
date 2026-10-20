@@ -127,6 +127,24 @@ def test_pairing_scoring_after_requests_cost_and_initial_timing(tmp_path, monkey
     assert summary["methods"]["jev_joint"]["mean_retry_wait_s"] == pytest.approx(.7)
 
 
+def test_function_change_metric_counts_a_changed_function_name(tmp_path):
+    class WrongFunctionGenerator(Generator):
+        def generate(self, public, history):
+            candidate = super().generate(public, history)
+            if not history:
+                candidate["calls"][0]["name"] = "Other"
+            return candidate
+
+    events = []
+    arguments = args(tmp_path)
+    generator, verifier = WrongFunctionGenerator(events), Verifier(events)
+    cases = [example()]
+    summary = additional.execute(arguments, cases, additional.prepare_apibank.score_example,
+                                 config(arguments, cases, generator, verifier), generator, verifier)
+    assert summary["methods"]["direct"]["function_change_rate"] == 0
+    assert summary["methods"]["jev_joint"]["function_change_rate"] == 1
+
+
 def test_failed_verifier_stops_sanitized_and_resume_reuses_initial(tmp_path):
     events = []
     arguments = args(tmp_path)
