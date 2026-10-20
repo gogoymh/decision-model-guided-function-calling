@@ -1,0 +1,10 @@
+{
+  "amended_at_utc": "2026-10-20T10:24:00Z",
+  "reason": "The prior neutral instruction resulted in textual call descriptions rather than native structured call candidates, especially GPT-5.4-mini (all initial native calls empty).",
+  "outcomes_inspected": true,
+  "status": "All preceding API-Bank attempts preserved as exploratory interface pilots; no held-out claim for this prompt choice.",
+  "new_common_input": "Append exact native structured call candidate instruction to original dialogue prefixes for all three generators. Keep tool_choice auto and all original messages, labels, catalog, split, scorer, threshold and repairs unchanged.",
+  "development_verification": "Verify native-call interface on development examples before final three-repeat execution; no outcome-driven threshold or fallback tuning.",
+  "adapter_sha256": "cf65ac793653604ff2f3ee9e83d2c62123a2d2c9b3a671cd23151d800d438eb7",
+  "adapted_manifest_sha256": "a931e2c5ad3c854c5638145d273da3e7925ff3261072340c5a8a9464bc7953fd"
+}
