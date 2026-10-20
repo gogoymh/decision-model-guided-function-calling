@@ -1,0 +1,56 @@
+{
+  "declared_at_utc": "2026-10-20T10:01:08.182216+00:00",
+  "status": "predeclared before additional model inference",
+  "source_sha256": "c167522df5f566dc0797b8124cb2b1d8ebbad0ab25133b85f58343f5228c8342",
+  "runner_sha256": "15fb5b554c6b8e61fedb94cd73f3193985075fc66d5b17d72bb128416dcb2fc7",
+  "preparer_sha256": "1450290c7587d3ecc7efcaba59f8f3b9ef896f4b142bbb400b1a018aece39b23",
+  "api_bank_manifest_sha256": "4a223e4df84e6213e4bacb5ca2edde2c44288c7542f1c143ad3009030b5e02c7",
+  "api_bank_test_n": 156,
+  "api_bank_dev_n": 48,
+  "api_bank_outcome_tuning": false,
+  "bfcl_prepared_n": 3051,
+  "bfcl_main_n": 3035,
+  "bfcl_setting_selection": "historical BFCL evaluation results; exploratory",
+  "settings": {
+    "max_repairs": 3,
+    "threshold": 0.5,
+    "final_rule": "keep_first",
+    "max_completion_tokens": 4096,
+    "temperature": null,
+    "gpt_reasoning_effort": "none",
+    "claude_thinking_override": null,
+    "jev_model": "jev-1.13.0",
+    "generator_gateway": "apim",
+    "jev_gateway": "direct",
+    "external_tool_execution": false,
+    "workers_per_job": 8,
+    "replicates": 3,
+    "methods": [
+      "direct",
+      "jev_joint"
+    ],
+    "share_initial_within_model_repetition": true
+  },
+  "matrix": [
+    {
+      "benchmark": "apibank_firstcall_test",
+      "model": "gpt-5-nano",
+      "api_style": "azure_chat_completions"
+    },
+    {
+      "benchmark": "apibank_firstcall_test",
+      "model": "gpt-5.4-mini",
+      "api_style": "azure_chat_completions"
+    },
+    {
+      "benchmark": "apibank_firstcall_test",
+      "model": "claude-sonnet-5-5",
+      "api_style": "anthropic_messages"
+    },
+    {
+      "benchmark": "bfcl_all",
+      "model": "claude-sonnet-5-5",
+      "api_style": "anthropic_messages"
+    }
+  ]
+}
