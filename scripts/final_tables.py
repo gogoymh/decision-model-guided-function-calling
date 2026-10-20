@@ -72,6 +72,7 @@ SAME_PER_MODEL = ("llm_model", "reasoning_effort", "prices_usd_per_million")
 NOT_COPIED = ("config_id", "created_at", "extends", "added", "rethreshold", "reused", "workers")
 FIGURE_RUN = f"results/table3_gpt-5-nano_r10_t{THRESHOLD:g}"
 ACM_SHORT = "% MANUSCRIPT FORMAT: ACM SHORT"
+COMBINED_MAIN = "% COMBINED MAIN TABLE: V1"
 
 
 def rerun(model, run):
@@ -521,7 +522,13 @@ def update_paper(paper, final, figure, rules, costs):
         source = path.read_text()
     if ACM_SHORT in source:
         # Only regenerate data: the short-paper captions, headings and plot layout are author-edited.
-        source = _replace_table_rows(source, "CATEGORIES", compact_main_rows(final, costs, method_name))
+        if COMBINED_MAIN in source:
+            # Publication still requires all completed additional runs; never revert the six-row comparison.
+            import additional_paper_tables
+            combined = additional_paper_tables.latex_table(additional_paper_tables.build_report(ROOT))
+            source = _replace_block(source, "CATEGORIES", combined.rstrip())
+        else:
+            source = _replace_table_rows(source, "CATEGORIES", compact_main_rows(final, costs, method_name))
         result_rows = _table_rows(paper_tables.latex_table2(final["gpt-5-nano"][0]))
         if method_name == "DMFC":
             result_rows = result_rows.replace(r"\textbf{JBFC", r"\textbf{DMFC")

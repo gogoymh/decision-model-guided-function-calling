@@ -324,3 +324,65 @@ def test_measured_tradeoff_rejects_missing_p95():
                        for color in ("tradeoffaccuracy", "tradeoffmean", "tradeofftail"))
     with pytest.raises(ValueError, match="p95_latency_s"):
         final_tables.measured_tradeoff(source, figure)
+
+
+def test_main_combined_marker_keeps_six_rows_and_updates_ablations_plot(root, monkeypatch):
+    import additional_paper_tables
+
+    monkeypatch.setattr(final_tables, "ROOT", root)
+    paper = root / "paper/main.tex"
+    section = paper.parent / "sec/experiment_setting_and_results.tex"
+    section.parent.mkdir(parents=True)
+    paper.write_text(r"\title{Decision-Model-Guided Function Calling}" + "\n"
+                     + r"\input{sec/experiment_setting_and_results}" + "\n")
+    main_before = paper.read_text()
+    section.write_text(final_tables.ACM_SHORT + "\nAUTHOR TEXT\n% BEGIN AUTO CATEGORIES\n"
+                       + final_tables.COMBINED_MAIN + "\nOLD COMBINED TABLE\n% END AUTO CATEGORIES\n"
+                       + "% BEGIN AUTO RESULTS\n" + r"\begin{table}\midrule" + "\nOLD ABLATION\n"
+                       + r"\bottomrule\caption{Ablation caption.}\end{table}" + "\n% END AUTO RESULTS\n"
+                       + "% BEGIN AUTO REPAIRS\n" + r"\input{sec/repair_tradeoff}" + "\n% END AUTO REPAIRS\nLIMIT TEXT\n")
+    plot = section.parent / "repair_tradeoff.tex"
+    plot.write_text("\n".join(rf"\addplot[color={color}, thick] coordinates {{(1,0)}};"
+                             for color in ("tradeoffaccuracy", "tradeoffmean", "tradeofftail")))
+    # Completed-result validation belongs to the exporter, independently tested against actual records.
+    # This regression isolates make final's routing and preserves all six sentinel outcomes.
+    seen = []
+    report = {"status": "complete", "rows": [{"outcome": index + .1} for index in range(6)]}
+    def completed_report(actual_root):
+        seen.append(actual_root)
+        return report
+    def six_row_table(actual_report):
+        assert actual_report == report
+        return final_tables.COMBINED_MAIN + "\n" + r"\begin{table*}" + "\n" + "\n".join(
+            f"benchmark {index} & generator & Direct {row['outcome']} & DMFC {row['outcome']}\\\\"
+            for index, row in enumerate(actual_report["rows"])) + "\n" + r"\end{table*}" + "\n"
+    monkeypatch.setattr(additional_paper_tables, "build_report", completed_report)
+    monkeypatch.setattr(additional_paper_tables, "latex_table", six_row_table)
+    def no_legacy_rows(*args, **kwargs):
+        raise AssertionError("Combined results must never be replaced by the legacy four rows")
+    monkeypatch.setattr(final_tables, "compact_main_rows", no_legacy_rows)
+
+    final_tables.main(["--paper", str(paper), "--json", str(root / "combined-final.json")])
+
+    text = section.read_text()
+    assert seen == [root] and paper.read_text() == main_before
+    assert text.count(" & generator & Direct ") == 6
+    assert "OLD COMBINED TABLE" not in text and "OLD ABLATION" not in text
+    assert "Direct 5.1 & DMFC 5.1" in text and r"\caption{Ablation caption.}" in text
+    assert "AUTHOR TEXT" in text and "LIMIT TEXT" in text
+    assert "(10,16.500000)" in plot.read_text()
+
+
+def test_combined_marker_refuses_unfinished_additions_before_paper_write(root, monkeypatch):
+    import additional_paper_tables
+
+    monkeypatch.setattr(final_tables, "ROOT", root)
+    paper = root / "main.tex"
+    source = final_tables.ACM_SHORT + "\n% BEGIN AUTO CATEGORIES\n" + final_tables.COMBINED_MAIN + "\nSIX ROWS\n% END AUTO CATEGORIES\n"
+    paper.write_text(source)
+    def incomplete(actual_root):
+        raise ValueError("Additional result grid is incomplete")
+    monkeypatch.setattr(additional_paper_tables, "build_report", incomplete)
+    with pytest.raises(ValueError, match="incomplete"):
+        final_tables.update_paper(paper, {}, {}, {}, [])
+    assert paper.read_text() == source
