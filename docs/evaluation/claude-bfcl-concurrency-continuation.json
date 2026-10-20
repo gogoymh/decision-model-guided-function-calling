@@ -1,0 +1,56 @@
+{
+  "format_version": "additional-concurrency-continuation-v1",
+  "created_at": "2026-10-20T10:31:54.431265+00:00",
+  "script_sha256": "8e3093d7f3a3651f6b5f7e4653c9eb818c16dc127c9581a1615327fdbbaab845",
+  "source_directory": "/Users/minhyeong/jev-backed-function-calling/results/additional/bfcl_claude-sonnet-5-5",
+  "original_config_id": "0ad3e8e431e359f696cfddeee83fdc9598b32bf82ab29e346bb23b119a287642",
+  "child_config_id": "6f4fdb194004cff858d6e4b6d181aecd87731ef5f4385a6fa035104a33d84812",
+  "source_files_sha256": {
+    "manifest.json": "b03bb61c54e89dd28734da8fc7412b41a533d2d04e581527f643c6f77d418498",
+    "records.jsonl": "58e27b6593c40d790fe54ddb542e680c87e55c4f93b2415f17769a55cb208219",
+    "initial.jsonl": "cc383dc10d0ddc5ddfb35118700334b7daecada5bc54483e5ba86a35c832502b",
+    "errors.jsonl": "1bce6291b8f9d68c1086d450aeb819c1b936e05780448fe620eb37b0ec307697"
+  },
+  "child_manifest_sha256": "e66687c9e77acfa3bd6d582f0fd029fd88c8d3ddf30e0a74e608ab77c307e136",
+  "settings_changes": {
+    "workers": {
+      "before": 8,
+      "after": 32
+    },
+    "provider_adapter_sha256": {
+      "before": null,
+      "after": "0ccc2534cdfdb5470cfa5bdfb30726f924d21c2eeac283e7f6f1bbf7381c68e1"
+    },
+    "provider_input_rule": {
+      "before": null,
+      "after": "Canonical BFCL schemas and IDs unchanged. After an actual Claude HTTP 400, an input containing a schema property key outside ^[a-zA-Z0-9_.-]{1,64}$ is recorded as calls=None, incomplete=unsupported_schema and scored as an error; other errors stop. No case is excluded."
+    }
+  },
+  "record_amendments": [
+    "config_id",
+    "original_config_id",
+    "recorded_workers"
+  ],
+  "counts": {
+    "completed_method_records": 4232,
+    "cached_initials": 2119,
+    "expected_method_records": 18306,
+    "remaining_method_records": 14074
+  },
+  "runtime_history": [
+    {
+      "phase": "preserved_checkpoint",
+      "workers": 8,
+      "records": 4232,
+      "cached_initials": 2119
+    },
+    {
+      "phase": "continuation",
+      "workers": 32,
+      "record_rule": "Rows without recorded_workers use child manifest workers; cached initials keep their original concurrency."
+    }
+  ],
+  "timing_note": "Physical serving concurrency changes; cached initial and completed response times are preserved. Latency comparisons must disclose the mixed concurrency.",
+  "checkpointed_assertion": true,
+  "source_process_check": "No matching local source runner active"
+}

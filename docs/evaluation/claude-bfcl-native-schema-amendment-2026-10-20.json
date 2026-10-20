@@ -1,0 +1,16 @@
+{
+  "declared_at_utc": "2026-10-20T10:33:00Z",
+  "source_run": "results/additional/bfcl_claude-sonnet-5-5",
+  "continuation_run": "results/additional/bfcl_claude-sonnet-5-5_compatible32",
+  "canonical_data_unchanged": true,
+  "known_native_schema_rejections": [
+    "live_simple_67-31-0"
+  ],
+  "unsupported_key": "a\u00f1o_vehiculo",
+  "rule": "retain all3051cases; actual known schema400 -> unreadable incorrect candidate; all other errors stop",
+  "workers_before": 8,
+  "workers_after": 32,
+  "scores_inspected": false,
+  "provider_adapter_sha256": "0ccc2534cdfdb5470cfa5bdfb30726f924d21c2eeac283e7f6f1bbf7381c68e1",
+  "cached_prefix_preserved": true
+}
