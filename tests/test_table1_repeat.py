@@ -141,6 +141,7 @@ def test_cli_writes_the_mean_table_and_reports_paired_differences_over_runs(tmp_
     source = paper.read_text()
     assert "mean of three runs" in source and "OLD TABLE 1" not in source and "OLD TABLE 2" in source
     assert json.loads(report_path.read_text()) == json.loads(json.dumps(report))
+    assert r"\textbf{DMFC}" in source and "JBFC" not in source
     nano = report["paired"]["gpt-5-nano jbfc - direct"]
     assert nano["delta"] == pytest.approx(1 / 3) and nano["n_paired_ids"] == 2 and nano["n_paired_records"] == 6
     # Large Direct minus small JBFC, per example averaged over runs: a (1 - 1), b (2/3 - 2/3).

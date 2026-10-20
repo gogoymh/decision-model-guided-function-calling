@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Table 1 over three runs (user request, 2026-10-18): Direct and JBFC (r=3) for gpt-5-nano and gpt-5.4-mini.
+# Table 1 over three runs (user request, 2026-10-18): Direct and DMFC (r=3) for gpt-5-nano and gpt-5.4-mini.
 # Run 1 of each generator is its r=3 run from make r3. This script adds runs 2 and 3. Each is a Direct run on
-# all 3,051 examples with new first proposals (generator only), then JBFC (r=3) added from those proposals with
+# all 3,051 examples with new first proposals (generator only), then DMFC (r=3) added from those proposals with
 # scripts/raise_limit.py --add jev_joint, the way run 1 of gpt-5.4-mini was made. Code, data, interface,
 # settings and prices are those of run 1; only the generator's samples differ. Jev answers through the gateway
 # when it can, otherwise directly with TYPESAFE_API_KEY (same model); each manifest records the route.
@@ -57,7 +57,7 @@ run_model() {  # runs $RUNS of one generator
     note "$model" "$log" "run $run: Direct on all 3,051 examples with new first proposals -> $direct"
     uv run jev-fc run --split all --methods direct --max-repairs 2 --replicates 1 \
       --workers "$WORKERS" --output "$direct" --resume 2>&1 | stamp "$model" "$log"
-    note "$model" "$log" "run $run: add JBFC (r=$LIMIT) from those first proposals -> $out"
+    note "$model" "$log" "run $run: add DMFC (r=$LIMIT) from those first proposals -> $out"
     uv run python scripts/raise_limit.py "$direct" --max-repairs "$LIMIT" --add jev_joint \
       --output "$out" --workers "$WORKERS" --resume 2>&1 | stamp "$model" "$log"
   done

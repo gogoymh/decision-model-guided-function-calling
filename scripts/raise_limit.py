@@ -13,9 +13,9 @@ larger limit. For each method of the source run:
 Continued rows replay their saved attempts through the same pipeline and must match
 the record, so every new request is the one an uninterrupted run with the new limit
 would have sent. --reuse METHOD=RUN takes a method's rows from a run of the same
-trajectories with a limit at least as large, cut at the new limit (for JBFC, the
+trajectories with a limit at least as large, cut at the new limit (for DMFC, the
 Figure 2 extension, so Table 2 agrees with Figure 2). --add METHOD runs a method the
-source lacks, starting from the source's shared first proposals (JBFC next to a
+source lacks, starting from the source's shared first proposals (DMFC next to a
 Direct-only run). The source must come from the same code (source_sha256), data,
 models, interfaces and prices; Jev's route may change only on request
 (--jev-gateway or JEV_GATEWAY) and is then recorded. The output is a normal run.

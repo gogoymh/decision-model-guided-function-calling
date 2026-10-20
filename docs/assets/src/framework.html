@@ -1,0 +1,32 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}html,body{margin:0;width:1440px;height:820px;background:transparent;font-family:Inter,system-ui,sans-serif;color:#171717}
+.card{position:relative;width:1440px;height:820px;border-radius:18px;border:1px solid #deddd6;background:#fcfcfb;padding:30px 32px}
+h1,h2,p{margin:0}h1{font-size:27px;font-weight:700;letter-spacing:-.02em}h2{font-size:22px;font-weight:650;letter-spacing:-.01em}.note{font-size:16px;color:#686762;margin-top:8px}
+.flow{display:grid;grid-template-columns:200px 250px 220px 290px 232px;gap:40px;margin-top:26px}.node{height:98px;border:1px solid #c6c5bd;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;text-align:center;font-size:19px;line-height:1.45}.history{background:#f2efff;border-color:#c4b5fd}.verify{background:#fff4e8;border-color:#e8c295}.final{background:#edf9ef;border-color:#a9d3b3}.minor{font-size:15px;color:#676661}.wires{position:absolute;left:0;top:0;pointer-events:none}.loop{margin:11px 0 27px 240px;color:#5b36a3;font-size:16px;height:27px;padding:3px 14px;border-left:2px solid #a78bfa;border-bottom:2px solid #a78bfa;width:810px;text-align:center;border-bottom-left-radius:8px}
+.example-title{margin-bottom:16px}.examples{display:grid;grid-template-columns:1fr 1fr 1fr;gap:28px}.round{font-size:19px;font-weight:650;margin-bottom:10px}.prompt{height:245px;background:#fff;border:1px solid #c6c5bd;border-radius:12px;overflow:hidden;font-size:17px;line-height:1.5}.prefix{height:164px;padding:14px 16px}.original{padding:11px 16px;background:#f2efff;border-top:1px solid #d4cbef}.tag{font-size:13px;font-weight:650;color:#625982;letter-spacing:.02em;margin-bottom:5px}.mono{font-family:"SFMono-Regular",Consolas,monospace;font-size:16px}.output{margin-top:18px;border:1px solid #e8c295;background:#fff4e8;border-radius:12px;padding:14px 16px;line-height:1.5;font-size:17px;height:103px}.accepted{background:#edf9ef;border-color:#a9d3b3}.outcome{font-size:16px;font-weight:600}.footer{margin-top:21px;font-size:15px;color:#686762}
+</style></head><body><div class="card">
+<h1>(a) DMFC: verify a candidate, then repair with cumulative feedback</h1>
+<p class="note">Decision-model judgments assess function selection and arguments. The current implementation uses Jev; repairs never execute tools.</p>
+<div class="flow">
+<div class="node">User request<br>Available functions</div>
+<div class="node history">History before the<br>unchanged request</div>
+<div class="node">LLM proposes<br>a call or no call</div>
+<div class="node verify"><div>Decision model + schema<br><span class="minor">Arguments skipped for no call</span></div></div>
+<div class="node final"><div>Return final proposal<br><span class="minor">First passing; otherwise first</span></div></div>
+</div>
+<svg class="wires" width="1440" height="280" viewBox="0 0 1440 280" xmlns="http://www.w3.org/2000/svg"><defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 Z" fill="#8d8b83"/></marker></defs>
+<path d="M237 161 H264" stroke="#8d8b83" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<path d="M527 161 H554" stroke="#8d8b83" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<path d="M787 161 H814" stroke="#8d8b83" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+<path d="M1117 161 H1144" stroke="#8d8b83" stroke-width="2" fill="none" marker-end="url(#arrow)"/>
+</svg>
+<div class="loop">Rejected and repairs left: append the candidate and its actual judgments to the history</div>
+<div class="example-title"><h2>(b) Cumulative prompt example</h2><p class="note">Available functions: <span class="mono">book_flight(origin, destination)</span> and <span class="mono">book_hotel(city)</span></p></div>
+<div class="examples">
+<div><div class="round">Initial proposal · empty history</div><div class="prompt"><div class="prefix"><div class="tag">NO REPAIR HISTORY</div>Only the original conversation and request.</div><div class="original"><div class="tag">ORIGINAL REQUEST · UNCHANGED</div>Book a flight from Seoul to Tokyo.</div></div><div class="output"><div class="mono">book_hotel(Tokyo)</div><div class="mono">f=0.12 FAIL; a=0.94 PASS</div><div class="outcome">Rejected: wrong function</div></div></div>
+<div><div class="round">Repair 1 · one rejected candidate</div><div class="prompt"><div class="prefix"><div class="tag">NOT EXECUTED · OLDEST FIRST</div><div class="mono">1: book_hotel(Tokyo)<br>&nbsp;&nbsp;&nbsp;f=0.12 FAIL; a=0.94 PASS</div></div><div class="original"><div class="tag">ORIGINAL REQUEST · UNCHANGED</div>Book a flight from Seoul to Tokyo.</div></div><div class="output"><div class="mono">book_flight(Tokyo, Seoul)</div><div class="mono">f=0.96 PASS; a=0.18 FAIL</div><div class="outcome">Rejected: wrong arguments</div></div></div>
+<div><div class="round">Repair 2 · both rejected candidates</div><div class="prompt"><div class="prefix"><div class="tag">NOT EXECUTED · OLDEST FIRST</div><div class="mono">1: book_hotel(Tokyo)<br>&nbsp;&nbsp;&nbsp;f=0.12 FAIL; a=0.94 PASS<br>2: book_flight(Tokyo, Seoul)<br>&nbsp;&nbsp;&nbsp;f=0.96 PASS; a=0.18 FAIL</div></div><div class="original"><div class="tag">ORIGINAL REQUEST · UNCHANGED</div>Book a flight from Seoul to Tokyo.</div></div><div class="output accepted"><div class="mono">book_flight(Seoul, Tokyo)</div><div class="mono">f=0.97 PASS; a=0.95 PASS</div><div class="outcome">Accepted: both checks pass</div></div></div>
+</div>
+<div class="footer">Illustrative probabilities, not measured results. Both thresholds are 0.5 and schema checks pass. f: function judgment; a: argument judgment.</div>
+</div></body></html>

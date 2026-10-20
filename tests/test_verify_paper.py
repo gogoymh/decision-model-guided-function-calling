@@ -85,3 +85,39 @@ def test_imported_draft_accepts_archived_and_revised_figure_captions(framework, 
              f"Figure 2: {framework}.\nFigure 3: {tradeoff}.\nAlgorithm 1 DMFC\nCited [1].",
              "", "", "", "", "Conclusion\nAcknowledgements\nReferences\n[1] A paper."]
     verify_paper.verify_acm_draft(pages)
+
+
+@pytest.fixture
+def anonymous_pages(short_pages):
+    short_pages[0] = ("Anonymous Author(s)\nWeb agents need verification before dispatch. "
+                      "Web Infrastructure and Agentic Systems.\n" + short_pages[0])
+    return short_pages
+
+
+def test_anonymous_review_accepts_nonidentifying_pdf(anonymous_pages):
+    verify_paper.verify_anonymous_review(anonymous_pages, {"/Author": "Anonymous Author(s)"})
+
+
+@pytest.mark.parametrize("identity", ["Minhyeong Yu", "Wonduk Seo", "Enhans", "University College London",
+                                     "Pseudo Lab", "No-More-Slops"])
+def test_anonymous_review_rejects_author_leaks(anonymous_pages, identity):
+    anonymous_pages[1] += "\n" + identity
+    with pytest.raises(AssertionError, match="Author-identifying text"):
+        verify_paper.verify_anonymous_review(anonymous_pages)
+
+
+def test_anonymous_review_rejects_metadata_leak(anonymous_pages):
+    with pytest.raises(AssertionError, match="PDF metadata"):
+        verify_paper.verify_anonymous_review(anonymous_pages, {"/Author": "Minhyeong Yu"})
+
+
+def test_anonymous_review_rejects_missing_first_page_track(anonymous_pages):
+    anonymous_pages[0] = anonymous_pages[0].replace("Web Infrastructure and Agentic Systems.", "")
+    with pytest.raises(AssertionError, match="selected-track relevance"):
+        verify_paper.verify_anonymous_review(anonymous_pages)
+
+
+def test_anonymous_review_rejects_acknowledgements(anonymous_pages):
+    anonymous_pages[1] += "\nAcknowledgments\nSupport details."
+    with pytest.raises(AssertionError, match="Acknowledgements"):
+        verify_paper.verify_anonymous_review(anonymous_pages)

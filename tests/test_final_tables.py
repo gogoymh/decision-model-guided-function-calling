@@ -254,7 +254,7 @@ def test_main_fills_the_paper(root, monkeypatch, split_source):
     text = target.read_text()
     if split_source:
         assert paper.read_text() == original_main
-        assert r"\textbf{DMFC}" in text and "JBFC" not in text
+    assert r"\textbf{DMFC}" in text and "JBFC" not in text
     assert "UNFILLED" not in text and r"\label{tab:rules}" in text and r"\label{tab:categories}" in text
     assert r"\label{tab:main}" in text and r"\label{fig:repairs}" in text
     assert json.loads((root / "final.json").read_text())["settings"]["threshold"] == .5

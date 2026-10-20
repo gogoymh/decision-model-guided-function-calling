@@ -1,4 +1,4 @@
-"""Extend the JBFC trajectories of a finished run to a higher repair limit (Figure 2).
+"""Extend the DMFC trajectories of a finished run to a higher repair limit (Figure 2).
 
 Neither model sees the repair limit and no function runs before the end, so the
 trajectory for a limit r is the first r+1 attempts of a trajectory for any larger
@@ -95,13 +95,13 @@ def _relative(path):
 
 
 def check_source(source_dir, max_repairs):
-    """Return the manifest and JBFC rows of a complete source run that may be extended."""
+    """Return the manifest and DMFC rows of a complete source run that may be extended."""
     source_dir = Path(source_dir)
     manifest = json.loads((source_dir / "manifest.json").read_text())
     rows = read_jsonl(source_dir / "records.jsonl")
     methods, cap = manifest.get("methods") or [], manifest.get("max_repairs")
     if manifest.get("synthetic") is not False or METHOD not in methods:
-        raise ValueError("The source must be a real run that includes JBFC (jev_joint).")
+        raise ValueError("The source must be a real run that includes DMFC (jev_joint).")
     if isinstance(cap, bool) or not isinstance(cap, int) or isinstance(max_repairs, bool) or max_repairs <= cap:
         raise ValueError("The new repair limit must be larger than the source run's limit.")
     if manifest.get("exhaustion_policy") != "execute_last":
@@ -160,7 +160,7 @@ class ReplayVerifier:
 
 
 def continue_row(example, row, generator, verifier, max_repairs):
-    """Continue one exhausted JBFC row; the replayed prefix must match the record exactly."""
+    """Continue one exhausted DMFC row; the replayed prefix must match the record exactly."""
     saved = row["trace"]
     record = run_example(example, ReplayGenerator(generator, saved), ReplayVerifier(verifier, saved),
                          METHOD, max_repairs, "execute_last", initial_proposal=saved[0]["proposal"])
@@ -250,7 +250,7 @@ def main(argv=None):
             else:
                 todo.append(row)
         count = len(joint) - len(todo)
-        print(f"{count} of {len(joint)} JBFC rows stopped within r={source['max_repairs']}; "
+        print(f"{count} of {len(joint)} DMFC rows stopped within r={source['max_repairs']}; "
               f"continuing {len(todo)} rows up to r={args.max_repairs}.", flush=True)
 
         def task(row):

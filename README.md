@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/jbfc-hero.png" alt="Jev-Backed Function Calling: Agentic In-Context Learning with Cumulative Decision Feedback (JBFC). The LLM proposes a call, Jev checks it, a rejected call goes back to the LLM with the verdict, and only a call that passes runs." width="100%">
+  <img src="docs/assets/dmfc-hero.png" alt="Decision-Model-Guided Function Calling with Cumulative Verification Feedback (DMFC). The LLM proposes a call, the decision model and schema check assess it, and rejected candidates return as cumulative feedback. The library executes an accepted call only at final dispatch." width="100%">
 </p>
 
 <p align="center">
@@ -15,7 +15,7 @@
 <p align="center">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square&logo=python&logoColor=white">
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-eab308?style=flat-square"></a>
-  <img alt="649 offline tests" src="https://img.shields.io/badge/tests-649%20passing-16a34a?style=flat-square">
+  <img alt="768 offline tests" src="https://img.shields.io/badge/tests-768%20passing-16a34a?style=flat-square">
   <img alt="Dependencies: httpx and jsonschema" src="https://img.shields.io/badge/deps-httpx%20%2B%20jsonschema-6b7280?style=flat-square">
   <a href="paper/main.pdf"><img alt="Paper (PDF)" src="https://img.shields.io/badge/paper-PDF-b31b1b?style=flat-square&logo=latex&logoColor=white"></a>
 </p>
@@ -32,27 +32,27 @@
   <a href="#reproduce-the-paper"><b>Reproduce</b></a>
 </p>
 
-Current paper: **[paper/main.pdf](paper/main.pdf)** · source: **[paper/main.tex](paper/main.tex)** · [Overleaf comment resolutions](docs/overleaf-comment-resolution-2026-10-20.md). The manuscript uses DMFC; the library and recorded experiment IDs retain JBFC names.
+Current paper: **[paper/main.pdf](paper/main.pdf)** · source: **[paper/main.tex](paper/main.tex)** · [Overleaf comment resolutions](docs/overleaf-comment-resolution-2026-10-20.md). The manuscript and public library use **DMFC**. Recorded experiment IDs and result directories keep their original names for reproducibility; `import jbfc` remains compatible.
 
-LLMs call the wrong function, invent argument values, and call tools when no tool applies. A JSON schema cannot catch that, because a wrong call can be perfectly well formed. **JBFC** puts a verifier between the model and your code. [Jev](https://typesafe.ai) answers two yes/no questions about every proposed call: *is this the right function?* and *are these the right arguments?* When a check fails, the same model gets the verdicts back and repairs the call. Only a call that passes runs.
+LLMs call the wrong function, invent argument values, and call tools when no tool applies. A JSON schema cannot catch that, because a wrong call can be perfectly well formed. **DMFC** puts a verifier between the model and your code. [Jev](https://typesafe.ai) answers two yes/no questions about every proposed call: *is this the right function?* and *are these the right arguments?* When a check fails, the same model gets the verdicts back and repairs the call. Only a call that passes runs.
 
 ```python
-import jbfc
+import dmfc
 
-agent = jbfc.JBFC("openai:gpt-5-nano", tools=[get_weather, book_table])
+agent = dmfc.DMFC("openai:gpt-5-nano", tools=[get_weather, book_table])
 agent.run("Is it jacket weather in Seoul tonight?")  # runs the call only if Jev accepts it
 ```
 
 > [!TIP]
-> Already have an agent? Keep it. `jbfc.verify(messages, tool_calls, tools)` checks calls from the OpenAI, Anthropic or Google SDKs before you execute them. [Jump there](#verify-calls-from-any-framework).
+> Already have an agent? Keep it. `dmfc.verify(messages, tool_calls, tools)` checks calls from the OpenAI, Anthropic or Google SDKs before you execute them. [Jump there](#verify-calls-from-any-framework).
 
 ## How it works
 
-![JBFC: the model proposes a call, Jev checks it, and rejected calls return to the model as a growing feedback history](docs/assets/jbfc-framework.png)
+![DMFC: the model proposes a call, Jev checks it, and rejected calls return to the model as a growing feedback history](docs/assets/dmfc-framework.png)
 
-**(a)** The LLM proposes a call $c_t$, one function with its arguments, or no call. A local schema check and Jev judge it: Jev sees the request, the available functions and the call, and answers *right function?* and, when there is a call, *right arguments?* as probabilities of yes. A check passes at 0.5 or more. A rejected call and its verdicts $d_t$ are appended to the feedback history $H_t$, and the model tries again. **(b)** The history goes *before* the original request, oldest first, and is marked as not executed, so the model sees every earlier attempt and can change the function, the arguments, or decide not to call. (The scores in (b) are illustrative.)
+**(a)** The LLM proposes a call $c_t$, one function with its arguments, or no call. A local schema check and Jev judge it: Jev sees the request, the available functions and the call, and answers *right function?* and, when there is a call, *right arguments?* as probabilities of yes. A check passes at 0.5 or more. A rejected call and its verdicts $d_t$ are appended to the feedback history $H_t$, and the model tries again. **(b)** The history goes *before* the original request, oldest first, and is marked as not executed, so the model sees every earlier attempt and can change the function, the arguments, or decide not to call. (The probabilities in (b) are illustrative, not measured benchmark results.)
 
-Each record is a labeled example: a call the model wrote, with Jev's verdict on it. Like the demonstrations in [many-shot in-context learning](https://arxiv.org/abs/2404.11018), more of them seemed to help in our run: the full history scored slightly above the latest record alone, and accuracy rose with the repair limit (which also adds attempts). Jev makes those labels in a fraction of a second, without reference answers.
+Each history record contains a candidate and the verifier's actual judgments, without reference answers. The [many-shot in-context learning](https://arxiv.org/abs/2404.11018) literature motivates studying how prior examples affect later proposals. DMFC uses rejected candidates as feedback; its cumulative-history ablation and repair-limit analysis appear in [Results](#results).
 
 The loop stops at the first proposal that passes every check, or after `max_repairs` repairs (3 by default). If none passes, the result is the model's first proposal, so a repair replaces the model's answer only once Jev accepts it (`on_exhaustion="last"` returns the last repair instead). Nothing runs during repairs; `run()` executes only an accepted call.
 
@@ -84,13 +84,13 @@ Two real traces from the paper's first run (`gpt-5-nano` on BFCL, `jev-1.13.0`, 
 + Jev          right function? p=0.97   right arguments? p=0.89   → accepted
 ```
 
-## Why JBFC
+## Why DMFC
 
 <table>
   <tr>
     <td width="33%" valign="top"><b>🎯 Checks what schemas cannot</b><br>Wrong function, invented values, a call that should not happen at all. Jev judges meaning; a local schema check covers format.</td>
     <td width="33%" valign="top"><b>🔁 Repairs instead of failing</b><br>Rejected calls go back to the model with every earlier attempt and verdict. Nothing runs until a call passes.</td>
-    <td width="33%" valign="top"><b>⚡ Light checks</b><br>A Jev verdict took about 0.2 s per call in our runs, less time than the model took to propose the call, and about $0.06 per 1,000 checks.</td>
+    <td width="33%" valign="top"><b>🔍 Decision-model feedback</b><br>The current verifier is Jev. It returns binary judgment probabilities without generating explanations or requiring reference answers.</td>
   </tr>
   <tr>
     <td valign="top"><b>🔌 Any model</b><br>OpenAI, Anthropic, Gemini, xAI Grok, Azure OpenAI, OpenRouter, or any OpenAI-compatible server. Plain HTTP, no vendor SDKs.</td>
@@ -107,6 +107,8 @@ Python 3.11 or newer. From a clone of this repository:
 pip install -e .        # or: uv sync
 ```
 
+`import dmfc` and `dmfc.DMFC(...)` are the current API. Existing `import jbfc` / `jbfc.JBFC(...)` applications and their method aliases remain supported. The repository URL is unchanged.
+
 Set the keys for Jev and for your model provider:
 
 ```bash
@@ -117,7 +119,7 @@ export OPENAI_API_KEY=...     # or ANTHROPIC_API_KEY, GEMINI_API_KEY, XAI_API_KE
 ## Quickstart
 
 ```python
-import jbfc
+import dmfc
 
 def get_weather(city: str, unit: str = "celsius") -> dict:
     """Current weather for a city.
@@ -128,7 +130,7 @@ def get_weather(city: str, unit: str = "celsius") -> dict:
     """
     return {"city": city, "temp": 12, "unit": unit}
 
-agent = jbfc.JBFC("openai:gpt-5-nano", tools=[get_weather])
+agent = dmfc.DMFC("openai:gpt-5-nano", tools=[get_weather])
 
 result = agent.run("Do I need a jacket in Seoul tonight?")
 result.call       # {"name": "get_weather", "arguments": {"city": "Seoul"}}
@@ -152,30 +154,30 @@ elif result.no_call:
 The model is a `"provider:model"` string or a provider object. Options such as `api_key=` go to the provider; `jev_api_key=` goes to Jev.
 
 ```python
-jbfc.JBFC("openai:gpt-5-nano")                       # OPENAI_API_KEY
-jbfc.JBFC("anthropic:claude-sonnet-4-5")             # ANTHROPIC_API_KEY
-jbfc.JBFC("gemini:gemini-2.5-flash")                 # GEMINI_API_KEY or GOOGLE_API_KEY
-jbfc.JBFC("xai:grok-4")                              # XAI_API_KEY
-jbfc.JBFC("openrouter:meta-llama/llama-3.3-70b-instruct")   # OPENROUTER_API_KEY
-jbfc.JBFC("azure:my-deployment", endpoint="https://my-resource.openai.azure.com")  # AZURE_OPENAI_API_KEY
+dmfc.DMFC("openai:gpt-5-nano")                       # OPENAI_API_KEY
+dmfc.DMFC("anthropic:claude-sonnet-4-5")             # ANTHROPIC_API_KEY
+dmfc.DMFC("gemini:gemini-2.5-flash")                 # GEMINI_API_KEY or GOOGLE_API_KEY
+dmfc.DMFC("xai:grok-4")                              # XAI_API_KEY
+dmfc.DMFC("openrouter:meta-llama/llama-3.3-70b-instruct")   # OPENROUTER_API_KEY
+dmfc.DMFC("azure:my-deployment", endpoint="https://my-resource.openai.azure.com")  # AZURE_OPENAI_API_KEY
 
 # Local or self-hosted, OpenAI-compatible (Ollama, vLLM, LM Studio, ...)
-jbfc.JBFC(jbfc.OpenAICompatible("llama3.1", base_url="http://localhost:11434/v1"))
+dmfc.DMFC(dmfc.OpenAICompatible("llama3.1", base_url="http://localhost:11434/v1"))
 
 # Keys in code instead of the environment
-jbfc.JBFC("anthropic:claude-sonnet-4-5", api_key="sk-ant-...", jev_api_key="...")
+dmfc.DMFC("anthropic:claude-sonnet-4-5", api_key="sk-ant-...", jev_api_key="...")
 ```
 
 | Provider | Spec | Key | Class |
 |---|---|---|---|
-| OpenAI | `openai:<model>` | `OPENAI_API_KEY` | `jbfc.OpenAI` |
-| Anthropic | `anthropic:<model>` | `ANTHROPIC_API_KEY` | `jbfc.Anthropic` |
-| Google Gemini | `gemini:<model>` | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | `jbfc.Gemini` |
-| xAI Grok | `xai:<model>` | `XAI_API_KEY` | `jbfc.XAI` |
-| Azure OpenAI | `azure:<deployment>` | `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT` | `jbfc.AzureOpenAI` |
-| OpenRouter | `openrouter:<model>` | `OPENROUTER_API_KEY` | `jbfc.OpenRouter` |
-| Anything OpenAI-compatible | | optional | `jbfc.OpenAICompatible` |
-| Jev (verifier) | | `TYPESAFE_API_KEY` | `jbfc.Jev` |
+| OpenAI | `openai:<model>` | `OPENAI_API_KEY` | `dmfc.OpenAI` |
+| Anthropic | `anthropic:<model>` | `ANTHROPIC_API_KEY` | `dmfc.Anthropic` |
+| Google Gemini | `gemini:<model>` | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | `dmfc.Gemini` |
+| xAI Grok | `xai:<model>` | `XAI_API_KEY` | `dmfc.XAI` |
+| Azure OpenAI | `azure:<deployment>` | `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT` | `dmfc.AzureOpenAI` |
+| OpenRouter | `openrouter:<model>` | `OPENROUTER_API_KEY` | `dmfc.OpenRouter` |
+| Anything OpenAI-compatible | | optional | `dmfc.OpenAICompatible` |
+| Jev (verifier) | | `TYPESAFE_API_KEY` | `dmfc.Jev` |
 
 <details>
 <summary><b>Provider options</b></summary>
@@ -189,16 +191,16 @@ Provider objects take `max_output_tokens` (4,096 by default), `temperature`, `sy
 Plain functions work as they are: parameter types come from type hints (`str`, `int`, `float`, `bool`, `list[...]`, `dict[...]`, `Literal`, `Enum`, `Optional`, `TypedDict`, `Annotated[..., "description"]`), descriptions from Google, NumPy or Sphinx docstrings, and defaults from the signature. Use the decorator to override anything, or pass JSON Schema definitions in OpenAI, Anthropic or Gemini format:
 
 ```python
-@jbfc.tool(name="weather", description="Current weather for a city.")
+@dmfc.tool(name="weather", description="Current weather for a city.")
 def get_weather(city: str, unit: Literal["celsius", "fahrenheit"] = "celsius") -> dict: ...
 
 schema = {"type": "function", "function": {
     "name": "search", "description": "Search the web.",
     "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}}
-agent = jbfc.JBFC("openai:gpt-5-nano", tools=[get_weather, schema], functions={"search": my_search})
+agent = dmfc.DMFC("openai:gpt-5-nano", tools=[get_weather, schema], functions={"search": my_search})
 ```
 
-`jbfc.schema_of(fn)` shows the schema JBFC sends.
+`dmfc.schema_of(fn)` shows the schema DMFC sends.
 
 ## Verify calls from any framework
 
@@ -208,34 +210,44 @@ Keep your agent and check its calls before you execute them. `verify` takes the 
 from openai import OpenAI
 
 response = OpenAI().chat.completions.create(model="gpt-5-nano", messages=messages, tools=tools)
-verdict = jbfc.verify(messages, response.choices[0].message.tool_calls, tools)
+verdict = dmfc.verify(messages, response.choices[0].message.tool_calls, tools)
 
 if verdict:                       # passed the schema check and both Jev checks
     execute(response.choices[0].message.tool_calls)
 else:
     print(verdict.function_probability, verdict.arguments_probability, verdict.schema_errors)
-    # verdict.feedback is the record JBFC would send back to the model for a repair
+    # verdict.feedback is the record DMFC would send back to the model for a repair
 ```
 
 ## Options and baselines
 
 ```python
-jbfc.JBFC(
+dmfc.DMFC(
     "openai:gpt-5-nano",
     tools=[...],
     max_repairs=3,             # repairs after the first proposal
     threshold=0.5,             # Jev threshold for both checks
     on_exhaustion="first",     # if nothing passes: return the first proposal ("last": the last repair)
-    method="jbfc",             # or a baseline: "direct", "schema", "self-refine",
-                               # "jev-function", "jev-arguments", "jbfc-latest"
-    execute_unverified=False,  # run() also executes the final call when nothing passed
+    method="dmfc",             # or a baseline: "direct", "schema", "self-refine",
+                               # "dmfc-f", "dmfc-a", "dmfc-latest"
+    execute_unverified=False,  # True also permits the final unverified proposal to run
 )
 ```
 
+| Paper label | Public method option | Recorded experiment ID |
+|---|---|---|
+| Direct | `direct` | `direct` |
+| Schema repair | `schema` | `schema_only` |
+| Self-refine | `self-refine` | `self_refine` |
+| DMFC-F: function judgment only | `dmfc-f` | `jev_function` |
+| DMFC-A: argument judgment only | `dmfc-a` | `jev_arguments` |
+| DMFC-L: latest rejected candidate only | `dmfc-latest` | `jev_joint_latest` |
+| DMFC: both judgments, cumulative history | `dmfc` | `jev_joint` |
+
 - The defaults are the paper's final settings: at most three repairs, threshold 0.5, and the first proposal when nothing passes. `call()` and `run()` also take `max_repairs=` and `on_exhaustion=` per request.
-- `jbfc.Jev(api_key, threshold=0.5, function_threshold=None, arguments_threshold=None, model="jev-1.13.0")` configures the verifier; pass it as `jev=`.
+- `dmfc.Jev(api_key, threshold=0.5, function_threshold=None, arguments_threshold=None, model="jev-1.13.0")` configures the verifier; pass it as `jev=`.
 - `acall`, `arun` and `averify` run the same steps in a worker thread for async code.
-- `jbfc.SYSTEM_PROMPT` is the generator prompt used in the paper; replace it with `system_prompt=` on a provider.
+- `dmfc.SYSTEM_PROMPT` is the generator prompt used in the paper; replace it with `system_prompt=` on a provider.
 
 <details>
 <summary><b>The result object</b></summary>
@@ -280,38 +292,38 @@ The charts and detailed analyses below preserve the original BFCL GPT experiment
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-categories-dark.png">
-  <img alt="Accuracy by BFCL category, mean of three runs, Direct then JBFC, for gpt-5-nano and gpt-5.4-mini: Simple Python 90.8 to 91.3 and 90.5 to 91.8; Multiple 91.0 to 91.5 and 93.3 to 95.0; Irrelevance 27.2 to 78.2 and 87.1 to 87.9; Live simple 74.3 to 77.8 and 77.1 to 79.8; Live multiple 67.6 to 71.4 and 75.2 to 77.4; Live irrelevance 48.8 to 65.7 and 80.7 to 79.4; total 64.1 to 74.8 and 81.1 to 82.1." src="docs/assets/chart-categories-light.png" width="100%">
+  <img alt="Accuracy by BFCL category, mean of three runs, Direct then DMFC, for gpt-5-nano and gpt-5.4-mini: Simple Python 90.8 to 91.3 and 90.5 to 91.8; Multiple 91.0 to 91.5 and 93.3 to 95.0; Irrelevance 27.2 to 78.2 and 87.1 to 87.9; Live simple 74.3 to 77.8 and 77.1 to 79.8; Live multiple 67.6 to 71.4 and 75.2 to 77.4; Live irrelevance 48.8 to 65.7 and 80.7 to 79.4; total 64.1 to 74.8 and 81.1 to 82.1." src="docs/assets/chart-categories-light.png" width="100%">
 </picture>
 
-- With `gpt-5-nano`, JBFC raised call accuracy from 64.1% to 74.8% on average (paired bootstrap 95% CI for the difference 9.7–11.6 points; +10.8, +10.7 and +10.4 in the three runs), mostly on requests where no tool applies (Irrelevance: 27.2% → 78.2%). Where a call is needed, the gains are small (Simple Python 90.8% → 91.3%, Multiple 91.0% → 91.5%): a yes/no verdict says *that* a call is wrong, not *which* call is right.
-- With `gpt-5.4-mini`, JBFC raised accuracy in every run, from 81.1% to 82.1% on average (95% CI for the difference 0.5–1.5 points). It fixed 55–66 calls per run and broke 27–39, mostly correct no-calls that became calls Jev accepted after rejecting the no-call.
+- With `gpt-5-nano`, DMFC raised call accuracy from 64.1% to 74.8% on average (paired bootstrap 95% CI for the difference 9.7–11.6 points; +10.8, +10.7 and +10.4 in the three runs), mostly on requests where no tool applies (Irrelevance: 27.2% → 78.2%). Where a call is needed, the gains are small (Simple Python 90.8% → 91.3%, Multiple 91.0% → 91.5%): a yes/no verdict says *that* a call is wrong, not *which* call is right.
+- With `gpt-5.4-mini`, DMFC raised accuracy in every run, from 81.1% to 82.1% on average (95% CI for the difference 0.5–1.5 points). It fixed 55–66 calls per run and broke 27–39, mostly correct no-calls that became calls Jev accepted after rejecting the no-call.
 - Which proposal to return when none passes mattered for the larger model. Returning the last repair instead of the first would have put `gpt-5.4-mini` at 80.7%, below Direct: those unverified changes fixed 10–14 calls per run and broke 53–55, mostly correct no-calls. For `gpt-5-nano`, the last repair would have scored 0.4 points higher (75.1%; 95% CI 0.03–0.68). Both rules make the same requests.
-- A larger model alone beat the small model with JBFC: Direct with `gpt-5.4-mini` reached 81.1%, 6.4 points above JBFC with `gpt-5-nano` (95% CI 5.1–7.7), at 3.3 times the cost ($0.70 instead of $0.21 per 1,000 requests) and in under half the time.
+- A larger model alone beat the small model with DMFC: Direct with `gpt-5.4-mini` reached 81.1%, 6.4 points above DMFC with `gpt-5-nano` (95% CI 5.1–7.7), at 3.3 times the cost ($0.70 instead of $0.21 per 1,000 requests) and in under half the time.
 - The three runs agree: each total moved by at most 0.6 points between runs (standard deviation 0.1–0.3), although about 30% of `gpt-5-nano`'s first calls (13% of `gpt-5.4-mini`'s) changed from run to run.
 - In the first run with `gpt-5-nano`, every repair method scored above Direct. Generic self-review spends four proposals on every request and trailed every Jev-based method, which averaged 1.4 to 1.6.
 - In the same run, keeping the whole history scored 1.1 points above showing only the latest rejection (95% CI 0.4–1.7).
 - Accepted is not the same as correct: with `gpt-5-nano`, calls that passed every check (84–85% of examples in each run) were 84–85% correct.
-- With `gpt-5-nano`, JBFC cost about four times Direct ($0.21 instead of $0.056 per 1,000 requests) and took 1.3 more API seconds.
+- With `gpt-5-nano`, DMFC cost about four times Direct ($0.21 instead of $0.056 per 1,000 requests) and took 1.3 more API seconds.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-methods-dark.png">
-  <img alt="Call accuracy by method with gpt-5-nano, first run, at most three repairs: JBFC 74.6, JBFC-L 73.5, JBFC-F 73.2, JBFC-A 72.5, Self-refine 70.0, Schema repair 65.8, Direct 63.8, with API seconds and USD per 1,000 requests." src="docs/assets/chart-methods-light.png" width="100%">
+  <img alt="Call accuracy by method with gpt-5-nano, first run, at most three repairs: DMFC 74.6, DMFC-L 73.5, DMFC-F 73.2, DMFC-A 72.5, Self-refine 70.0, Schema repair 65.8, Direct 63.8, with API seconds and USD per 1,000 requests." src="docs/assets/chart-methods-light.png" width="100%">
 </picture>
 
 <a id="more-repairs"></a>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/chart-limits-dark.png">
-  <img alt="JBFC by repair limit: call accuracy 72.0% at r=1, 73.4% at r=2, 74.6% at r=3 (default), 75.8% at r=5, 76.4% at r=7 and 76.7% at r=10; cost per 1,000 requests $0.155, $0.183, $0.211, $0.265, $0.319 and $0.399." src="docs/assets/chart-limits-light.png" width="100%">
+  <img alt="DMFC by repair limit: call accuracy 72.0% at r=1, 73.4% at r=2, 74.6% at r=3 (default), 75.8% at r=5, 76.4% at r=7 and 76.7% at r=10; cost per 1,000 requests $0.155, $0.183, $0.211, $0.265, $0.319 and $0.399." src="docs/assets/chart-limits-light.png" width="100%">
 </picture>
 
-Continuing the first `gpt-5-nano` run raised call accuracy from 74.6% at three repairs (the default) to 76.7% at ten, at 1.9 times the cost. Every newly correct answer came from a later proposal that passed, most of them (59 of 70) on requests where no tool applies. Even at ten repairs, JBFC stayed below Direct with `gpt-5.4-mini` (76.7% against 81.1% on average). Three repairs was chosen on the first run at threshold 0.8, where each further point cost about four times as much.
+Continuing the first `gpt-5-nano` run raised call accuracy from 74.6% at three repairs (the default) to 76.7% at ten, at 1.9 times the cost. Every newly correct answer came from a later proposal that passed, most of them (59 of 70) on requests where no tool applies. Even at ten repairs, DMFC stayed below Direct with `gpt-5.4-mini` (76.7% against 81.1% on average). Three repairs was chosen on the first run at threshold 0.8, where each further point cost about four times as much.
 
 <details>
 <summary><b>Original BFCL GPT analyses as tables</b></summary>
 
 Original GPT category breakdown, mean of three runs per generator (total: mean ± standard deviation across runs). The current paper's Table 1 uses the six-row summary above:
 
-| Category | Examples | `gpt-5-nano` Direct | `gpt-5-nano` JBFC | `gpt-5.4-mini` Direct | `gpt-5.4-mini` JBFC |
+| Category | Examples | `gpt-5-nano` Direct | `gpt-5-nano` DMFC | `gpt-5.4-mini` Direct | `gpt-5.4-mini` DMFC |
 |---|---:|---:|---:|---:|---:|
 | Simple Python | 400 | 90.8 | 91.3 | 90.5 | **91.8** |
 | Multiple | 200 | 91.0 | 91.5 | 93.3 | **95.0** |
@@ -322,9 +334,9 @@ Original GPT category breakdown, mean of three runs per generator (total: mean �
 | **Total** (excl. 16 live relevance) | 3,035 | 64.1 ± 0.3 | 74.8 ± 0.3 | 81.1 ± 0.2 | **82.1** ± 0.1 |
 | USD / 1k requests | | 0.056 | 0.210 | 0.703 | 1.137 |
 
-Historical first-versus-last fallback analysis on BFCL GPT runs, mean of three runs with the same requests. JBFC returns the first proposal when none passes; the last-proposal alternative is shown below. This is no longer a numbered table in the current paper:
+Historical first-versus-last fallback analysis on BFCL GPT runs, mean of three runs with the same requests. DMFC returns the first proposal when none passes; the last-proposal alternative is shown below. This is no longer a numbered table in the current paper:
 
-| Generator | Direct | JBFC, last proposal | JBFC, first proposal (default) | First − last (points, 95% CI) |
+| Generator | Direct | DMFC, last proposal | DMFC, first proposal (default) | First − last (points, 95% CI) |
 |---|---:|---:|---:|---:|
 | `gpt-5-nano` | 64.1 | **75.1** | 74.8 | −0.35 (−0.68 to −0.03) |
 | `gpt-5.4-mini` | 81.1 | 80.7 | **82.1** | +1.37 (0.93 to 1.82) |
@@ -336,10 +348,10 @@ First run (the paper's Table 2 and Figure 2):
 | Direct (no checks) | 63.8 | 74.8 | 81.2 | 1.30 | 0.056 |
 | Schema repair | 65.8 | 76.4 | 81.8 | 1.36 | 0.059 |
 | Self-refine (4 proposals, every request) | 70.0 | 80.3 | 82.2 | 5.47 | 0.265 |
-| JBFC-F (function check only) | 73.2 | 84.5 | 81.4 | 2.24 | 0.172 |
-| JBFC-A (argument check only) | 72.5 | 82.6 | **82.7** | 2.21 | 0.169 |
-| JBFC-L (latest feedback only) | 73.5 | 84.3 | 82.2 | 2.60 | 0.203 |
-| **JBFC** | **74.6** | **85.3** | 82.1 | 2.61 | 0.211 |
+| DMFC-F (function check only) | 73.2 | 84.5 | 81.4 | 2.24 | 0.172 |
+| DMFC-A (argument check only) | 72.5 | 82.6 | **82.7** | 2.21 | 0.169 |
+| DMFC-L (latest feedback only) | 73.5 | 84.3 | 82.2 | 2.60 | 0.203 |
+| **DMFC** | **74.6** | **85.3** | 82.1 | 2.61 | 0.211 |
 
 | `max_repairs` | 1 | 2 | 3 (default) | 5 | 7 | 10 |
 |---|---:|---:|---:|---:|---:|---:|
@@ -355,29 +367,29 @@ First run (the paper's Table 2 and Figure 2):
 ## FAQ
 
 **Is Jev just another LLM-as-a-judge?**
-Jev is TypeSafe's decision model. It does not write explanations: it answers each yes/no question with a probability, in 0.19 s on average in the paper's first run. JBFC asks two fixed questions (right function, right arguments) and also runs a local schema check.
+Jev is TypeSafe's decision model. It does not write explanations: it answers each yes/no question with a probability, in 0.19 s on average in the paper's first run. DMFC asks two fixed questions (right function, right arguments) and also runs a local schema check.
 
 **What does it cost?**
-Each Jev check reads about 1,400 tokens, roughly $0.06 per 1,000 checks at $0.042 per million input tokens. With `gpt-5-nano`, JBFC cost $0.21 per 1,000 requests on average, against $0.056 for a bare call; a bare call to `gpt-5.4-mini` cost $0.70 and was more accurate.
+Each Jev check reads about 1,400 tokens, roughly $0.06 per 1,000 checks at $0.042 per million input tokens. With `gpt-5-nano`, DMFC cost $0.21 per 1,000 requests on average, against $0.056 for a bare call; a bare call to `gpt-5.4-mini` cost $0.70 and was more accurate.
 
-**Does anything run while JBFC repairs a call?**
+**Does anything run while DMFC repairs a call?**
 No. Proposals are marked as not executed, and `run()` executes only the final call after it passes (or, with `execute_unverified=True`, the final proposal even if none passed: the first one by default).
 
 **Can I use it with LangChain, the OpenAI Agents SDK, or my own loop?**
-Yes. Call `jbfc.verify(...)` on the tool calls your framework produces, or let `JBFC.call()` make the decision for one step of your loop.
+Yes. Call `dmfc.verify(...)` on the tool calls your framework produces, or let `DMFC.call()` make the decision for one step of your loop.
 
 **Parallel tool calls?**
-Not yet. JBFC decides one step at a time: a single call or no call, the setting it was evaluated on.
+Not yet. DMFC decides one step at a time: a single call or no call, the setting it was evaluated on.
 
 **Which models have been benchmarked?**
 `gpt-5-nano`, `gpt-5.4-mini`, and Claude Sonnet 5.5, each with Direct and DMFC over three runs on BFCL and the exploratory API-Bank adaptation. The verifier is Jev in every comparison. Effects vary by generator and benchmark; see [Results](#results). Other provider adapters are covered by offline tests, not these benchmark results.
 
-**When does JBFC help?**
+**When does DMFC help?**
 The largest BFCL gain came from GPT-5-nano withdrawing unnecessary calls. GPT-5.4-mini gained one point, while Claude lost 1.3 points because accepted revisions introduced more errors than they fixed. API-Bank's adapted evaluation showed smaller gains for all three generators, with Claude's interval including zero. Measure on your own traffic; `verify()` returns verdicts without revising the call.
 
 ## Limits
 
-- **One decision per step.** JBFC decides a single call or no call. `call()` and `run()` take text messages, so give earlier tool results back to the model as text; `verify()` also accepts tool-call and tool-result messages.
+- **One decision per step.** DMFC decides a single call or no call. `call()` and `run()` take text messages, so give earlier tool results back to the model as text; `verify()` also accepts tool-call and tool-result messages.
 - **A verifier is a model too.** Jev can accept a wrong call or reject a right one; accepted calls were about 85% correct in the original GPT-5-nano BFCL runs. Claude's BFCL accuracy decreased after accepted revisions, even with the first-proposal fallback.
 - **Cost and latency.** Each proposal costs one generator call and one Jev call; with at most three repairs, that is up to four of each.
 - **Evidence so far.** Three generators, two providers, one verifier, and mostly English requests; Direct/DMFC have three runs per generator and benchmark, while the other methods have one GPT-5-nano BFCL run. BFCL settings were chosen after inspecting evaluated examples. API-Bank has 156 exploratory test cases, no validated no-call negatives, and an input instruction revised after prior outcomes. This study does not evaluate end-to-end execution success.
@@ -386,23 +398,23 @@ The largest BFCL gain came from GPT-5-nano withdrawing unnecessary calls. GPT-5.
 
 Read **[paper/main.pdf](paper/main.pdf)** for the current manuscript and edit **[paper/main.tex](paper/main.tex)** as its source entry point. The Abstract is inline in `main.tex`; active sections are loaded from `paper/sec/`. `paper/sec/abstract.tex` is unused, and `paper/sigconf*.tex` files are ACM template examples.
 
-The 2026-10-20 Overleaf revision updates the Abstract and Introduction, integrates related work into Methodology, and includes BFCL plus exploratory API-Bank results for three generators and one verifier. It fits four total pages including references. The manuscript uses DMFC; implementation and recorded experiment IDs retain JBFC/Jev naming. This is an author-facing copy; anonymous submission formatting remains to check. See [comment resolutions](docs/overleaf-comment-resolution-2026-10-20.md) and [paper build notes](paper/README.md). Previous sources and PDFs are saved under [paper/versions/](paper/versions/).
+The 2026-10-20 Overleaf revision updates the Abstract and Introduction, integrates related work into Methodology, and includes BFCL plus exploratory API-Bank results for three generators and one verifier. It fits four total pages including references. The current manuscript uses the supplied ACM `sigconf,anonymous,review` format and omits author details and acknowledgements from its compiled PDF. The named author review copy is preserved in [paper/versions/2026-10-20-author-review/](paper/versions/2026-10-20-author-review/). Confirm the submission track and its relevance statement before submitting. The public library uses DMFC; recorded method IDs and trace paths keep their historical JBFC/Jev names. See [comment resolutions](docs/overleaf-comment-resolution-2026-10-20.md) and [paper build notes](paper/README.md). Previous sources and PDFs are saved under [paper/versions/](paper/versions/).
 
-The experiment code lives in [`src/jev_fc`](src/jev_fc) and the manuscript in [`paper/main.tex`](paper/main.tex). JBFC's loop in the library *is* `jev_fc.pipeline.run_example`, and offline tests check that the library sends the same prompts as the experiments. The runs started at threshold 0.8 with the last proposal returned; the paper's numbers come from rerunning the Jev methods at threshold 0.5 from the same first proposals and keeping the first proposal when none passes (`make final`).
+The experiment code lives in [`src/jev_fc`](src/jev_fc) and the manuscript in [`paper/main.tex`](paper/main.tex). DMFC's loop in the library *is* `jev_fc.pipeline.run_example`, and offline tests check that the library sends the same prompts as the experiments. The runs started at threshold 0.8 with the last proposal returned; the paper's numbers come from rerunning the Jev methods at threshold 0.5 from the same first proposals and keeping the first proposal when none passes (`make final`).
 
 ```bash
 make setup         # uv sync and a .env from .env.example
 make prepare       # download and convert the pinned BFCL revision (3,051 examples)
 make test          # offline tests and lint; no keys needed
 make check-config  # show the configured routes, models and keys, without API calls
-make table1        # optional: Direct vs JBFC at r=2 (6,102 records), not used by the tables
+make table1        # optional: Direct vs DMFC at r=2 (6,102 records), not used by the tables
 make table2        # all seven methods at r=2 (21,357 records, threshold 0.8): the first run's source
-make table3        # JBFC at threshold 0.8 extended to r=10 (its r=3 rows feed make r3)
+make table3        # DMFC at threshold 0.8 extended to r=10 (its r=3 rows feed make r3)
 make compare       # Direct with gpt-5.4-mini on all examples (no Jev)
-make r3            # r=3: raise the Table 2 run and add JBFC to gpt-5.4-mini (threshold 0.8)
-make repeat        # runs 2-3 of Direct and JBFC for both models (threshold 0.8)
-make threshold THRESHOLD=0.5   # JBFC again at threshold 0.5 from every run's first proposals (docs/threshold.md)
-make t05           # JBFC-F, JBFC-A and JBFC-L at 0.5, and JBFC at 0.5 continued to r=10 (Table 2, Figure 2)
+make r3            # r=3: raise the Table 2 run and add DMFC to gpt-5.4-mini (threshold 0.8)
+make repeat        # runs 2-3 of Direct and DMFC for both models (threshold 0.8)
+make threshold THRESHOLD=0.5   # DMFC again at threshold 0.5 from every run's first proposals (docs/threshold.md)
+make t05           # DMFC-F, DMFC-A and DMFC-L at 0.5, and DMFC at 0.5 continued to r=10 (Table 2, Figure 2)
 make final         # derive recorded results; preserve combined Table 1, update Table 2 and Figure 2
 make paper         # rebuild paper/main.pdf
 python scripts/analyze_results.py results/final/gpt-5-nano_run1   # the first run's numbers quoted in Results
@@ -416,7 +428,8 @@ The historical BFCL GPT runs used an Azure OpenAI deployment of `gpt-5-nano` beh
 <summary><b>Repository layout</b></summary>
 
 ```text
-src/jbfc/      the library: JBFC, providers, Jev, tools
+src/dmfc/      public library: DMFC, providers, Jev, tools
+src/jbfc/      compatibility library for existing import jbfc applications
 src/jev_fc/    experiment code: repair loop, Jev client, BFCL data and scoring, CLI (jev-fc)
 scripts/       table runs, run extension for Figure 2, analysis, paper build and checks
 paper/         manuscript and PDF
@@ -429,11 +442,11 @@ docs/          benchmark, gateway, literature and validation notes; README image
 ## Citation
 
 ```bibtex
-@misc{yu2026jbfc,
-  title  = {Jev-Backed Function Calling: Agentic In-Context Learning with Cumulative Decision Feedback},
-  author = {Yu, Minhyeong},
+@misc{yu2026dmfc,
+  title  = {Decision-Model-Guided Function Calling with Cumulative Verification Feedback},
+  author = {Yu, Minhyeong and Seo, Wonduk},
   year   = {2026},
-  note   = {Enhans}
+  note   = {Manuscript}
 }
 ```
 
@@ -443,4 +456,4 @@ docs/          benchmark, gateway, literature and validation notes; README image
 
 ## Acknowledgements
 
-This work was created as part of the No-More-Slops group activities at Pseudo Lab. Jev is TypeSafe's verifier model; the benchmark is the Berkeley Function Calling Leaderboard (BFCL).
+This work was created as part of the No-More-Slops group activities at Pseudo Lab. Jev is TypeSafe's decision model. The study uses the Berkeley Function Calling Leaderboard (BFCL) and an exploratory API-Bank first-call adaptation.

@@ -1,0 +1,53 @@
+\subsection{Task and Prior Approaches}
+Let $x$ be a request, $\mathcal{F}$ the available functions, and $c=(f,a)$ a proposed function and arguments, or $c=\varnothing$ for no call. We study a single call-or-no-call decision before execution. Correctly withholding an irrelevant call matters because valid syntax alone cannot prevent an unintended external action. We evaluate one next call, not interactive tool execution; API-Bank inputs may contain several prior dialogue turns.
+
+Toolformer learns when to use APIs~\cite{schick2023toolformer}. $\tau$-bench evaluates tool-agent interactions under user and policy constraints~\cite{yao2024taubench}, while API-Bank includes executable API calls in dialogue~\cite{li2023apibank}. Our task isolates a single proposed call before execution. Many-shot learning studies larger demonstration sets~\cite{agarwal2024manyshot}; our history instead contains failed attempts at one request.
+
+\subsection{Decision-Model Verification}
+\textbf{DMFC} separates a generator $G$ from a decision model $J$:
+\begin{equation}
+c_t=G(H_t,x,\mathcal{F}),\qquad
+p_f^{(t)}=J_f(x,\mathcal{F},c_t),\quad
+p_a^{(t)}=J_a(x,\mathcal{F},c_t).
+\end{equation}
+Here $H_t$ is the rejected-call history, initially empty. The function question checks whether the selected function, including no call, fits $x$. The argument question checks required values, support in $x$, and parameter roles; it is skipped for no call. A readable call with missing arguments still receives both checks. Passing the argument check alone cannot establish correct function selection.
+
+A decision model supplies external binary judgments; our evaluated implementation uses TypeSafe's \texttt{jev-1.13.0}~\cite{typesafe2026models}. Its \texttt{Noul} primitive returns the probability of \emph{yes}, not a separate confidence score~\cite{typesafe2026noul,typesafe2026confidence}. JEV-as-a-Judge studies confidence-based acceptance and escalation~\cite{li2026jevjudge}; process supervision trains step verifiers for mathematical reasoning~\cite{lightman2023verify}. These are adjacent uses of verification, not evidence that other decision models have been tested in DMFC.
+
+\subsection{Acceptance and Cumulative Repair}
+Local validation checks readability, function availability, required arguments, and types; $S(c)=1$ denotes success. All applicable checks must pass on the same candidate:
+\begin{equation}
+A_t=S(c_t)\mathbf{1}[p_f^{(t)}\geq\tau_f]
+\begin{cases}
+1,&c_t=\varnothing,\\
+\mathbf{1}[p_a^{(t)}\geq\tau_a],&\text{otherwise}.
+\end{cases}
+\label{eq:gate}
+\end{equation}
+Null required scores fail this gate. After rejection, feedback $d_t$ contains the actual probabilities, pass/fail verdicts, thresholds, and local errors:
+\begin{equation}
+H_{t+1}=H_t\mathbin{\Vert}[(c_t,d_t)].
+\end{equation}
+The generator receives all records, oldest first and marked as not executed, before the unchanged original request. The decision model receives only the current request, schemas, and candidate. Readable schema-invalid candidates still receive binary checks; unreadable candidates receive local errors only. Reference answers never enter either model's requests.
+
+\begin{algorithm}[t]
+\caption{\textbf{DMFC}: verification and cumulative repair}
+\label{alg:jbfc}
+\footnotesize
+\begin{algorithmic}[1]
+\Require Request $x$, functions $\mathcal{F}$, generator $G$, decision model $J$
+\State $H\gets[\,]$
+\For{$t=0,\ldots,r$}
+  \State $c_t\gets G(\mathrm{Prefix}(H,x),\mathcal{F})$
+  \State $(s,e,\mathrm{readable})\gets\mathrm{SchemaCheck}(c_t,\mathcal{F})$
+  \State $p_f,p_a\gets\mathrm{null},\mathrm{null}$
+  \If{$\mathrm{readable}$}
+    \State $p_f,p_a\gets J(x,\mathcal{F},c_t,\mathrm{ApplicableChecks}(c_t))$
+  \EndIf
+  \State \textbf{if} $\mathrm{Accept}(s,c_t,p_f,p_a)=1$ \textbf{then return} $c_t$
+  \State \textbf{if} $t<r$ \textbf{then} $H\gets H\Vert[(c_t,\mathrm{Feedback}(e,p_f,p_a))]$
+\EndFor
+\State \Return $c_0$
+\end{algorithmic}
+\end{algorithm}
+A repair replaces the initial answer only after acceptance; if the limit is exhausted, DMFC returns $c_0$. No external function executes during this loop. Acceptance is a verifier decision, not a guarantee of benchmark correctness.

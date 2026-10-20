@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# JBFC again with another Jev threshold (default 0.7, both checks; user request, 2026-10-18), on each of Table 1's
+# DMFC again with another Jev threshold (default 0.7, both checks; user request, 2026-10-18), on each of Table 1's
 # three runs per generator. Every rerun keeps its run's first proposals (Direct is copied, not requested again)
-# and only JBFC runs (scripts/rethreshold.py), so Direct, JBFC at 0.8 and JBFC at THRESHOLD are paired per
+# and only DMFC runs (scripts/rethreshold.py), so Direct, DMFC at 0.8 and DMFC at THRESHOLD are paired per
 # example. Code, data, generator settings, prices and r=3 are those of the run; Jev answers through the gateway
 # when it can, otherwise directly with TYPESAFE_API_KEY (same model), as recorded in each manifest. The two
 # generators run at the same time (PARALLEL=0: one after the other); running the script again resumes from the
@@ -45,7 +45,7 @@ source_run() {  # Table 1's run k of a generator (run 1 of gpt-5-nano is the sev
   esac
 }
 
-run_model() {  # reruns JBFC on $RUNS of one generator
+run_model() {  # reruns DMFC on $RUNS of one generator
   local model="$1" log="results/threshold_${TAG}_${1}.log" env_file="results/threshold_${TAG}_${1}_preflight.env"
   local route run source out
   use_model "$model"
@@ -64,14 +64,14 @@ run_model() {  # reruns JBFC on $RUNS of one generator
   for run in $RUNS; do
     source="$(source_run "$model" "$run")"
     out="results/jbfc_${TAG}_${model}_run${run}"
-    note "$model" "$log" "run $run: JBFC with threshold $THRESHOLD from the first proposals of $source -> $out"
+    note "$model" "$log" "run $run: DMFC with threshold $THRESHOLD from the first proposals of $source -> $out"
     uv run python scripts/rethreshold.py "$source" --threshold "$THRESHOLD" --output "$out" \
       --workers "$WORKERS" --resume 2>&1 | stamp "$model" "$log"
   done
   note "$model" "$log" "done: runs $RUNS of $model"
 }
 
-note all "$LOG" "JBFC with threshold $THRESHOLD, runs $RUNS for: $MODELS (workers=$WORKERS per generator, parallel=$PARALLEL)"
+note all "$LOG" "DMFC with threshold $THRESHOLD, runs $RUNS for: $MODELS (workers=$WORKERS per generator, parallel=$PARALLEL)"
 # Each generator runs in a background subshell so that any failing step stops it (errexit stays active there).
 failed=0
 pids=()
@@ -88,7 +88,7 @@ if [ "$failed" != 0 ]; then
   exit 1
 fi
 
-note all "$LOG" "comparison with Direct and JBFC at the runs' threshold (scripts/threshold_compare.py)"
+note all "$LOG" "comparison with Direct and DMFC at the runs' threshold (scripts/threshold_compare.py)"
 uv run python scripts/threshold_compare.py --threshold "$THRESHOLD" --json "results/threshold_${TAG#t}.json" \
   2>&1 >/dev/null | stamp all "$LOG"
 note all "$LOG" "table of every threshold run so far: docs/threshold.md (scripts/threshold_table.py)"

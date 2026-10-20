@@ -102,6 +102,7 @@ def test_filled_figure_plots_and_labels_every_limit():
     assert r"at (axis cs:10,71.0000) {71.0}" in figure and "gray: USD per 1,000 requests" in figure
     assert "Generator" not in figure  # the generator is named in Table 2's caption
     assert "not yet run" not in figure and "unrun" not in figure
+    assert r"\textbf{DMFC}" in figure and "JBFC" not in figure
 
 
 def test_table3_paper_check_follows_the_paper_protocol_except_the_limit():

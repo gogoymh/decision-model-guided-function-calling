@@ -1,8 +1,8 @@
-"""JBFC with another Jev threshold against Direct and JBFC at the run's own threshold.
+"""DMFC with another Jev threshold against Direct and DMFC at the run's own threshold.
 
 For each generator, every Table 1 run with a rerun from scripts/rethreshold.py
 (results/jbfc_t<THRESHOLD>_<model>_run<k>) is paired with it: the rerun starts from the
-same first proposals, so Direct, JBFC at the run's threshold and JBFC at the new one are
+same first proposals, so Direct, DMFC at the run's threshold and DMFC at the new one are
 compared example by example. The report gives each run's values and their means
 (accuracy, cost, time, repairs, acceptance and its precision, fixes and breaks against
 the first proposal) and paired differences with 95% intervals: each example is averaged

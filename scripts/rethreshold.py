@@ -3,12 +3,12 @@
 Every example keeps the first proposal it had in the source run (its Direct row), so
 Direct is unchanged and each new row pairs with the source's row of the same method: the
 only difference is the threshold of both Jev checks, which decides acceptance and appears
-in the feedback the generator sees, as in any run with that threshold. The method is JBFC
-(jev_joint) unless --method names JBFC-F, JBFC-A or JBFC-L. Code
+in the feedback the generator sees, as in any run with that threshold. The method is DMFC
+(jev_joint) unless --method names DMFC-F, DMFC-A or DMFC-L. Code
 (source_sha256), data, generator settings, interface, prices, repair limit and
 exhaustion policy must equal the source's; Jev's route may change on request
 (--jev-gateway or JEV_GATEWAY) and is recorded. The output is a normal run with Direct
-(copied) and JBFC (new), so summaries and paired analyses work as for any run.
+(copied) and DMFC (new), so summaries and paired analyses work as for any run.
 
 This is an exploratory run: the thresholds of the paper's tables stay at the source's.
 

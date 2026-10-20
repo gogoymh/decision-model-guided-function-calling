@@ -198,7 +198,7 @@ def test_invalid_selection_stops_before_any_test_request(suite_run, monkeypatch)
 def test_suite_requires_jbfc_development_source(suite_run, selection_method):
     _, selection, observed, _ = suite_run
     selection["selection_method"] = selection_method
-    with pytest.raises(ValueError, match="JBFC development method"):
+    with pytest.raises(ValueError, match="DMFC development method"):
         suite.main([])
     assert observed["events"] == ["run_dev", "select_dev"]
     assert len(observed["commands"]) == 1

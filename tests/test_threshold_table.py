@@ -47,8 +47,8 @@ def write(path, run_summary, rows):
 
 
 def build(tmp_path):
-    """Two runs. Run k: a's first proposal is right; b's is wrong. JBFC at 0.8 breaks a at the limit and
-    fixes b; JBFC at 0.7 accepts a at once and leaves b wrong at the limit."""
+    """Two runs. Run k: a's first proposal is right; b's is wrong. DMFC at 0.8 breaks a at the limit and
+    fixes b; DMFC at 0.7 accepts a at once and leaves b wrong at the limit."""
     results, base_dirs = tmp_path / "results", []
     for run in (1, 2):
         base = results / f"base{run}"
@@ -86,7 +86,7 @@ def test_report_rows_and_trajectory_counts(tmp_path):
 def test_markdown_lists_every_threshold_with_signed_intervals(tmp_path):
     base_dirs = build(tmp_path)
     text = threshold_table.markdown({"gpt-5-nano": threshold_table.model_report("gpt-5-nano", base_dirs, root=tmp_path)})
-    assert "| | **JBFC** | 0.8 | 50.0 ± 0.0 | 50.0 / 50.0 |" in text and "| | **JBFC** | 0.7 |" in text
+    assert "| | **DMFC** | 0.8 | 50.0 ± 0.0 | 50.0 / 50.0 |" in text and "| | **DMFC** | 0.7 |" in text
     assert "| | 0.8 | 1 / 1 | 1 / 1 | 1 | 1 (1) | 100.0 |" in text
     assert "자동 생성 파일" in text and "-" not in text.split("## 정확도")[1].split("##")[0].replace("|---", "").replace("-5-nano", "")
 

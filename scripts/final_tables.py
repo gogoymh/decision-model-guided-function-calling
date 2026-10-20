@@ -1,16 +1,16 @@
-"""The paper's tables and Figure 2 at its final JBFC settings (make final).
+"""The paper's tables and Figure 2 at its final DMFC settings (make final).
 
 Final settings (user decision, 2026-10-18): Jev threshold 0.5 for both checks and, when no
 proposal passes within the repair limit r=3, the first proposal is returned (rule "keep_first")
 instead of the last one. The rule changes only which recorded proposal is final, never what is
 generated or checked, so the final runs are derived from recorded runs without new requests:
 
-* Table 1: three runs per generator. Direct and JBFC (threshold 0.5) come from the threshold
+* Table 1: three runs per generator. Direct and DMFC (threshold 0.5) come from the threshold
   reruns (make threshold THRESHOLD=0.5), which share each Table 1 run's first proposals.
 * Table 2: gpt-5-nano's run 1 with all seven methods. Direct, schema repair and self-refine come
-  from the r=3 run; JBFC from the threshold rerun; JBFC-F, JBFC-A and JBFC-L at 0.5 from make t05.
-* Figure 2: JBFC at 0.5 continued to r=10 (make t05), cut at each limit.
-* Table 3: JBFC at 0.5 returning the last or the first proposal when none passes, on the same
+  from the r=3 run; DMFC from the threshold rerun; DMFC-F, DMFC-A and DMFC-L at 0.5 from make t05.
+* Figure 2: DMFC at 0.5 continued to r=10 (make t05), cut at each limit.
+* Table 3: DMFC at 0.5 returning the last or the first proposal when none passes, on the same
   trajectories (so with the same requests and cost).
 
 The rule applies to every method that stops at its first passing proposal; Direct and
@@ -76,7 +76,7 @@ COMBINED_MAIN = "% COMBINED MAIN TABLE: V1"
 
 
 def rerun(model, run):
-    """JBFC at the final threshold on run `run` of `model` (make threshold THRESHOLD=0.5)."""
+    """DMFC at the final threshold on run `run` of `model` (make threshold THRESHOLD=0.5)."""
     return f"results/jbfc_t{THRESHOLD:g}_{model}_run{run}"
 
 
@@ -179,7 +179,7 @@ def _write_run(output, manifest, rows, rule):
 
 def derive(output, parts, root=None, rule=True):
     """A run made of recorded rows: parts maps each method to the run it comes from. The settings are
-    those of the JBFC run; with rule=True the final rule is applied. Returns its summary."""
+    those of the DMFC run; with rule=True the final rule is applied. Returns its summary."""
     root = Path(root or ROOT)
     output = root / output
     loaded, rows, manifests = {}, [], {}
@@ -269,7 +269,7 @@ def build(root=None):
 
 
 def check_figure_run(manifest):
-    """Figure 2's run: JBFC with gpt-5-nano at the final threshold, continued to the largest limit."""
+    """Figure 2's run: DMFC with gpt-5-nano at the final threshold, continued to the largest limit."""
     expected = {**PAPER_SETTINGS, "max_repairs": max(table3.LIMITS), "threshold": THRESHOLD, "methods": ["jev_joint"]}
     for key, value in expected.items():
         if key != "jev_gateway" and manifest.get(key) != value:
@@ -332,8 +332,8 @@ def table1_costs(final):
 
 
 def history_labels(summary):
-    """JBFC's history as labeled examples: Jev seconds per check, generator seconds per proposal and Jev's
-    USD per 1,000 checks, over every JBFC attempt of a run."""
+    """DMFC's history as labeled examples: Jev seconds per check, generator seconds per proposal and Jev's
+    USD per 1,000 checks, over every DMFC attempt of a run."""
     steps = [step for row in _rows(summary) if row["method"] == "jev_joint" for step in row["trace"]]
     checks = [step["verification"] for step in steps if step["verification"].get("api_calls", 0) > 0]
     tokens = [(check.get("usage") or {}).get("input_tokens") for check in checks]
@@ -376,7 +376,7 @@ def _with_initial(rows):
 
 
 def rule_report(final, last):
-    """Table 3's numbers: Direct, JBFC returning the last proposal, JBFC returning the first."""
+    """Table 3's numbers: Direct, DMFC returning the last proposal, DMFC returning the first."""
     report = {}
     for model in MODELS:
         first_rows = [[r for r in _rows(s) if r["method"] in ("direct", "jev_joint")] for s in final[model]]
@@ -418,7 +418,7 @@ def _plain(value, digits=2):
 
 
 def latex_rules(report):
-    """Table 3: the proposal JBFC returns when none passes."""
+    """Table 3: the proposal DMFC returns when none passes."""
     lines = [r"\begin{table}[t]", r"\centering\footnotesize", r"\setlength{\tabcolsep}{4pt}",
              r"\begin{tabular}{lrrrr}", r"\toprule",
              r"Generator & Direct & Last & First & First $-$ last\\", r"\midrule"]
@@ -429,7 +429,7 @@ def latex_rules(report):
         lines.append(rf"\texttt{{{_tex_escape(model)}}} & " + " & ".join(cells)
                      + rf" & {_signed(diff['delta'])} [{_plain(low)}, {_plain(high)}]\\")
     lines += [r"\bottomrule", r"\end{tabular}",
-              r"\caption{Call accuracy (\%), mean of three runs, when \textbf{JBFC} returns the last or the first "
+              r"\caption{Call accuracy (\%), mean of three runs, when \textbf{DMFC} returns the last or the first "
               r"proposal if none passes. First $-$ last: paired difference [95\% interval].}",
               r"\label{tab:rules}", r"\end{table}"]
     return "\n".join(lines)
@@ -513,11 +513,10 @@ def measured_tradeoff(source, figure):
 def update_paper(paper, final, figure, rules, costs):
     path = Path(paper)
     source = path.read_text()
-    method_name = "JBFC"
+    method_name = "DMFC"
     section_input = r"\input{sec/experiment_setting_and_results}"
     if section_input in source and "% BEGIN AUTO CATEGORIES" not in source:
         # The ACM draft keeps measured tables in its experiment section; leave the supplied front matter alone.
-        method_name = "DMFC" if "Decision-Model-Guided Function Calling" in source else "JBFC"
         path = path.parent / "sec" / "experiment_setting_and_results.tex"
         source = path.read_text()
     if ACM_SHORT in source:
@@ -530,8 +529,6 @@ def update_paper(paper, final, figure, rules, costs):
         else:
             source = _replace_table_rows(source, "CATEGORIES", compact_main_rows(final, costs, method_name))
         result_rows = _table_rows(paper_tables.latex_table2(final["gpt-5-nano"][0]))
-        if method_name == "DMFC":
-            result_rows = result_rows.replace(r"\textbf{JBFC", r"\textbf{DMFC")
         source = _replace_table_rows(source, "RESULTS", result_rows)
         repairs = re.search(r"% BEGIN AUTO REPAIRS\s*\n(.*?)\n% END AUTO REPAIRS", source, re.DOTALL)
         if not repairs or repairs.group(1).strip() != r"\input{sec/repair_tradeoff}":
@@ -546,8 +543,6 @@ def update_paper(paper, final, figure, rules, costs):
     source = _replace_block(source, "RESULTS", paper_tables.latex_table2(final["gpt-5-nano"][0]))
     source = _replace_block(source, "REPAIRS", table3.latex_repairs_figure(figure))
     source = _replace_block(source, "RULES", latex_rules(rules))
-    if method_name == "DMFC":
-        source = source.replace(r"\textbf{JBFC", r"\textbf{DMFC")
     path.write_text(source)
 
 
@@ -570,7 +565,7 @@ def main(argv=None):
     figure = figure_summaries(ROOT)
     nano_run1 = built["table1"]["gpt-5-nano"][0]
     if abs(figure[LIMIT]["methods"]["jev_joint"]["accuracy"] - nano_run1["methods"]["jev_joint"]["accuracy"]) > 1e-12:
-        raise ValueError("Figure 2 at r=3 must equal Table 2's JBFC.")
+        raise ValueError("Figure 2 at r=3 must equal Table 2's DMFC.")
     rules = rule_report(built["table1"], built["last"])
     costs = table1_costs(built["table1"])
     if args.paper:

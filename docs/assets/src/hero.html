@@ -18,40 +18,40 @@
     background-size: 22px 22px;
     mask-image: linear-gradient(90deg, rgba(0,0,0,.9), rgba(0,0,0,.15));
   }
-  .left { position: absolute; left: 64px; top: 50px; width: 770px; }
+  .left { position: absolute; left: 64px; top: 50px; width: 740px; }
   .top { display: flex; align-items: center; gap: 14px; }
   .chip {
-    font: 800 15px Inter; letter-spacing: .16em; padding: 6px 13px 6px 15px; border-radius: 999px;
+    font: 800 15px Inter,system-ui,sans-serif; letter-spacing: .16em; padding: 6px 13px 6px 15px; border-radius: 999px;
     color: #0b1026; background: linear-gradient(90deg, #67e8f9 0%, #a78bfa 55%, #f472b6 100%);
   }
-  .eyebrow { font: 600 14px Inter; letter-spacing: .14em; text-transform: uppercase; color: #a5b4fc; }
+  .eyebrow { font: 600 14px Inter,system-ui,sans-serif; letter-spacing: .14em; text-transform: uppercase; color: #a5b4fc; }
   .title {
-    margin-top: 20px; font: 800 50px/1.08 "Inter Display"; letter-spacing: -.015em;
+    margin-top: 20px; font: 800 43px/1.08 "Inter Display",system-ui,sans-serif; letter-spacing: -.015em;
     background: linear-gradient(90deg, #67e8f9 0%, #a78bfa 45%, #f472b6 80%, #fbbf24 100%);
     -webkit-background-clip: text; background-clip: text; color: transparent; width: fit-content;
   }
-  .sub { margin-top: 12px; font: 600 30px/1.24 Inter; color: rgba(255,255,255,.95); letter-spacing: -.005em; }
+  .sub { margin-top: 12px; font: 600 26px/1.24 Inter,system-ui,sans-serif; color: rgba(255,255,255,.95); letter-spacing: -.005em; }
   .node {
     position: absolute; display: flex; align-items: center; gap: 11px; padding: 0 16px; border-radius: 14px;
     border: 1.5px solid; backdrop-filter: blur(4px);
   }
   .node .e { font-size: 21px; line-height: 1; }
-  .node .t1 { font: 650 17px/1.2 Inter; }
-  .node .t2 { margin-top: 2px; font: 400 13px/1.25 Inter; color: rgba(255,255,255,.70); }
+  .node .t1 { font: 650 17px/1.2 Inter,system-ui,sans-serif; }
+  .node .t2 { margin-top: 2px; font: 400 13px/1.25 Inter,system-ui,sans-serif; color: rgba(255,255,255,.70); }
   .n1 { color: #bae6fd; border-color: rgba(56,189,248,.65); background: rgba(56,189,248,.13); }
   .n2 { color: #fde68a; border-color: rgba(251,191,36,.65); background: rgba(251,191,36,.12); }
   .n3 { color: #ddd6fe; border-color: rgba(167,139,250,.75); background: rgba(167,139,250,.15); }
   .n4 { color: #bbf7d0; border-color: rgba(34,197,94,.65); background: rgba(34,197,94,.13); }
   .wires { position: absolute; inset: 0; pointer-events: none; }
-  .wires text { font-family: Inter; font-size: 13px; font-weight: 600; }
+  .wires text { font-family: Inter,system-ui,sans-serif; font-size: 13px; font-weight: 600; }
   .card {
     position: absolute; right: 56px; top: 50px; width: 372px; padding: 22px 24px 20px;
     border-radius: 20px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16);
     box-shadow: 0 20px 60px rgba(0,0,0,.35); backdrop-filter: blur(6px);
   }
-  .card .lbl { font: 600 13px Inter; letter-spacing: .1em; text-transform: uppercase; color: #a5b4fc; }
-  .card .req { margin-top: 12px; font: 500 15px/1.35 Inter; color: rgba(255,255,255,.92); }
-  .card .req .who { font: 600 11px Inter; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.55); margin-right: 8px; }
+  .card .lbl { font: 600 13px Inter,system-ui,sans-serif; letter-spacing: .1em; text-transform: uppercase; color: #a5b4fc; }
+  .card .req { margin-top: 12px; font: 500 15px/1.35 Inter,system-ui,sans-serif; color: rgba(255,255,255,.92); }
+  .card .req .who { font: 600 11px Inter,system-ui,sans-serif; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.55); margin-right: 8px; }
   .card .step { margin-top: 12px; display: flex; gap: 11px; align-items: flex-start; }
   .card .ic { flex: none; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
   .card .bad .ic { background: rgba(248,113,113,.22); border: 1.5px solid rgba(248,113,113,.8); }
@@ -59,17 +59,17 @@
   .card .code { font: 500 14px/1.35 "DejaVu Sans Mono", monospace; color: #fff; }
   .card .bad .code { color: #fecaca; text-decoration: line-through; text-decoration-color: rgba(248,113,113,.7); }
   .card .good .code { color: #bbf7d0; }
-  .card .why { margin-top: 3px; font: 400 13px Inter; color: rgba(255,255,255,.66); }
+  .card .why { margin-top: 3px; font: 400 13px Inter,system-ui,sans-serif; color: rgba(255,255,255,.66); }
   .card .why b { font-weight: 700; color: #fff; }
-  .card .mid { margin: 10px 0 0 33px; font: 500 13px Inter; color: #ddd6fe; }
+  .card .mid { margin: 10px 0 0 33px; font: 500 13px Inter,system-ui,sans-serif; color: #ddd6fe; }
 </style></head>
 <body>
 <div class="hero">
   <div class="grid"></div>
   <div class="left">
-    <div class="top"><span class="chip">JBFC</span><span class="eyebrow">Paper · Python library</span></div>
-    <div class="title">Jev-Backed Function Calling:</div>
-    <div class="sub">Agentic In-Context Learning with<br>Cumulative Decision Feedback</div>
+    <div class="top"><span class="chip">DMFC</span><span class="eyebrow">Paper · Python library</span></div>
+    <div class="title">Decision-Model-Guided<br>Function Calling</div>
+    <div class="sub">with Cumulative Verification Feedback</div>
   </div>
   <svg class="wires" width="1280" height="460" viewBox="0 0 1280 460">
   <path d="M320,322.0 H422" stroke="rgba(255,255,255,.55)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
@@ -85,8 +85,8 @@
   <text x="294" y="402.0" fill="#c4b5fd" text-anchor="middle">repair</text>
   </svg>
   <div class="node n1" style="left:64px;top:294px;width:250px;height:56px"><span class="e">🤖</span><div><div class="t1">LLM proposes</div><div class="t2">a call, or no call</div></div></div>
-  <div class="node n2" style="left:428px;top:294px;width:340px;height:56px"><span class="e">🔍</span><div><div class="t1">Jev + schema check</div><div class="t2">right function? right arguments?</div></div></div>
-  <div class="node n4" style="left:900px;top:294px;width:212px;height:56px"><span class="e">✅</span><div><div class="t1">Runs</div><div class="t2">only an accepted call</div></div></div>
+  <div class="node n2" style="left:428px;top:294px;width:340px;height:56px"><span class="e">🔍</span><div><div class="t1">Decision model + schema</div><div class="t2">right function? right arguments?</div></div></div>
+  <div class="node n4" style="left:900px;top:294px;width:212px;height:56px"><span class="e">✅</span><div><div class="t1">Final dispatch</div><div class="t2">execute if accepted</div></div></div>
   <div class="node n3" style="left:383px;top:386px;width:430px;height:50px"><span class="e">🔁</span><div><div class="t1">Feedback history grows</div><div class="t2">rejected calls + verdicts, placed before the request</div></div></div>
   <div class="card">
     <div class="lbl">Checked before it runs</div>

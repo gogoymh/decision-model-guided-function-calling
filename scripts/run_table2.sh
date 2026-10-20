@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Source run of Tables 1 and 2: all seven methods once on all 3,051 prepared examples with repair limit
-# r=2 (3,051 x 7 = 21,357 records). make table3 continues its JBFC rows to r=10, and make r3 raises the
+# r=2 (3,051 x 7 = 21,357 records). make table3 continues its DMFC rows to r=10, and make r3 raises the
 # run to the paper's r=3 and fills Tables 1 and 2; this script only summarizes the r=2 run.
 # The generator is an Azure OpenAI deployment behind the APIM host and key in .env.
 # Usage: make table2 [MODEL=gpt-5-nano] [WORKERS=8]   (or MODEL=... bash scripts/run_table2.sh)

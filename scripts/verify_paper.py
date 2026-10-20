@@ -93,13 +93,42 @@ def verify_acm_short(pages):
           "accuracy/API-time plot, Algorithm 1, and citations present.")
 
 
+def verify_anonymous_review(pages, metadata=None):
+    """Reject author leaks and absent Web relevance in the submission PDF."""
+    verify_acm_short(pages)
+    text = " ".join("\n".join(pages).lower().split())
+    identifying = ("minhyeong", "wonduk", "enhans", "university college london",
+                   "ucl.ac.uk", "pseudo lab", "no-more-slops", "yu and seo")
+    for value in identifying:
+        assert value not in text, f"Author-identifying text in anonymous PDF: {value}"
+    assert not re.search(r"(?im)^\s*acknowledg(?:e)?ments?\s*$", "\n".join(pages)), \
+        "Acknowledgements must not appear in anonymous review PDF"
+    assert "anonymous author" in text, "Missing anonymous author label"
+    first_page = " ".join(pages[0].lower().split())
+    assert "web infrastructure and agentic systems" in first_page, \
+        "Missing selected-track relevance on page one"
+    assert "before dispatch" in first_page and "web agents" in first_page, \
+        "Missing scientific Web-relevance explanation on page one"
+    assert "woodstock" not in text and "conference acronym" not in text, \
+        "Sample conference metadata remains"
+    for value in (metadata or {}).values():
+        assert not any(token in str(value).lower() for token in identifying), \
+            "Author-identifying PDF metadata"
+    print("Verified anonymous review copy: no author/affiliation/acknowledgement leaks; "
+          "Web and track relevance on page one.")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pdf", nargs="?", default="paper/main.pdf", type=Path)
-    parser.add_argument("--format", choices=("original", "acm-draft", "acm-short"), default="original")
+    parser.add_argument("--format", choices=("original", "acm-draft", "acm-short", "acm-review"),
+                        default="original")
     args = parser.parse_args(argv)
-    pages = [page.extract_text() or "" for page in PdfReader(args.pdf).pages]
-    if args.format == "acm-short":
+    reader = PdfReader(args.pdf)
+    pages = [page.extract_text() or "" for page in reader.pages]
+    if args.format == "acm-review":
+        verify_anonymous_review(pages, reader.metadata)
+    elif args.format == "acm-short":
         verify_acm_short(pages)
     elif args.format == "acm-draft":
         verify_acm_draft(pages)

@@ -1,9 +1,9 @@
 """Table 1 as the mean of three runs per generator (make repeat).
 
 Run 1 of each generator is its r=3 run from make r3: the gpt-5-nano seven-method run
-(also the source of Table 2 and Figure 2) and the gpt-5.4-mini Direct/JBFC run. Runs 2
-and 3 repeat Direct and JBFC with new first proposals (scripts/run_repeat.sh: a Direct
-run, then JBFC added from its first proposals with scripts/raise_limit.py, the way run 1
+(also the source of Table 2 and Figure 2) and the gpt-5.4-mini Direct/DMFC run. Runs 2
+and 3 repeat Direct and DMFC with new first proposals (scripts/run_repeat.sh: a Direct
+run, then DMFC added from its first proposals with scripts/raise_limit.py, the way run 1
 of gpt-5.4-mini was made). Every run covers all 3,051 examples with the same code, data,
 interface, settings and prices; only the generator's samples differ.
 
@@ -46,15 +46,15 @@ NUMBER_WORDS = {2: "two", 3: "three", 4: "four", 5: "five"}
 
 
 def check_repeat(first, run, label):
-    """A later run of run 1's generator: Direct and JBFC from new first proposals, all else as run 1."""
+    """A later run of run 1's generator: Direct and DMFC from new first proposals, all else as run 1."""
     manifest, reference = run["manifest"], first["manifest"]
     if manifest.get("methods") != list(TABLE_METHODS):
-        raise ValueError(f"{label}: a repeat has Direct and JBFC only (make repeat).")
+        raise ValueError(f"{label}: a repeat has Direct and DMFC only (make repeat).")
     for key in (*paper_tables.SAME_AS_MAIN, *REPEAT_SAME):
         if manifest.get(key) != reference.get(key):
             raise ValueError(f"{label} differs from run 1 of {reference.get('llm_model')} in {key}.")
     if manifest.get("added") != ["jev_joint"] or not (manifest.get("extends") or {}).get("run_dir"):
-        raise ValueError(f"{label}: JBFC must be added to a new Direct run (scripts/run_repeat.sh).")
+        raise ValueError(f"{label}: DMFC must be added to a new Direct run (scripts/run_repeat.sh).")
     paper_tables.check_route(manifest)
     paper_tables._check_all_examples(manifest)
 
@@ -64,7 +64,7 @@ def _digest(value):
 
 
 def load_rows(run_dir):
-    """Direct and JBFC rows of a run: example, category, initial and final correctness, first proposal."""
+    """Direct and DMFC rows of a run: example, category, initial and final correctness, first proposal."""
     rows = []
     with (Path(run_dir) / "records.jsonl").open() as handle:
         for line in handle:
@@ -105,7 +105,7 @@ def same_first_calls(rows, reference):
 
 
 def transitions(rows):
-    """JBFC's fixes and breaks against the shared first proposal, live relevance excluded."""
+    """DMFC's fixes and breaks against the shared first proposal, live relevance excluded."""
     scored = [row for row in rows if row["method"] == "jev_joint" and row["category"] != "live_relevance"]
     return {"fixes": sum(1 for row in scored if row["initial_correct"] is False and row["score"]["correct"]),
             "breaks": sum(1 for row in scored if row["initial_correct"] and row["score"]["correct"] is False)}
@@ -156,7 +156,7 @@ def latex_table1(small, large, costs=None):
              rf" & & \multicolumn{{2}}{{c}}{{\texttt{{{_tex_escape(small_model)}}}}}"
              rf" & \multicolumn{{2}}{{c}}{{\texttt{{{_tex_escape(large_model)}}}}}\\",
              r"\cmidrule(lr){3-4}\cmidrule(lr){5-6}",
-             r"Category & Examples & Direct & \textbf{JBFC} & Direct & \textbf{JBFC}\\", r"\midrule"]
+             r"Category & Examples & Direct & \textbf{DMFC} & Direct & \textbf{DMFC}\\", r"\midrule"]
     bolded = False
     for category, label, examples in TABLE1_CATEGORIES:
         key = "relevance_call_rate" if category == "live_relevance" else "accuracy"

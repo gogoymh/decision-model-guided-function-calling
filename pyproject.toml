@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "jev-backed-function-calling"
+name = "dmfc"
 version = "0.1.0"
-description = "JBFC: check LLM function calls with Jev before they run and repair them with accumulated feedback"
+description = "Decision Model Guided Function Calling: verify and repair LLM tool calls with cumulative feedback"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
@@ -16,10 +16,11 @@ dependencies = ["httpx>=0.27,<1", "jsonschema>=4.23,<5", "python-dotenv>=1,<2"]
 dev = ["pytest>=8,<10", "ruff>=0.9,<1", "pypdf>=5,<7"]
 
 [project.scripts]
+dmfc-eval = "jev_fc.cli:main"
 jev-fc = "jev_fc.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/jev_fc", "src/jbfc"]
+packages = ["src/dmfc", "src/jbfc", "src/jev_fc"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -1,0 +1,96 @@
+%%
+%% This is file `sigconf.tex',
+%% generated with the docstrip utility.
+\documentclass[sigconf,nonacm]{acmart}
+
+\AtBeginDocument{%
+  \providecommand\BibTeX{{%
+    Bib\TeX}}}
+
+\setcopyright{none}
+\settopmatter{printacmref=false,printccs=false,printfolios=true}
+
+% Text color support
+\usepackage{xcolor}
+
+% Dependencies for the framework, algorithm, and measured-result plots migrated from the prior manuscript.
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{tabularx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepgfplotslibrary{groupplots}
+\setlength{\emergencystretch}{1em}
+
+
+\begin{document}
+\title{Decision-Model-Guided Function Calling with Cumulative Verification Feedback}
+
+\author{Minhyeong Yu}
+% \authornote{Both authors contributed equally to this research.}
+\affiliation{%
+  \institution{Enhans}
+  \city{Seoul}
+  \country{South Korea}}
+\email{minhyeong@enhans.ai}
+
+
+\author{Wonduk Seo}
+\correspondingauthor
+\affiliation{%
+  \institution{University College London}
+  \city{London}
+  \country{United Kingdom}}
+\email{wonduk.seo.26@ucl.ac.uk}
+
+% \author{Valerie B\'eranger}
+% \affiliation{%
+%   \institution{Inria Paris-Rocquencourt}
+%   \city{Rocquencourt}
+%   \country{France}
+% }
+
+
+\renewcommand{\shortauthors}{Yu and Seo}
+
+\begin{abstract}
+Function calling requires choosing a function and arguments, or withholding a call. We present \textbf{Decision-Model-Guided Function Calling (DMFC)}, which combines schema validation with binary function and argument judgments. Rejected candidates and actual feedback accumulate before the unchanged request; repair never executes functions. With one decision model and at most three repairs, three-run BFCL accuracy rises from 64.1\% to 74.8\% with GPT-5-nano and 81.1\% to 82.1\% with GPT-5.4-mini, but falls from 88.3\% to 87.0\% with Claude. On an exploratory 156-case API-Bank first-call adaptation, accuracy rises from 60.0\% to 66.5\%, 78.2\% to 79.5\%, and 86.3\% to 87.2\%, respectively. A single-run BFCL ablation finds a 1.1-point advantage over latest-only feedback. Effects vary across generators and require additional inference time and cost. API-Bank's input was refined after exploratory outcomes; this evaluation measures call prediction, not execution success.
+\end{abstract}
+
+
+\keywords{function calling, decision models, verification, in-context learning}
+
+\input{sec/framework}
+
+\maketitle
+\raggedbottom
+
+
+
+\section{Introduction}
+\input{sec/introduction}
+
+% \section{Problem Definition}
+% \input{sec/problem_definition}
+
+\section{Methodology}
+\input{sec/methodology}
+
+\section{Experiment Setting \& Results}
+\input{sec/experiment_setting_and_results}
+
+\section{Conclusion}
+\input{sec/conclusion}
+
+\begin{acks}
+\input{sec/acknowledgements}
+\end{acks}
+
+\clearpage
+\balance
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

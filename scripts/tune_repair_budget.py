@@ -1,4 +1,4 @@
-"""Choose the shared repair budget from saved JBFC development traces.
+"""Choose the shared repair budget from saved DMFC development traces.
 
 Not part of the paper protocol since 2026-10-18: the paper fixes r=2 and runs every
 example once (make table1, make table2). Kept for optional exploration only.

@@ -1,4 +1,4 @@
-"""Tables 1 and 2 at r=3: gpt-5-nano's seven methods, and Direct/JBFC for gpt-5-nano and gpt-5.4-mini."""
+"""Tables 1 and 2 at r=3: gpt-5-nano's seven methods, and Direct/DMFC for gpt-5-nano and gpt-5.4-mini."""
 
 import importlib.util
 import json
@@ -53,7 +53,7 @@ def compare_summary(direct=.8, jbfc=.82, **changes):
 def test_unrun_comparison_leaves_two_empty_columns_named_for_the_planned_model():
     table = paper_tables.latex_table1(main_summary())
     assert r"\multicolumn{2}{c}{\texttt{gpt-5-nano}} & \multicolumn{2}{c}{\texttt{gpt-5.4-mini}}" in table
-    assert r"Category & Examples & Direct & \textbf{JBFC} & Direct & \textbf{JBFC}\\" in table
+    assert r"Category & Examples & Direct & \textbf{DMFC} & Direct & \textbf{DMFC}\\" in table
     assert r"Simple Python & 400 & 60.0 & \textbf{70.0} & -- & --\\" in table
     assert r"Total & 3051 & 63.8 & \textbf{75.3} & -- & --\\" in table
     assert r"USD/1k & & 0.056 & 0.273 & -- & --\\" in table
@@ -73,9 +73,12 @@ def test_filled_table_bolds_the_highest_of_four_and_shows_each_cost():
 
 def test_table2_states_the_raised_limit():
     table = paper_tables.latex_table2(main_summary())
-    assert r"Methods on all BFCL examples (one run, $r=3$, \texttt{gpt-5-nano})." in table and r"\textbf{JBFC} & \textbf{75.3}" in table
+    assert r"Methods on all BFCL examples (one run, $r=3$, \texttt{gpt-5-nano})." in table and r"\textbf{DMFC} & \textbf{75.3}" in table
     assert "Bold: highest accuracy per column." in table and "exclude live relevance; argument accuracy" in table
     assert "$r=2$" not in paper_tables.latex_table2(main_summary())
+    assert "JBFC" not in table
+    for suffix in ("", "-F", "-A", "-L"):
+        assert rf"\textbf{{DMFC{suffix}}}" in table
 
 
 @pytest.mark.parametrize("change", [

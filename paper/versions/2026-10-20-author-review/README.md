@@ -1,0 +1,1 @@
+Author-facing paper preserved before the anonymous submission-format and public DMFC API revision on 2026-10-20. Source commit: 8385b385f950b3b693e19969d57d60f616e03fba. ACM class/style files remain in the parent paper directory.

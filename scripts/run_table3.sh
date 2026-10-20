@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Figure 2 (formerly Table 3): JBFC with repair limits 1, 2, 3, 5, 7 and 10. Continues JBFC trajectories that reached their
+# Figure 2 (formerly Table 3): DMFC with repair limits 1, 2, 3, 5, 7 and 10. Continues DMFC trajectories that reached their
 # limit up to r=10, then cuts them at each limit. Only rows that reached the source limit make new requests.
 # The source is the r=7 extension when it exists, so the rows up to r=7 stay exactly as before; otherwise
 # the Table 2 run (r=2). Needs the same code and settings that produced the Table 2 run.
@@ -36,7 +36,7 @@ uv run python scripts/preflight.py "$OUT/preflight.env" 2>&1 | stamp
 source "$OUT/preflight.env"
 note "settings: deployment=$LLM_MODEL effort='${LLM_REASONING_EFFORT}' jev=$JEV_GATEWAY workers=$WORKERS source=$SOURCE"
 
-note "2/3 extend JBFC from $SOURCE to r=$MAX_R"
+note "2/3 extend DMFC from $SOURCE to r=$MAX_R"
 uv run python scripts/extend_run.py "$SOURCE" --max-repairs "$MAX_R" --workers "$WORKERS" --output "$OUT" --resume 2>&1 | stamp
 
 note "3/3 cut at r=1,2,3,5,7,10 (the paper's Figure 2 uses threshold 0.5 and comes from make t05 and make final)"

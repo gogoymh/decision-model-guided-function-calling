@@ -1,0 +1,39 @@
+% Measured source: results/final/final.json (figure2 accuracy and mean_latency_s).
+% p95 source: results/final/figure2/r{1,2,3,5,7,10}/summary.json,
+% methods.jev_joint.p95_latency_s, independently checked against recorded logical_latency_s.
+% These are cuts of one continued run, not independent trials at each repair limit.
+\begin{figure}[t]
+\centering
+\definecolor{tradeoffaccuracy}{HTML}{2A78D6}
+\definecolor{tradeoffmean}{HTML}{EB6834}
+\definecolor{tradeofftail}{HTML}{52514E}
+\begin{tikzpicture}
+\begin{groupplot}[
+  group style={group size=2 by 1, horizontal sep=0.65cm},
+  scale only axis, width=0.36\columnwidth, height=2.05cm,
+  xmin=0.5, xmax=10.5, xtick={1,2,3,5,7,10}, xlabel={Repair limit $r$},
+  axis x line*=bottom, axis y line*=left,
+  tick label style={font=\tiny}, label style={font=\tiny},
+  title style={font=\scriptsize}, tick align=outside, major tick length=2pt,
+  ymajorgrids, grid style={black!12},
+  legend style={font=\tiny, draw=none, fill=none, at={(0.02,0.98)},
+    anchor=north west, inner sep=1pt, row sep=-1pt}
+]
+\nextgroupplot[title={(a) Call accuracy (\%)}, ymin=70, ymax=78,
+  ytick={70,72,74,76,78}]
+\addplot[color=tradeoffaccuracy, mark=*, mark size=1.5pt, thick]
+  coordinates {(1,72.0264) (2,73.4102) (3,74.5634) (5,75.8484) (7,76.3756) (10,76.7381)};
+\nextgroupplot[title={(b) API time (s)}, ymin=0, ymax=20, ytick={0,5,10,15,20}]
+\addplot[color=tradeoffmean, mark=*, mark size=1.5pt, thick]
+  coordinates {(1,1.992066) (2,2.324630) (3,2.605727) (5,3.114509) (7,3.590693) (10,4.285999)};
+\addlegendentry{Mean}
+\addplot[color=tradeofftail, mark=triangle*, mark size=1.5pt, thick, dashed]
+  coordinates {(1,3.862686) (2,5.262908) (3,6.833186) (5,9.771302) (7,13.011121) (10,17.717727)};
+\addlegendentry{p95}
+\end{groupplot}
+\end{tikzpicture}
+\caption{\textbf{DMFC} with \texttt{gpt-5-nano}: accuracy and API time over 3,051 examples from one run continued to $r=10$ and cut at each limit. At $r=3$, values match Table~\ref{tab:main}. API time sums generation and verification durations, excluding retry waits and tool execution.}
+\Description{Two aligned line plots over repair limits 1, 2, 3, 5, 7, and 10. Call accuracy rises from 72.0 to 76.7 percent. Mean API time rises from 1.99 to 4.29 seconds, and the 95th percentile rises from 3.86 to 17.72 seconds.}
+\label{fig:repairs}
+\label{fig:latency}
+\end{figure}

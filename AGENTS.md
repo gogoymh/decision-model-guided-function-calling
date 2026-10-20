@@ -1,5 +1,24 @@
 # Research repository instructions
 
+## Anonymous submission and public DMFC naming (user instruction, 2026-10-20)
+
+The user requested fixes to the Overleaf upload files for conference submission and
+the repository's code names/content. This supersedes the earlier author-facing
+nonacm format and public JBFC naming rules. The active paper uses
+sigconf,anonymous,review, omits author identities and acknowledgements, and keeps
+the original ACM class/style, standard body typography, and four TOTAL pages.
+Explain the scientific Web relevance and the appropriate track on page one.
+The author-facing source/PDF is preserved in
+paper/versions/2026-10-20-author-review (source commit 8385b38).
+
+Public usage is import dmfc and dmfc.DMFC. Keep jbfc/JBFC and old method strings
+as compatibility aliases. The default verifier remains Jev; do not claim multiple
+verifier families have been evaluated. Keep src/jev_fc byte-identical and preserve
+recorded jev_* method IDs, experiment fingerprints, cached inputs, and raw data.
+Displayed method names, current documentation, package metadata and visual assets
+use DMFC, DMFC-F, DMFC-A, DMFC-L. Historical archives and provenance keep their
+original names. Regenerate the upload ZIP and verify it builds from its own files.
+
 ## Overleaf feedback revision (user instruction, 2026-10-20)
 
 The user supplied additional Overleaf screenshot comments and asked to resolve them.
