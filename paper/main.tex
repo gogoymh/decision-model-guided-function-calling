@@ -35,7 +35,9 @@
 \author{Anonymous Author(s)}
 
 \begin{abstract}
-Function calling requires choosing a function and arguments, or withholding a call. We present \textbf{Decision-Model-Guided Function Calling (DMFC)}, which combines schema validation with binary function and argument judgments. Rejected candidates and actual feedback accumulate before the unchanged request; repair never executes functions. With one decision model and at most three repairs, three-run BFCL accuracy rises from 64.1\% to 74.8\% with GPT-5-nano and 81.1\% to 82.1\% with GPT-5.4-mini, but falls from 88.3\% to 87.0\% with Claude. On an exploratory 156-case API-Bank first-call adaptation, accuracy rises from 60.0\% to 66.5\%, 78.2\% to 79.5\%, and 86.3\% to 87.2\%, respectively. A single-run BFCL ablation finds a 1.1-point advantage over latest-only feedback. Effects vary across generators and require additional inference time and cost. API-Bank's input was refined after exploratory outcomes; this evaluation measures call prediction, not execution success.
+\input{sec/abstract}
+
+Reliable function calling requires Large Language Models (LLMs) to choose appropriate functions and generate arguments that match user intent. However, even syntactically valid calls can be semantically wrong, for instance by selecting the wrong function or producing mismatched arguments. Prior work uses verification and iterative refinement, but it remains difficult to efficiently carry verification feedback forward across attempts. In this paper, propose \textbf{Decision-Model-Guided Function Calling (DMFC)}, an inference-time framework that verifies function selection and argument correctness with separate binary judgments and then refines calls using cumulative feedback from previously rejected candidates without executing external tools. \textcolor{red}{On Berkeley Function Calling Leaderboard (BFCL), DMFC improves accuracy from 64.1\% to 74.8\% with GPT-5-nano and from 81.1\% to 82.1\% with GPT-5.4-mini. Retaining verification history further outperforms using only the latest feedback by 1.1 percentage points} highlighting the value of cumulative verification for reliable function calling.
 \end{abstract}
 
 \begin{CCSXML}
@@ -73,7 +75,6 @@ Function calling requires choosing a function and arguments, or withholding a ca
 \section{Conclusion}
 \input{sec/conclusion}
 
-\clearpage
 \balance
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{references}

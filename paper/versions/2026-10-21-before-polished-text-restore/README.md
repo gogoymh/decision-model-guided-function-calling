@@ -1,0 +1,1 @@
+Manuscript preserved before restoring the original supplied polished text on 2026-10-21. Source commit: 9e67f11da47c9cd5f7d8b024def5150c6086175f. The ACM class/style remain in the parent paper directory.

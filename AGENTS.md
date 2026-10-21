@@ -1,5 +1,19 @@
 # Research repository instructions
 
+## Restore supplied polished text (user instruction, 2026-10-21)
+
+The user's latest request supersedes all earlier permission to rewrite the text
+already supplied in the original WWW ZIP. Preserve the exact original abstract
+block in main.tex, the full sec/introduction.tex including red text and xxx, and
+the original Task Definition heading in sec/methodology.tex. Keep additions in
+originally empty sections and measured results. Do not rewrite these frozen
+passages to satisfy feedback, page limits, or factual cleanup without an explicit
+new instruction. This restoration is a draft with four total pages, a placeholder
+and an unrun multi-verifier claim in the supplied Introduction; do not call it a
+submission-ready manuscript. Keep current anonymous ACM formatting and archive
+the previous revision at paper/versions/2026-10-21-before-polished-text-restore.
+The restored \input{sec/abstract} requires that empty source in the upload ZIP.
+
 ## Anonymous submission and public DMFC naming (user instruction, 2026-10-20)
 
 The user requested fixes to the Overleaf upload files for conference submission and

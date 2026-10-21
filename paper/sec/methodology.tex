@@ -1,4 +1,4 @@
-\subsection{Task and Prior Approaches}
+\subsection{Task Definition}
 Let $x$ be a request, $\mathcal{F}$ the available functions, and $c=(f,a)$ a proposed function and arguments, or $c=\varnothing$ for no call. We study a single call-or-no-call decision before execution. Correctly withholding an irrelevant call matters because valid syntax alone cannot prevent an unintended external action. We evaluate one next call, not interactive tool execution; API-Bank inputs may contain several prior dialogue turns.
 
 Toolformer learns when to use APIs~\cite{schick2023toolformer}. $\tau$-bench evaluates tool-agent interactions under user and policy constraints~\cite{yao2024taubench}, while API-Bank includes executable API calls in dialogue~\cite{li2023apibank}. Our task isolates a single proposed call before execution. Many-shot learning studies larger demonstration sets~\cite{agarwal2024manyshot}; our history instead contains failed attempts at one request.
