@@ -1,6 +1,6 @@
-"""Figure 2 (formerly Table 3): DMFC with repair limits 1, 2, 3, 5, 7 and 10 on all examples, from one extended run.
+"""Figure 2 (formerly Table 3): DMGFC with repair limits 1, 2, 3, 5, 7 and 10 on all examples, from one extended run.
 
-The run comes from scripts/extend_run.py, which continues the r=2 DMFC trajectories
+The run comes from scripts/extend_run.py, which continues the r=2 DMGFC trajectories
 of the Table 2 run to a larger limit. An extension can itself be continued
 (r=2 -> 7 -> 10), so rows already reported keep their values. Each row of the table
 cuts the final trajectories at its limit. The cut at the limit of every run in the
@@ -59,7 +59,7 @@ def check_extension(run_dir):
     run_dir = Path(run_dir)
     manifest = json.loads((run_dir / "manifest.json").read_text())
     if manifest.get("methods") != [METHOD] or not manifest.get("extends"):
-        raise ValueError("Figure 2 needs a DMFC run made by scripts/extend_run.py.")
+        raise ValueError("Figure 2 needs a DMGFC run made by scripts/extend_run.py.")
     chain, current = [], run_dir
     while (source := _source_of(current)) is not None:
         if source.resolve() in {path.resolve() for path in chain} or len(chain) >= len(LIMITS):
@@ -83,7 +83,7 @@ def derive_limits(run_dir, limits=LIMITS):
 
 
 def check_matches_source(run_dir, source_dir):
-    """The cut at the source limit must reproduce every source DMFC row."""
+    """The cut at the source limit must reproduce every source DMGFC row."""
     run_dir, source_dir = Path(run_dir), Path(source_dir)
     cap = json.loads((source_dir / "manifest.json").read_text())["max_repairs"]
     cut = run_dir / "limits" / f"r{cap}"
@@ -148,7 +148,7 @@ def _labels(points, text, above):
 
 
 def latex_repairs_figure(summaries=None):
-    """Figure 2: DMFC call and function accuracy by repair limit, with each limit's cost under its tick."""
+    """Figure 2: DMGFC call and function accuracy by repair limit, with each limit's cost under its tick."""
     call = _points(summaries, "accuracy", 100)
     function = _points(summaries, "function_accuracy", 100)
     cost = dict(_points(summaries, "mean_cost_usd", 1000))
@@ -186,7 +186,7 @@ def latex_repairs_figure(summaries=None):
         notes += rf" Repairs {route['first_attempt']}--{last} call \textit{{Jev}} {way}."
     if len(call) < len(LIMITS):
         notes += " Limits without points are unrun."
-    lines += [r"\caption{\textbf{DMFC} accuracy (\%) by repair limit $r$: one run continued to "
+    lines += [r"\caption{\textbf{DMGFC} accuracy (\%) by repair limit $r$: one run continued to "
               rf"$r={max(LIMITS)}$ and cut at each limit ($r={TABLE_LIMIT}$ is Table~\ref{{tab:main}})"
               + "." + notes + "}",  # the x-axis label explains the gray costs
               r"\label{fig:repairs}", r"\end{figure}"]

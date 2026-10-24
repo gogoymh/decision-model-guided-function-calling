@@ -2,7 +2,8 @@
 
 A model proposes a function call; the current decision-model verifier, Jev, checks
 its function and arguments before execution. The same generator repairs the call
-with accumulated feedback. Jev is the only verifier adapter currently implemented.
+with accumulated feedback. Jev remains the default; PerplexityDecider is an
+explicit native-checkpoint adapter for separately recorded experiments.
 
     import dmfc
 
@@ -18,6 +19,7 @@ with accumulated feedback. Jev is the only verifier adapter currently implemente
 from ._prompt import SYSTEM_PROMPT
 from .core import DMFC, METHODS, Result, Verdict, verify
 from .jev import Jev, JevError
+from .perplexity import DeciderError, PerplexityDecider
 from .providers import (PROVIDERS, XAI, Anthropic, AzureOpenAI, Gemini, OpenAI, OpenAICompatible, OpenRouter,
                         Provider, ProviderError, provider)
 from .tools import invoke, normalize_calls, schema_of, tool, toolset
@@ -26,6 +28,6 @@ __version__ = "0.1.0"
 
 __all__ = [
     "DMFC", "METHODS", "PROVIDERS", "SYSTEM_PROMPT", "XAI", "Anthropic", "AzureOpenAI", "Gemini", "Jev",
-    "JevError", "OpenAI", "OpenAICompatible", "OpenRouter", "Provider", "ProviderError", "Result", "Verdict",
+    "JevError", "DeciderError", "PerplexityDecider", "OpenAI", "OpenAICompatible", "OpenRouter", "Provider", "ProviderError", "Result", "Verdict",
     "__version__", "invoke", "normalize_calls", "provider", "schema_of", "tool", "toolset", "verify",
 ]

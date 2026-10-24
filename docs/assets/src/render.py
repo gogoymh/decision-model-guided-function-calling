@@ -1,6 +1,6 @@
 """Render an HTML file to PNG at 2x.
 
-Usage: python docs/assets/src/render.py docs/assets/src/hero.html docs/assets/dmfc-hero.png 1280 460
+Usage: python docs/assets/src/render.py docs/assets/src/hero.html docs/assets/dmgfc-hero.png 1280 460
 """
 import sys
 import os

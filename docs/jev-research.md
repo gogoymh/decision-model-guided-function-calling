@@ -31,7 +31,7 @@ https://docs.typesafe.ai/primitives/noul
 https://docs.typesafe.ai/confidence
 https://docs.typesafe.ai/introduction
 
-Rechecked on 2026-10-17: the first-party Noul page defines its output as the probability that the answer is yes and explicitly states that it has no separate `confidence` field. The Confidence page gives an optional derived measure `abs(2*p - 1)` for Noul and the normalized maximum-option measure for Choice documented below. These API definitions should cite TypeSafe's documentation directly, rather than JEV-as-a-Judge. The initial experiment used threshold `0.8`; the current DMFC manuscript and public library use `0.5`, selected after inspecting the BFCL results on 2026-10-18. Neither value is a fixed vendor recommendation. JEV-as-a-Judge's maximum-verdict probability is a separate study-specific measure.
+Rechecked on 2026-10-17: the first-party Noul page defines its output as the probability that the answer is yes and explicitly states that it has no separate `confidence` field. The Confidence page gives an optional derived measure `abs(2*p - 1)` for Noul and the normalized maximum-option measure for Choice documented below. These API definitions should cite TypeSafe's documentation directly, rather than JEV-as-a-Judge. The initial experiment used threshold `0.8`; the current DMGFC manuscript and public library use `0.5`, selected after inspecting the BFCL results on 2026-10-18. Neither value is a fixed vendor recommendation. JEV-as-a-Judge's maximum-verdict probability is a separate study-specific measure.
 
 ## Model pin and cost
 
@@ -62,7 +62,7 @@ https://docs.typesafe.ai/sdk/python
 https://docs.typesafe.ai/sdk/python/api/types/responses
 https://docs.typesafe.ai/sdk/python/api/retries
 
-## Method design consequences for DMFC
+## Method design consequences for DMGFC
 
 1. Jev receives the original conversation, available tool schemas, and current proposed calls. The generating LLM also receives actual prior feedback during repairs. Never send reference answers, evaluator labels, or benchmark ground truth to either model.
 2. For a proposed call, ask separate function-selection and argument-correctness questions in one request. Accept only when both pass their respective probability thresholds **and** deterministic schema validation passes. For an empty call list, send only the function question and omit the argument threshold. Record the argument check as skipped, with no verdict or probability, rather than assigning a yes answer.
@@ -85,7 +85,7 @@ The defensible contribution is an auditable evaluation of **dual semantic checks
 
 ## Additional documented Jev capabilities (outside this experiment)
 
-The following capability notes were checked on 2026-10-16. They describe the official API and examples, not an implemented comparison arm in this project. **DMFC** uses the LLM to propose functions and arguments and Jev to check them with two Noul questions when a call is present; no-call receives only the function question.
+The following capability notes were checked on 2026-10-16. They describe the official API and examples, not an implemented comparison arm in this project. **DMGFC** uses the LLM to propose functions and arguments and Jev to check them with two Noul questions when a call is present; no-call receives only the function question.
 
 ### Choice: options, probabilities, and confidence
 
@@ -103,7 +103,7 @@ confidence = (max(probabilities) - 1/n) / (1 - 1/n)
 
 This is different from both the winning option's probability and Noul's affirmative probability. For example, distributions `(0.6, 0.3, 0.1)` and `(0.6, 0.2, 0.2)` both yield confidence `0.4`. A Noul correctness threshold such as `0.8` cannot be interpreted as the same Choice-confidence threshold.
 
-The vendor's Jev 1.13 jaggedness page says that option order can affect a Choice answer and that the model sometimes favors the first option. This is a documented limitation of that interface, not a measured result of the DMFC experiment.
+The vendor's Jev 1.13 jaggedness page says that option order can affect a Choice answer and that the model sometimes favors the first option. This is a documented limitation of that interface, not a measured result of the DMGFC experiment.
 
 Sources:
 https://docs.typesafe.ai/primitives/choice
@@ -116,7 +116,7 @@ https://docs.typesafe.ai/model-jaggedness/jev-1.13
 
 The official function-calling cookbook already uses Jev for routing and for selecting argument values from bounded alternatives. It uses one Choice question for a `Literal`, Noul membership questions for members of a `list[Literal[...]]`, and Noul questions for booleans and optional-field presence. In that example, unrestricted values such as the integer `limit` receive no question and retain their function defaults. Other recipes also construct values from bounded choices.
 
-Do **not** claim that Jev cannot produce argument values in general. The Jev 1.13 jaggedness page says it is not trained to generate text and recommends getting candidate extractions from a generative model or regex before asking Jev to choose among them. This supports a narrower description of **DMFC**: the LLM proposes function names and argument values from the request and supplied schemas, while Jev checks the current proposal.
+Do **not** claim that Jev cannot produce argument values in general. The Jev 1.13 jaggedness page says it is not trained to generate text and recommends getting candidate extractions from a generative model or regex before asking Jev to choose among them. This supports a narrower description of **DMGFC**: the LLM proposes function names and argument values from the request and supplied schemas, while Jev checks the current proposal.
 
 The experiment does not use Choice for direct routing or fixed-option argument selection. Its repair context contains the accumulated prior calls and actual verifier feedback before the unchanged original request. Both function and argument choices can change in a new proposal. Each proposal receives all applicable correctness questions again; no-call skips the argument question, while a selected function with missing required arguments still receives it.
 

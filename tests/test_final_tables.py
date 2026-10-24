@@ -254,7 +254,7 @@ def test_main_fills_the_paper(root, monkeypatch, split_source):
     text = target.read_text()
     if split_source:
         assert paper.read_text() == original_main
-    assert r"\textbf{DMFC}" in text and "JBFC" not in text
+    assert r"\textbf{DMGFC}" in text and "JBFC" not in text
     assert "UNFILLED" not in text and r"\label{tab:rules}" in text and r"\label{tab:categories}" in text
     assert r"\label{tab:main}" in text and r"\label{fig:repairs}" in text
     assert json.loads((root / "final.json").read_text())["settings"]["threshold"] == .5
@@ -304,10 +304,10 @@ def test_main_preserves_acm_short_layout_and_exports_tail_latency(root, monkeypa
 
     assert strip_rows(output) == strip_rows(source)
     assert "STALE DATA" not in output and "% BEGIN AUTO RULES" not in output
-    assert r"\textbf{DMFC}" in output and "JBFC" not in output
+    assert r"\textbf{DMGFC}" in output and "JBFC" not in output
     assert len(re.findall(r" & Direct & ", output)) == 2
     assert r"Direct & 60.0$\pm$0.0 & 1.50" in output
-    assert r"\textbf{DMFC} & \textbf{80.0}$\pm$0.0 & 4.50" in output
+    assert r"\textbf{DMGFC} & \textbf{80.0}$\pm$0.0 & 4.50" in output
     updated_plot = plot.read_text()
     assert "AUTHOR PLOT LAYOUT" in updated_plot and r"\caption{Custom plot caption.}" in updated_plot
     assert report["figure2"][10]["p95_latency_s"] == pytest.approx(16.5)
@@ -354,7 +354,7 @@ def test_main_combined_marker_keeps_six_rows_and_updates_ablations_plot(root, mo
     def six_row_table(actual_report):
         assert actual_report == report
         return final_tables.COMBINED_MAIN + "\n" + r"\begin{table*}" + "\n" + "\n".join(
-            f"benchmark {index} & generator & Direct {row['outcome']} & DMFC {row['outcome']}\\\\"
+            f"benchmark {index} & generator & Direct {row['outcome']} & DMGFC {row['outcome']}\\\\"
             for index, row in enumerate(actual_report["rows"])) + "\n" + r"\end{table*}" + "\n"
     monkeypatch.setattr(additional_paper_tables, "build_report", completed_report)
     monkeypatch.setattr(additional_paper_tables, "latex_table", six_row_table)
@@ -368,7 +368,7 @@ def test_main_combined_marker_keeps_six_rows_and_updates_ablations_plot(root, mo
     assert seen == [root] and paper.read_text() == main_before
     assert text.count(" & generator & Direct ") == 6
     assert "OLD COMBINED TABLE" not in text and "OLD ABLATION" not in text
-    assert "Direct 5.1 & DMFC 5.1" in text and r"\caption{Ablation caption.}" in text
+    assert "Direct 5.1 & DMGFC 5.1" in text and r"\caption{Ablation caption.}" in text
     assert "AUTHOR TEXT" in text and "LIMIT TEXT" in text
     assert "(10,16.500000)" in plot.read_text()
 

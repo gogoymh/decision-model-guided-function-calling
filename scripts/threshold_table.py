@@ -1,10 +1,10 @@
 """Table of the Jev threshold experiments (make threshold-table): docs/threshold.md.
 
-Per generator, Direct and DMFC at the runs' original threshold (0.8) come from Table 1's three
+Per generator, Direct and DMGFC at the runs' original threshold (0.8) come from Table 1's three
 runs; every other threshold with reruns (scripts/rethreshold.py, results/jbfc_t<T>_<model>_run<k>)
-adds a DMFC row. Reruns start from their run's first proposals, so all rows of a generator
+adds a DMGFC row. Reruns start from their run's first proposals, so all rows of a generator
 are paired example by example. Columns: mean accuracy +- s.d. across runs and each run;
-paired differences from Direct and from DMFC at 0.8 (95% intervals, each example averaged
+paired differences from Direct and from DMGFC at 0.8 (95% intervals, each example averaged
 over the runs first, then 2,000 resamples with seed 1729); first proposals rejected by the
 first check (right and wrong ones); fixes and breaks against the first proposal, and the
 breaks where nothing passed and the last proposal was returned; the accuracy if a
@@ -48,7 +48,7 @@ def thresholds_found(model, results=None):
 
 
 def trajectory_stats(run_dir):
-    """DMFC trajectories of one run (live relevance excluded): first-step gate, fixes, breaks, fallback."""
+    """DMGFC trajectories of one run (live relevance excluded): first-step gate, fixes, breaks, fallback."""
     stats = dict(n=0, right_first=0, right_rejected=0, wrong_first=0, wrong_rejected=0, fixes=0, breaks=0,
                  breaks_at_limit=0, keep_first_correct=0)
     first_checks = {}
@@ -199,8 +199,8 @@ def markdown(report):
         "> 자동 생성 파일입니다: `make threshold-table` (`scripts/threshold_table.py`). 직접 고치지 마세요.", "",
         "아래 표는 기존 BFCL GPT 실험에서 임계값과 최종 제안 규칙을 선택한 기록입니다. 현재 원고의 "
         "세 생성기·두 벤치마크 Table 1과 구분하며, 경로와 JSON 키는 당시 기록을 유지합니다.", "",
-        "기존 BFCL Table 1의 세 회차(생성기마다)마다 그 회차의 첫 제안을 그대로 두고 **DMFC**만 다른 임계값(함수·인자 검사 모두)으로 "
-        "다시 실행했습니다(`make threshold THRESHOLD=…`, `scripts/rethreshold.py`). Direct와 임계값 0.8의 **DMFC**는 "
+        "기존 BFCL Table 1의 세 회차(생성기마다)마다 그 회차의 첫 제안을 그대로 두고 **DMGFC**만 다른 임계값(함수·인자 검사 모두)으로 "
+        "다시 실행했습니다(`make threshold THRESHOLD=…`, `scripts/rethreshold.py`). Direct와 임계값 0.8의 **DMGFC**는 "
         "기존 실행 그대로이고, 수정 한도는 r=3, 종료 규칙은 한도까지 통과하지 못하면 마지막 제안을 최종 예측으로 내는 "
         "`execute_last`입니다. 0.8 외의 임계값은 이 예제들의 결과를 본 뒤 고른 값입니다. 이 표를 보고 사용자가 "
         "임계값 0.5와, 통과한 제안이 없으면 첫 제안을 내는 규칙을 논문 설정으로 정했습니다(2026-10-18; 논문 표는 "
@@ -213,7 +213,7 @@ def markdown(report):
     for model, item in report.items():
         lines.append(f"| `{model}` | Direct | – | {_mean_sd(item['direct']['accuracy'])} | {_runs(item['direct']['accuracy'])} | – | – |")
         for threshold, row in item["jbfc"].items():
-            lines.append(f"| | **DMFC** | {_label(item, threshold, row)} | {_mean_sd(row['accuracy'])} | {_runs(row['accuracy'])} | "
+            lines.append(f"| | **DMGFC** | {_label(item, threshold, row)} | {_mean_sd(row['accuracy'])} | {_runs(row['accuracy'])} | "
                          f"{_delta(row['vs_direct'])} | {_delta(row['vs_base'])} |")
     lines += ["", "## 동작과 비용 (회차 평균)", "",
               "첫 제안 거부는 첫 검사에서 통과하지 못한 첫 제안 수입니다(맞는 것 / 틀린 것). 망가뜨린 것 중 괄호 안은 "
@@ -241,7 +241,7 @@ def markdown(report):
     for model, item in report.items():
         lines.append(f"| `{model}` | Direct | " + " | ".join(_pct(item["direct"]["categories"][c]["mean"]) for c, _ in CATEGORIES) + " |")
         for threshold, row in item["jbfc"].items():
-            lines.append(f"| | **DMFC** {_label(item, threshold, row)} | " + " | ".join(_pct(row["categories"][c]["mean"]) for c, _ in CATEGORIES) + " |")
+            lines.append(f"| | **DMGFC** {_label(item, threshold, row)} | " + " | ".join(_pct(row["categories"][c]["mean"]) for c, _ in CATEGORIES) + " |")
     notes = []
     for model, item in report.items():
         for threshold, row in item["jbfc"].items():

@@ -21,7 +21,7 @@
 \draw[flow] (selfprompt)--(selfgen);
 \draw[flow] (selfgen)--(selfcheck);
 \draw[flow] (selfcheck)--(selfreturn);
-\node[anchor=west,font=\bfseries,text=blue!70!black] at (0,0.41) {DMFC};
+\node[anchor=west,font=\bfseries,text=blue!70!black] at (0,0.41) {DMGFC};
 \node[box,text width=3.8cm,fill=blue!6] (prompt) at (4.52,0.41) {All history before unchanged\\request + functions};
 \node[box,text width=1.85cm,fill=blue!6] (generator) at (7.87,0.41) {LLM candidate\\or revision};
 \node[box,text width=3.10cm,fill=blue!6] (judge) at (10.84,0.41) {Decision model + schema\\Function / arguments};
@@ -32,7 +32,7 @@
 \draw[feedback] (gate.south)--(14.64,-0.18)--(4.52,-0.18)--(prompt.south);
 \node[fill=white,inner sep=1.5pt,text=blue!70!black] at (9.58,-0.18) {Rejected + repairs left: append candidate + actual verdicts (oldest first)};
 \end{tikzpicture}}
-\caption{Comparison of evaluated mechanisms (schematic; not measured results). \textbf{DMFC} retains all rejected candidates and actual verdicts before the unchanged request, checks arguments only for a call, and executes no external function during repair.}
-\Description{Three rows compare Direct and schema repair, generic self-review, and DMFC. DMFC uses separate decision-model judgments for function choice and applicable arguments plus local schema validation, and feeds rejected candidates and their actual verdicts back before the unchanged user request.}
+\caption{Comparison of evaluated mechanisms (schematic; not measured results). \textbf{DMGFC} retains all rejected candidates and actual verdicts before the unchanged request, checks arguments only for a call, and executes no external function during repair.}
+\Description{Three rows compare Direct and schema repair, generic self-review, and DMGFC. DMGFC uses separate decision-model judgments for function choice and applicable arguments plus local schema validation, and feeds rejected candidates and their actual verdicts back before the unchanged user request.}
 \label{fig:loop}
 \end{teaserfigure}

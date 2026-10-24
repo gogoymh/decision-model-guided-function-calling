@@ -1,15 +1,23 @@
 # README artwork sources
 
-The hero and framework are native HTML/SVG. The six theme-specific charts use
+The DMGFC hero and framework are native HTML/SVG. The six theme-specific charts use
 `data.json`, whose measurements preserve the original BFCL GPT runs. The current
 paper's six-row benchmark summary also includes Claude and exploratory API-Bank;
 those additional results are shown separately in the root README.
 
-Render at twice the logical dimensions with Playwright and Chromium:
+To export chart HTML for inspection through a browser without launching Chromium:
 
 ```bash
-uv run --with playwright python docs/assets/src/render.py docs/assets/src/hero.html docs/assets/dmfc-hero.png 1280 460
-uv run --with playwright python docs/assets/src/render.py docs/assets/src/framework.html docs/assets/dmfc-framework.png 1440 820
+python3 docs/assets/src/charts.py docs/assets/src/data.json work/artwork --html-only
+```
+
+The renamed assets were captured and verified through the Codex in-app browser.
+The existing standalone renderer remains available to contributors using Playwright
+and Chromium, at twice the logical dimensions:
+
+```bash
+uv run --with playwright python docs/assets/src/render.py docs/assets/src/hero.html docs/assets/dmgfc-hero.png 1280 460
+uv run --with playwright python docs/assets/src/render.py docs/assets/src/framework.html docs/assets/dmgfc-framework.png 1440 820
 uv run --with playwright python docs/assets/src/charts.py docs/assets/src/data.json docs/assets
 ```
 

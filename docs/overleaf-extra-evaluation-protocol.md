@@ -62,7 +62,7 @@ The repository root has MIT text, but **`api-bank/LICENSE` is Apache-2.0**. The 
 
 ## Predeclared experiment matrix
 
-First evaluate Direct and full DMFC on BFCL and the adapted API-Bank test set, then the same F/A/L ablations where budget permits. Preserve one fixed generator/verifier configuration per comparison. For each model and repetition, generate one initial candidate per case and share it among methods. Different generator families must generate their own initial proposals.
+First evaluate Direct and full DMGFC on BFCL and the adapted API-Bank test set, then the same F/A/L ablations where budget permits. Preserve one fixed generator/verifier configuration per comparison. For each model and repetition, generate one initial candidate per case and share it among methods. Different generator families must generate their own initial proposals.
 
 - Repair budget `r = 3`: at most four proposals. Stop at the first passing candidate; use the same final fallback policy for applicable methods. No benchmark functions execute.
 - For this transfer experiment, freeze the historical BFCL settings before any additional inference: r=3, both thresholds=0.5, keep_first. The 48 API-Bank development cases remain unused for outcome tuning; evaluate all 156 prespecified test cases without changing these settings. BFCL settings were selected after inspecting the original BFCL examples, so its historical and added-generator comparisons are exploratory, not held-out tuning.
@@ -100,8 +100,8 @@ Sources: [Claude Sonnet 5.5 official overview](https://platform.claude.com/docs/
 
 ## Connecting the three motivation claims to evidence
 
-1. **Structure versus request alignment**: count schema-valid incorrect calls and unnecessary calls on BFCL. Compare Direct, schema-only, and full DMFC on matched cases. Cite prior tool-use work accurately; Toolformer learns API selection/timing/arguments and is not only a format validator.
+1. **Structure versus request alignment**: count schema-valid incorrect calls and unnecessary calls on BFCL. Compare Direct, schema-only, and full DMGFC on matched cases. Cite prior tool-use work accurately; Toolformer learns API selection/timing/arguments and is not only a format validator.
 2. **Function and argument errors are distinct**: use F/A ablations plus a paired error decomposition. Conditional argument scores have different denominators when function selection changes, so they cannot establish superiority in full-call correctness by themselves.
-3. **Cumulative feedback versus latest only**: compare DMFC with DMFC-L under identical prompts apart from retained history, thresholds, initial candidates, and budget. Differences arise at the second repair; `r <= 1` cannot establish the value of cumulative history. Supplement accuracy with token/time overhead. Do not state that earlier work always discards history; this is a specific ablation question.
+3. **Cumulative feedback versus latest only**: compare DMGFC with DMGFC-L under identical prompts apart from retained history, thresholds, initial candidates, and budget. Differences arise at the second repair; `r <= 1` cannot establish the value of cumulative history. Supplement accuracy with token/time overhead. Do not state that earlier work always discards history; this is a specific ablation question.
 
 All API-Bank candidate-interface arms and the Claude BFCL continuation are complete. Only validated complete records feed manuscript tables. Only then update the abstract/Introduction's benchmark list, multi-model claims, and quantitative summary.

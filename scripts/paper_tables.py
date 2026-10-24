@@ -1,11 +1,11 @@
 """Tables 1 and 2 at the paper's repair limit (r=3) from the raised runs (make r3).
 
-Table 2 compares the seven methods with gpt-5-nano. Table 1 shows Direct and DMFC by
+Table 2 compares the seven methods with gpt-5-nano. Table 1 shows Direct and DMGFC by
 category for gpt-5-nano and for the larger, costlier gpt-5.4-mini, with each column's
 cost per 1,000 requests. Both come from scripts/raise_limit.py: the gpt-5-nano run
-raises the Table 2 run's limit (its DMFC rows are the Figure 2 extension cut at r=3),
-and the gpt-5.4-mini run adds DMFC to that model's Direct run. Each run covers all
-3,051 examples once, Direct and DMFC share their first proposals, and both runs use
+raises the Table 2 run's limit (its DMGFC rows are the Figure 2 extension cut at r=3),
+and the gpt-5.4-mini run adds DMGFC to that model's Direct run. Each run covers all
+3,051 examples once, Direct and DMGFC share their first proposals, and both runs use
 the same code, data, interface and settings; only the generator and its prices differ.
 
 Usage: python scripts/paper_tables.py MAIN_RUN [--compare RUN] [--model NAME] [--paper paper/main.tex]
@@ -78,10 +78,10 @@ def check_main(summary):
 
 
 def check_compare(main, compare):
-    """The comparison run: Direct and DMFC, same code, data and settings as the main run, another generator."""
+    """The comparison run: Direct and DMGFC, same code, data and settings as the main run, another generator."""
     manifest, main_manifest = compare["manifest"], main["manifest"]
     if manifest.get("methods") != ["direct", "jev_joint"]:
-        raise ValueError("The comparison run must have Direct and DMFC (make r3).")
+        raise ValueError("The comparison run must have Direct and DMGFC (make r3).")
     for key in SAME_AS_MAIN:
         if manifest.get(key) != main_manifest.get(key):
             raise ValueError(f"The comparison run differs from the main run in {key}.")
@@ -109,7 +109,7 @@ def _bold_top(cells):
 
 
 def columns(main, compare=None):
-    """(summary, method) for Direct and DMFC with the paper's generator, then with the larger one."""
+    """(summary, method) for Direct and DMGFC with the paper's generator, then with the larger one."""
     return [(main, "direct"), (main, "jev_joint"), (compare, "direct"), (compare, "jev_joint")]
 
 
@@ -119,7 +119,7 @@ def _value(summary, method, key, category=None):
 
 
 def latex_table1(main, compare=None, model=DEFAULT_MODEL):
-    """Table 1: Direct and DMFC by category for two generators, with cost per 1,000 requests."""
+    """Table 1: Direct and DMGFC by category for two generators, with cost per 1,000 requests."""
     small = main["manifest"]["llm_model"]
     large = compare["manifest"]["llm_model"] if compare else model
     limit = main["manifest"]["max_repairs"]
@@ -128,7 +128,7 @@ def latex_table1(main, compare=None, model=DEFAULT_MODEL):
              rf" & & \multicolumn{{2}}{{c}}{{\texttt{{{_tex_escape(small)}}}}}"
              rf" & \multicolumn{{2}}{{c}}{{\texttt{{{_tex_escape(large)}}}}}\\",
              r"\cmidrule(lr){3-4}\cmidrule(lr){5-6}",
-             r"Category & Examples & Direct & \textbf{DMFC} & Direct & \textbf{DMFC}\\", r"\midrule"]
+             r"Category & Examples & Direct & \textbf{DMGFC} & Direct & \textbf{DMGFC}\\", r"\midrule"]
     missing = bolded = False
     for category, label, count in TABLE1_CATEGORIES:
         key = "relevance_call_rate" if category == "live_relevance" else "accuracy"
@@ -177,7 +177,7 @@ def latex_table2(main):
     for old, new in zip(long_form, short_form):
         table = table.replace(old, new)
     # Recorded experiment code is immutable; adapt only its rendered historical method labels.
-    return table.replace(r"\textbf{JBFC", r"\textbf{DMFC")
+    return table.replace(r"\textbf{JBFC", r"\textbf{DMGFC")
 
 
 def update_paper_tables(paper_path, main, compare=None, model=DEFAULT_MODEL):
@@ -189,7 +189,7 @@ def update_paper_tables(paper_path, main, compare=None, model=DEFAULT_MODEL):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("main_run", help="the raised gpt-5-nano run with all seven methods")
-    parser.add_argument("--compare", help="the larger generator's Direct and DMFC run")
+    parser.add_argument("--compare", help="the larger generator's Direct and DMGFC run")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="column header while the comparison is unrun")
     parser.add_argument("--paper")
     args = parser.parse_args(argv)

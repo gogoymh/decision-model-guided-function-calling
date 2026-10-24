@@ -1,5 +1,25 @@
 # Research repository instructions
 
+## DMGFC naming and DGX Spark preparation (user instruction, 2026-10-24)
+
+The repository is now `gogoymh/decision-model-guided-function-calling`. The current
+paper title is **Decision-Model-Guided Function Calling** and its displayed method
+names are **DMGFC**, **DMGFC-F**, **DMGFC-A**, and **DMGFC-L**. This explicitly permits
+title/acronym substitutions in otherwise frozen current manuscript passages,
+figures, generated display labels, and current documentation. Preserve all other
+wording, numerical results, cited titles, historical archives, raw method IDs,
+recorded source hashes, and the existing compatible `dmfc.DMFC` Python API.
+
+The user authorized cloning this renamed repository onto `ssh dgx_spark` and
+preparing one open decision model from the supplied comparison table. Use the
+`github.com-personal` SSH alias. Keep this experiment opt-in and separate from the
+historical Jev runs. Record the actual model ID, immutable revision, license,
+native inference settings, input/source hashes, and measured device accounting.
+Do not send gold answers or IDs to models, alter historical benchmark defaults,
+claim full experiments from smoke tests, or run paid generator experiments as part
+of preparation. Preserve existing DGX workloads and credentials; bind the new
+native decision-model service to loopback only.
+
 ## Restore supplied polished text (user instruction, 2026-10-21)
 
 The user's latest request supersedes all earlier permission to rewrite the text

@@ -541,7 +541,7 @@ def latex_table(report):
     _require(report.get("status") == "complete" and len(report.get("rows", [])) == 6, "A complete six-row report is required.")
     lines = [MARKER, r"\begin{table*}[t]", r"\centering\footnotesize", r"\setlength{\tabcolsep}{5pt}",
              r"\begin{tabular}{@{}llrrrr@{}}", r"\toprule",
-             r"Benchmark & Generator & Direct (\%) & \textbf{DMFC} (\%) & API s (D / M) & USD/1k (D / M)\\", r"\midrule"]
+             r"Benchmark & Generator & Direct (\%) & \textbf{DMGFC} (\%) & API s (D / M) & USD/1k (D / M)\\", r"\midrule"]
     for index, row in enumerate(report["rows"]):
         values = [row["methods"][method]["across_repetitions"] for method in ARMS]
         accuracy = []
@@ -560,8 +560,8 @@ def latex_table(report):
                      + " & " + pair("mean_latency_s", 1, 2) + " & " + pair("mean_known_cost_usd", 1000, 3) + r"\\")
     unknown = sum(row["methods"][method]["pooled"]["unknown_cost_n"] for row in report["rows"] for method in ARMS)
     lines += [r"\bottomrule", r"\end{tabular}",
-              r"\caption{Direct/DMFC accuracy: mean $\pm$ sample s.d. of three runs, $r=3$; bold compares methods per row. "
-              r"API seconds and USD/1k are Direct/DMFC pairs. BFCL: 3,035 accuracy cases, 3,051 time/cost cases; "
+              r"\caption{Direct/DMGFC accuracy: mean $\pm$ sample s.d. of three runs, $r=3$; bold compares methods per row. "
+              r"API seconds and USD/1k are Direct/DMGFC pairs. BFCL: 3,035 accuracy cases, 3,051 time/cost cases; "
               r"$^{\dagger}$API-Bank: 156 cases, exploratory adapted exact match. Time includes generation/verification only; "
               rf"cost omits {unknown} records with unavailable usage/prices. \textemdash\ means unavailable.}}",
               r"\label{tab:categories}", r"\end{table*}"]

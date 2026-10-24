@@ -6,7 +6,7 @@
 \setlength{\tabcolsep}{5pt}
 \begin{tabular}{@{}llrrrr@{}}
 \toprule
-Benchmark & Generator & Direct (\%) & \textbf{DMFC} (\%) & API s (D / M) & USD/1k (D / M)\\
+Benchmark & Generator & Direct (\%) & \textbf{DMGFC} (\%) & API s (D / M) & USD/1k (D / M)\\
 \midrule
 BFCL & nano & $64.1\pm0.3$ & $\mathbf{74.8}\pm0.3$ & 1.48 / 2.81 & 0.056 / 0.210\\
 BFCL & mini & $81.1\pm0.2$ & $\mathbf{82.1}\pm0.1$ & 1.30 / 1.98 & 0.703 / 1.137\\
@@ -17,7 +17,7 @@ API-Bank$^{\dagger}$ & mini & $78.2\pm0.6$ & $\mathbf{79.5}\pm0.6$ & 1.49 / 2.03
 API-Bank$^{\dagger}$ & Sonnet 5.5 & $86.3\pm0.4$ & $\mathbf{87.2}\pm0.0$ & 1.81 / 2.79 & 20.827 / 24.580\\
 \bottomrule
 \end{tabular}
-\caption{Direct/DMFC accuracy: mean $\pm$ sample s.d. of three runs, $r=3$; bold compares methods per row. API seconds and USD/1k are Direct/DMFC pairs. BFCL: 3,035 accuracy cases, 3,051 time/cost cases; $^{\dagger}$API-Bank: 156 cases, exploratory adapted exact match. Time includes generation/verification only; cost omits 7 records with unavailable usage/prices. \textemdash\ means unavailable.}
+\caption{Direct/DMGFC accuracy: mean $\pm$ sample s.d. of three runs, $r=3$; bold compares methods per row. API seconds and USD/1k are Direct/DMGFC pairs. BFCL: 3,035 accuracy cases, 3,051 time/cost cases; $^{\dagger}$API-Bank: 156 cases, exploratory adapted exact match. Time includes generation/verification only; cost omits 7 records with unavailable usage/prices. \textemdash\ means unavailable.}
 \label{tab:categories}
 \end{table*}
 % END AUTO CATEGORIES
@@ -33,10 +33,10 @@ Method & Call & Func. & Args. & API s & USD/1k\\
 Direct & 63.8 & 74.8 & 81.2 & 1.30 & 0.056 \\
 Schema repair & 65.8 & 76.4 & 81.8 & 1.36 & 0.059 \\
 Self-refine & 70.0 & 80.3 & 82.2 & 5.47 & 0.265 \\
-\textbf{DMFC-F} & 73.2 & 84.5 & 81.4 & 2.24 & 0.172 \\
-\textbf{DMFC-A} & 72.5 & 82.6 & \textbf{82.7} & 2.21 & 0.169 \\
-\textbf{DMFC-L} & 73.5 & 84.3 & 82.2 & 2.60 & 0.203 \\
-\textbf{DMFC} & \textbf{74.6} & \textbf{85.3} & 82.1 & 2.61 & 0.211 \\
+\textbf{DMGFC-F} & 73.2 & 84.5 & 81.4 & 2.24 & 0.172 \\
+\textbf{DMGFC-A} & 72.5 & 82.6 & \textbf{82.7} & 2.21 & 0.169 \\
+\textbf{DMGFC-L} & 73.5 & 84.3 & 82.2 & 2.60 & 0.203 \\
+\textbf{DMGFC} & \textbf{74.6} & \textbf{85.3} & 82.1 & 2.61 & 0.211 \\
 \bottomrule
 \end{tabular}
 \caption{Ablation: one \texttt{gpt-5-nano} run, $r=3$. Call/function accuracy (\%) excludes live relevance. Arguments are scored only when the function is correct; bold marks each accuracy column's maximum.}
@@ -53,7 +53,7 @@ Generators are \texttt{gpt-5-nano} (2025-08-07), \texttt{gpt-5.4-mini} (2026-03-
 For transfer, we adapt API-Bank~\cite{li2023apibank} to first-call prediction: retain dialogue prefixes before their first API turn and supply a fixed 53-API catalog, independent of gold calls. Eight gold/schema conflicts are excluded before inference, leaving 204 cases grouped into development (48) and test (156). A common user instruction requests a native call candidate without execution. We score API names and type-normalized arguments; this exact-match adaptation differs from API-Bank's native execution score. The BFCL settings transfer unchanged. Four development cases verify the interface, without tuning thresholds or fallback; the prompt was revised after inspecting earlier test outcomes, so this evaluation is exploratory.
 
 \paragraph{Compared methods.}
-All methods share initial candidates. \emph{Direct} returns the initial call; \emph{Schema repair} uses local errors; \emph{Self-refine} uses the generator's generic self-review for all $r$ repairs, an adaptation rather than a reproduction of Self-Refine~\cite{madaan2023selfrefine}. \textbf{DMFC-F} uses only function feedback and its acceptance gate; \textbf{DMFC-A} uses only argument feedback and its gate. Both compute applicable judgments but expose and require only their designated judgment, plus schema validation; DMFC-A accepts no call on schema alone. \textbf{DMFC-L} retains only the latest rejected candidate and feedback. Full \textbf{DMFC} retains all records. F/A isolate the two checks; L isolates history retention with the same thresholds, budget, and initial calls.
+All methods share initial candidates. \emph{Direct} returns the initial call; \emph{Schema repair} uses local errors; \emph{Self-refine} uses the generator's generic self-review for all $r$ repairs, an adaptation rather than a reproduction of Self-Refine~\cite{madaan2023selfrefine}. \textbf{DMGFC-F} uses only function feedback and its acceptance gate; \textbf{DMGFC-A} uses only argument feedback and its gate. Both compute applicable judgments but expose and require only their designated judgment, plus schema validation; DMGFC-A accepts no call on schema alone. \textbf{DMGFC-L} retains only the latest rejected candidate and feedback. Full \textbf{DMGFC} retains all records. F/A isolate the two checks; L isolates history retention with the same thresholds, budget, and initial calls.
 
 \subsection{Main Experiment}
 Table~\ref{tab:categories} shows BFCL gains of 10.7 points for nano (paired 95\% interval 9.7--11.6) and 1.0 for mini (0.5--1.5). Nano's largest category gain is on Irrelevance, 27.2\% to 78.2\%, driven by withholding unnecessary calls. Claude instead loses 1.3 points (interval $-1.8$ to $-0.7$): across three runs, repair fixes 58 initial errors but introduces 174 after accepted revisions. Its mean API time rises from 2.55 to 4.16~s.
@@ -61,7 +61,7 @@ Table~\ref{tab:categories} shows BFCL gains of 10.7 points for nano (paired 95\%
 API-Bank gains are 6.4 points for nano (interval 3.8--9.4), 1.3 for mini (0.2--2.6), and 0.9 for Claude (0.0--2.6). Claude's interval includes zero. These mixed effects do not establish a uniform benefit across generators or end-to-end tool-use success.
 
 \subsection{Ablation and Latency}
-In Table~\ref{tab:main}, both checks outperform either alone on call accuracy. Full history beats latest-only feedback by 1.1 points (95\% interval 0.4--1.7), with similar mean API time (2.61 vs.\ 2.60~s). DMFC-A's higher conditional argument score does not imply better overall calls because the scored subsets differ.
+In Table~\ref{tab:main}, both checks outperform either alone on call accuracy. Full history beats latest-only feedback by 1.1 points (95\% interval 0.4--1.7), with similar mean API time (2.61 vs.\ 2.60~s). DMGFC-A's higher conditional argument score does not imply better overall calls because the scored subsets differ.
 
 % BEGIN AUTO REPAIRS
 \input{sec/repair_tradeoff}

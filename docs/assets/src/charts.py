@@ -1,15 +1,14 @@
 """README charts: SVG in an HTML card, rendered to PNG for light and dark themes.
 
 Usage: python docs/assets/src/charts.py docs/assets/src/data.json docs/assets
-Needs Playwright with Chromium and the Inter font. The numbers in data.json must equal
+Use --html-only to export browser previews without launching Chromium.
+The PNG renderer needs Playwright with Chromium and the Inter font. The numbers in data.json must equal
 the filled paper results (Tables 1-2 and Figure 2); colors are a validated categorical palette.
 """
 import json
 import sys
 import os
 from pathlib import Path
-
-from playwright.sync_api import sync_playwright
 
 THEMES = {
     "light": dict(surface="#fcfcfb", ink="#0b0b0b", ink2="#52514e", muted="#898781", grid="#e1e0d9",
@@ -44,10 +43,10 @@ def text(x, y, s, color, size=12.5, weight=400, anchor="start"):
 
 
 def categories(t, rows):
-    """Per category, an arrow from Direct (ring) to DMFC (dot) for each generator (colour)."""
+    """Per category, an arrow from Direct (ring) to DMGFC (dot) for each generator (colour)."""
     width, left, x0, x1 = W - 56, 0, 168, 500
     models = (("gpt-5-nano", t["blue"]), ("gpt-5.4-mini", t["orange"]))
-    cols = (590, 660, 750, 820)  # right edges: nano Direct, nano DMFC, mini Direct, mini DMFC
+    cols = (590, 660, 750, 820)  # right edges: nano Direct, nano DMGFC, mini Direct, mini DMGFC
     row_h, top = 36, 44
     height = top + row_h * len(rows) + 30
 
@@ -62,7 +61,7 @@ def categories(t, rows):
         center = (pair[0] + pair[1]) / 2 - 18
         out.append(f'<circle cx="{center - len(name) * 3.4 - 9}" cy="{top - 32}" r="4" fill="{color}"/>')
         out.append(text(center, top - 32, name, t["ink2"], 11.5, 600, "middle"))
-        for x, label in zip(pair, ("Direct", "DMFC")):
+        for x, label in zip(pair, ("Direct", "DMGFC")):
             out.append(text(x, top - 14, label, t["muted"], 11, 500, "end"))
     for i, (label, *values) in enumerate(rows):
         y = top + row_h * i + row_h / 2
@@ -74,7 +73,7 @@ def categories(t, rows):
             direct, dmfc = values[2 * k], values[2 * k + 1]
             dy = -5 if k == 0 else 5  # the two generators sit just above and below the row line
             a, b = sx(direct), sx(dmfc)
-            if abs(b - a) > 9:  # arrow from Direct to DMFC, stopping short of the dot
+            if abs(b - a) > 9:  # arrow from Direct to DMGFC, stopping short of the dot
                 tip = b - 7 if b > a else b + 7
                 wing = -5 if b > a else 5
                 out.append(f'<line x1="{a}" y1="{y + dy}" x2="{tip}" y2="{y + dy}" stroke="{color}" stroke-width="1.6" stroke-opacity="0.55"/>')
@@ -107,7 +106,7 @@ def methods(t, rows):
         out.append(text(x, top - 14, name, t["muted"], 11, 500, "end"))
     for i, (label, note, accuracy, seconds, usd) in enumerate(rows):
         y = top + row_h * i + row_h / 2
-        star = label == "DMFC"
+        star = label == "DMGFC"
         out.append(text(0, y, label, t["ink"] if star else t["ink2"], 13.5, 650 if star else 450))
         if note:
             out.append(text(66, y, note, t["muted"], 11.5))
@@ -163,20 +162,28 @@ def limits(t, rows):
     return "".join(out)
 
 
-def main(data_path, out_dir):
+def main(data_path, out_dir, html_only=False):
     data = json.loads(Path(data_path).read_text())
     out_dir = Path(out_dir).resolve()
     jobs = []
     for mode, t in THEMES.items():
         jobs.append((f"chart-categories-{mode}.png", page(t, "Accuracy by BFCL category",
-                     "BFCL GPT runs · 3,035 scored / 3,051 prepared · mean of three runs · arrow: Direct (ring) to DMFC with at most 3 repairs (dot) · bold: highest in the row",
+                     "BFCL GPT runs · 3,035 scored / 3,051 prepared · mean of three runs · arrow: Direct (ring) to DMGFC with at most 3 repairs (dot) · bold: highest in the row",
                      [("gpt-5-nano", t["blue"]), ("gpt-5.4-mini", t["orange"])], categories(t, data["categories"]))))
         jobs.append((f"chart-methods-{mode}.png", page(t, "Call accuracy by method",
                      "gpt-5-nano · first run · same first proposal for every method · at most 3 repairs · time and cost per request at right",
                      [], methods(t, data["methods"]))))
-        jobs.append((f"chart-limits-{mode}.png", page(t, "DMFC by repair limit r",
+        jobs.append((f"chart-limits-{mode}.png", page(t, "DMGFC by repair limit r",
                      "Call accuracy and cost · one run continued from r=3 to r=10 and cut at each limit, so every limit shares its first attempts",
                      [], limits(t, data["limits"]))))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if html_only:
+        for name, html in jobs:
+            path = out_dir / Path(name).with_suffix(".html")
+            path.write_text(html)
+            print(path)
+        return
+    from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path=os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE"))
         for name, html in jobs:
@@ -190,4 +197,4 @@ def main(data_path, out_dir):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1], sys.argv[2], html_only="--html-only" in sys.argv[3:])
