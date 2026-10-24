@@ -1,7 +1,9 @@
 """Offline preparation and real frozen repair-loop transport with fake HTTP endpoints."""
 
 from copy import deepcopy
+import hashlib
 import importlib.util
+import inspect
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,7 +11,8 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from dmfc.perplexity import (CALIBRATION_TEMPERATURE, INHERITED_SERVER_MODEL,
+from dmgfc import DMGFC
+from dmgfc.perplexity import (CALIBRATION_TEMPERATURE, INHERITED_SERVER_MODEL,
                              MODEL_ID, MODEL_REVISION, PerplexityDecider)
 from jev_fc.benchmarks import BFCL_REVISION
 from jev_fc.llm import FunctionCallingLLM
@@ -107,6 +110,35 @@ def test_default_preflight_verifies_actual_cache_and_makes_zero_network_requests
     with pytest.raises(ValueError, match="--execute"):
         runner.execute(args, protocol, examples, initials)
     assert not args.output.exists()
+
+
+def test_preparation_fingerprints_loaded_canonical_implementations_not_only_aliases(tmp_path, monkeypatch):
+    args, _example = inputs(tmp_path)
+    original_manifest = args.generator_manifest.read_bytes()
+    monkeypatch.setattr(httpx.Client, "get", lambda *_args, **_kwargs: pytest.fail("Preparation cannot GET"))
+    monkeypatch.setattr(httpx.Client, "post", lambda *_args, **_kwargs: pytest.fail("Preparation cannot POST"))
+    protocol, _examples, _initials = preflight(args, monkeypatch)
+    proof = protocol["input_proof"]
+    inventory = proof["source_sha256"]
+
+    # Resolve actual imported classes so wrappers cannot stand in for implementation hashes.
+    for implementation, filename in ((DMGFC, "core.py"), (PerplexityDecider, "perplexity.py")):
+        source = Path(inspect.getfile(implementation)).resolve()
+        assert source == (ROOT / "src/dmgfc" / filename).resolve()
+        relative = source.relative_to(ROOT).as_posix()
+        assert inventory[relative] == hashlib.sha256(source.read_bytes()).hexdigest()
+
+    # Cover every canonical source, including the entry point, providers and tool handling.
+    canonical_sources = set((ROOT / "src/dmgfc").glob("*.py"))
+    assert {"core.py", "perplexity.py", "cli.py", "providers.py", "tools.py"} <= {
+        source.name for source in canonical_sources}
+    for source in canonical_sources:
+        assert inventory[source.relative_to(ROOT).as_posix()] == hashlib.sha256(source.read_bytes()).hexdigest()
+    assert proof["decision_model"]["protocol_source_sha256"]["perplexity.py"] == inventory[
+        "src/dmgfc/perplexity.py"]
+    assert proof["generator"]["source_sha256"] == "historical-source-hash"
+    assert args.generator_manifest.read_bytes() == original_manifest
+    assert proof["execution"] == {"model_api_calls": 0, "generator_calls": 0, "tool_executions": 0}
 
 
 def test_fake_http_repair_loop_scores_only_after_model_calls_and_accounts_initial_once(tmp_path, monkeypatch):

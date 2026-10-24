@@ -32,19 +32,19 @@
   <a href="#reproduce-the-paper"><b>Reproduce</b></a>
 </p>
 
-Current paper: **[paper/main.pdf](paper/main.pdf)** · source: **[paper/main.tex](paper/main.tex)** · [Overleaf comment resolutions](docs/overleaf-comment-resolution-2026-10-20.md). Its full title is **Decision-Model-Guided Function Calling with Cumulative Verification Feedback**. The displayed method name uses **DMGFC** (Decision-Model-Guided Function Calling). The existing `dmfc` Python API remains compatible. Recorded experiment IDs and result directories keep their original names for reproducibility; `import jbfc` remains compatible.
+Current paper: **[paper/main.pdf](paper/main.pdf)** · source: **[paper/main.tex](paper/main.tex)** · [Overleaf comment resolutions](docs/overleaf-comment-resolution-2026-10-20.md). Its full title is **Decision-Model-Guided Function Calling with Cumulative Verification Feedback**. The displayed method name uses **DMGFC** (Decision-Model-Guided Function Calling). The public library uses `import dmgfc` and `dmgfc.DMGFC(...)`. Existing `dmfc` and `jbfc` imports remain compatibility aliases. Recorded experiment IDs and result directories keep their original names for reproducibility.
 
 LLMs call the wrong function, invent argument values, and call tools when no tool applies. A JSON schema cannot catch that, because a wrong call can be perfectly well formed. **DMGFC** puts a verifier between the model and your code. [Jev](https://typesafe.ai) answers two yes/no questions about every proposed call: *is this the right function?* and *are these the right arguments?* When a check fails, the same model gets the verdicts back and repairs the call. Only a call that passes runs.
 
 ```python
-import dmfc
+import dmgfc
 
-agent = dmfc.DMFC("openai:gpt-5-nano", tools=[get_weather, book_table])
+agent = dmgfc.DMGFC("openai:gpt-5-nano", tools=[get_weather, book_table])
 agent.run("Is it jacket weather in Seoul tonight?")  # runs the call only if Jev accepts it
 ```
 
 > [!TIP]
-> Already have an agent? Keep it. `dmfc.verify(messages, tool_calls, tools)` checks calls from the OpenAI, Anthropic or Google SDKs before you execute them. [Jump there](#verify-calls-from-any-framework).
+> Already have an agent? Keep it. `dmgfc.verify(messages, tool_calls, tools)` checks calls from the OpenAI, Anthropic or Google SDKs before you execute them. [Jump there](#verify-calls-from-any-framework).
 
 ## How it works
 
@@ -109,7 +109,7 @@ cd decision-model-guided-function-calling
 pip install -e .        # or: uv sync
 ```
 
-`import dmfc` and `dmfc.DMFC(...)` are the current API. Existing `import jbfc` / `jbfc.JBFC(...)` applications and their method aliases remain supported. The repository is now [decision-model-guided-function-calling](https://github.com/gogoymh/decision-model-guided-function-calling).
+The distribution is named `dmgfc`; its public API is `import dmgfc` and `dmgfc.DMGFC(...)`. Existing `dmfc.DMFC(...)` and `jbfc.JBFC(...)` applications and their method aliases remain supported. See the [migration guide](docs/dmgfc-public-api-migration-2026-10-24.md) for the exact names.
 
 Set the keys for Jev and for your model provider:
 
@@ -121,7 +121,7 @@ export OPENAI_API_KEY=...     # or ANTHROPIC_API_KEY, GEMINI_API_KEY, XAI_API_KE
 ## Quickstart
 
 ```python
-import dmfc
+import dmgfc
 
 def get_weather(city: str, unit: str = "celsius") -> dict:
     """Current weather for a city.
@@ -132,7 +132,7 @@ def get_weather(city: str, unit: str = "celsius") -> dict:
     """
     return {"city": city, "temp": 12, "unit": unit}
 
-agent = dmfc.DMFC("openai:gpt-5-nano", tools=[get_weather])
+agent = dmgfc.DMGFC("openai:gpt-5-nano", tools=[get_weather])
 
 result = agent.run("Do I need a jacket in Seoul tonight?")
 result.call       # {"name": "get_weather", "arguments": {"city": "Seoul"}}
@@ -156,30 +156,30 @@ elif result.no_call:
 The model is a `"provider:model"` string or a provider object. Options such as `api_key=` go to the provider; `jev_api_key=` goes to Jev.
 
 ```python
-dmfc.DMFC("openai:gpt-5-nano")                       # OPENAI_API_KEY
-dmfc.DMFC("anthropic:claude-sonnet-4-5")             # ANTHROPIC_API_KEY
-dmfc.DMFC("gemini:gemini-2.5-flash")                 # GEMINI_API_KEY or GOOGLE_API_KEY
-dmfc.DMFC("xai:grok-4")                              # XAI_API_KEY
-dmfc.DMFC("openrouter:meta-llama/llama-3.3-70b-instruct")   # OPENROUTER_API_KEY
-dmfc.DMFC("azure:my-deployment", endpoint="https://my-resource.openai.azure.com")  # AZURE_OPENAI_API_KEY
+dmgfc.DMGFC("openai:gpt-5-nano")                       # OPENAI_API_KEY
+dmgfc.DMGFC("anthropic:claude-sonnet-4-5")             # ANTHROPIC_API_KEY
+dmgfc.DMGFC("gemini:gemini-2.5-flash")                 # GEMINI_API_KEY or GOOGLE_API_KEY
+dmgfc.DMGFC("xai:grok-4")                              # XAI_API_KEY
+dmgfc.DMGFC("openrouter:meta-llama/llama-3.3-70b-instruct")   # OPENROUTER_API_KEY
+dmgfc.DMGFC("azure:my-deployment", endpoint="https://my-resource.openai.azure.com")  # AZURE_OPENAI_API_KEY
 
 # Local or self-hosted, OpenAI-compatible (Ollama, vLLM, LM Studio, ...)
-dmfc.DMFC(dmfc.OpenAICompatible("llama3.1", base_url="http://localhost:11434/v1"))
+dmgfc.DMGFC(dmgfc.OpenAICompatible("llama3.1", base_url="http://localhost:11434/v1"))
 
 # Keys in code instead of the environment
-dmfc.DMFC("anthropic:claude-sonnet-4-5", api_key="sk-ant-...", jev_api_key="...")
+dmgfc.DMGFC("anthropic:claude-sonnet-4-5", api_key="sk-ant-...", jev_api_key="...")
 ```
 
 | Provider | Spec | Key | Class |
 |---|---|---|---|
-| OpenAI | `openai:<model>` | `OPENAI_API_KEY` | `dmfc.OpenAI` |
-| Anthropic | `anthropic:<model>` | `ANTHROPIC_API_KEY` | `dmfc.Anthropic` |
-| Google Gemini | `gemini:<model>` | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | `dmfc.Gemini` |
-| xAI Grok | `xai:<model>` | `XAI_API_KEY` | `dmfc.XAI` |
-| Azure OpenAI | `azure:<deployment>` | `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT` | `dmfc.AzureOpenAI` |
-| OpenRouter | `openrouter:<model>` | `OPENROUTER_API_KEY` | `dmfc.OpenRouter` |
-| Anything OpenAI-compatible | | optional | `dmfc.OpenAICompatible` |
-| Jev (verifier) | | `TYPESAFE_API_KEY` | `dmfc.Jev` |
+| OpenAI | `openai:<model>` | `OPENAI_API_KEY` | `dmgfc.OpenAI` |
+| Anthropic | `anthropic:<model>` | `ANTHROPIC_API_KEY` | `dmgfc.Anthropic` |
+| Google Gemini | `gemini:<model>` | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | `dmgfc.Gemini` |
+| xAI Grok | `xai:<model>` | `XAI_API_KEY` | `dmgfc.XAI` |
+| Azure OpenAI | `azure:<deployment>` | `AZURE_OPENAI_API_KEY` + `AZURE_OPENAI_ENDPOINT` | `dmgfc.AzureOpenAI` |
+| OpenRouter | `openrouter:<model>` | `OPENROUTER_API_KEY` | `dmgfc.OpenRouter` |
+| Anything OpenAI-compatible | | optional | `dmgfc.OpenAICompatible` |
+| Jev (verifier) | | `TYPESAFE_API_KEY` | `dmgfc.Jev` |
 
 <details>
 <summary><b>Provider options</b></summary>
@@ -193,16 +193,16 @@ Provider objects take `max_output_tokens` (4,096 by default), `temperature`, `sy
 Plain functions work as they are: parameter types come from type hints (`str`, `int`, `float`, `bool`, `list[...]`, `dict[...]`, `Literal`, `Enum`, `Optional`, `TypedDict`, `Annotated[..., "description"]`), descriptions from Google, NumPy or Sphinx docstrings, and defaults from the signature. Use the decorator to override anything, or pass JSON Schema definitions in OpenAI, Anthropic or Gemini format:
 
 ```python
-@dmfc.tool(name="weather", description="Current weather for a city.")
+@dmgfc.tool(name="weather", description="Current weather for a city.")
 def get_weather(city: str, unit: Literal["celsius", "fahrenheit"] = "celsius") -> dict: ...
 
 schema = {"type": "function", "function": {
     "name": "search", "description": "Search the web.",
     "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}}}
-agent = dmfc.DMFC("openai:gpt-5-nano", tools=[get_weather, schema], functions={"search": my_search})
+agent = dmgfc.DMGFC("openai:gpt-5-nano", tools=[get_weather, schema], functions={"search": my_search})
 ```
 
-`dmfc.schema_of(fn)` shows the schema DMGFC sends.
+`dmgfc.schema_of(fn)` shows the schema DMGFC sends.
 
 ## Verify calls from any framework
 
@@ -212,7 +212,7 @@ Keep your agent and check its calls before you execute them. `verify` takes the 
 from openai import OpenAI
 
 response = OpenAI().chat.completions.create(model="gpt-5-nano", messages=messages, tools=tools)
-verdict = dmfc.verify(messages, response.choices[0].message.tool_calls, tools)
+verdict = dmgfc.verify(messages, response.choices[0].message.tool_calls, tools)
 
 if verdict:                       # passed the schema check and both Jev checks
     execute(response.choices[0].message.tool_calls)
@@ -224,14 +224,14 @@ else:
 ## Options and baselines
 
 ```python
-dmfc.DMFC(
+dmgfc.DMGFC(
     "openai:gpt-5-nano",
     tools=[...],
     max_repairs=3,             # repairs after the first proposal
     threshold=0.5,             # Jev threshold for both checks
     on_exhaustion="first",     # if nothing passes: return the first proposal ("last": the last repair)
-    method="dmfc",             # or a baseline: "direct", "schema", "self-refine",
-                               # "dmfc-f", "dmfc-a", "dmfc-latest"
+    method="dmgfc",             # or a baseline: "direct", "schema", "self-refine",
+                               # "dmgfc-f", "dmgfc-a", "dmgfc-latest"
     execute_unverified=False,  # True also permits the final unverified proposal to run
 )
 ```
@@ -241,15 +241,15 @@ dmfc.DMFC(
 | Direct | `direct` | `direct` |
 | Schema repair | `schema` | `schema_only` |
 | Self-refine | `self-refine` | `self_refine` |
-| DMGFC-F: function judgment only | `dmfc-f` | `jev_function` |
-| DMGFC-A: argument judgment only | `dmfc-a` | `jev_arguments` |
-| DMGFC-L: latest rejected candidate only | `dmfc-latest` | `jev_joint_latest` |
-| DMGFC: both judgments, cumulative history | `dmfc` | `jev_joint` |
+| DMGFC-F: function judgment only | `dmgfc-f` | `jev_function` |
+| DMGFC-A: argument judgment only | `dmgfc-a` | `jev_arguments` |
+| DMGFC-L: latest rejected candidate only | `dmgfc-latest` | `jev_joint_latest` |
+| DMGFC: both judgments, cumulative history | `dmgfc` | `jev_joint` |
 
 - The defaults are the paper's final settings: at most three repairs, threshold 0.5, and the first proposal when nothing passes. `call()` and `run()` also take `max_repairs=` and `on_exhaustion=` per request.
-- `dmfc.Jev(api_key, threshold=0.5, function_threshold=None, arguments_threshold=None, model="jev-1.13.0")` configures the verifier; pass it as `jev=`.
+- `dmgfc.Jev(api_key, threshold=0.5, function_threshold=None, arguments_threshold=None, model="jev-1.13.0")` configures the verifier; pass it as `jev=`.
 - `acall`, `arun` and `averify` run the same steps in a worker thread for async code.
-- `dmfc.SYSTEM_PROMPT` is the generator prompt used in the paper; replace it with `system_prompt=` on a provider.
+- `dmgfc.SYSTEM_PROMPT` is the generator prompt used in the paper; replace it with `system_prompt=` on a provider.
 
 <details>
 <summary><b>The result object</b></summary>
@@ -272,10 +272,10 @@ dmfc.DMFC(
 
 ## Native decision model on DGX Spark
 
-For new experiments, `dmfc.PerplexityDecider` connects to the native
+For new experiments, `dmgfc.PerplexityDecider` connects to the native
 [Perplexity Decider v1.1 27B](https://huggingface.co/perplexity-ai/pplx-decider-v1.1-27b)
 checkpoint at an immutable revision. Pass it explicitly as `jev=` to the existing
-`dmfc.DMFC` API. Jev remains the default verifier for the historical experiments.
+`dmgfc.DMGFC` API. Jev remains the default verifier for the historical experiments.
 The [DGX experiment guide](docs/dgx-decider-experiments.md) covers the isolated
 runtime, input and model fingerprints, bounded smoke tests, and the separate
 experiment runner. The following paper results do not include this new model.
@@ -388,7 +388,7 @@ Each Jev check reads about 1,400 tokens, roughly $0.06 per 1,000 checks at $0.04
 No. Proposals are marked as not executed, and `run()` executes only the final call after it passes (or, with `execute_unverified=True`, the final proposal even if none passed: the first one by default).
 
 **Can I use it with LangChain, the OpenAI Agents SDK, or my own loop?**
-Yes. Call `dmfc.verify(...)` on the tool calls your framework produces, or let `DMFC.call()` make the decision for one step of your loop.
+Yes. Call `dmgfc.verify(...)` on the tool calls your framework produces, or let `DMGFC.call()` make the decision for one step of your loop.
 
 **Parallel tool calls?**
 Not yet. DMGFC decides one step at a time: a single call or no call, the setting it was evaluated on.
@@ -410,7 +410,7 @@ The largest BFCL gain came from GPT-5-nano withdrawing unnecessary calls. GPT-5.
 
 Read **[paper/main.pdf](paper/main.pdf)** for the current manuscript and edit **[paper/main.tex](paper/main.tex)** as its source entry point. The Abstract is inline in `main.tex`; active sections are loaded from `paper/sec/`. `paper/sec/abstract.tex` is a required empty input, and `paper/sigconf*.tex` files are ACM template examples.
 
-On 2026-10-21, the supplied polished Abstract and Introduction were restored exactly, together with the original Task Definition heading, at the author’s request. Added methods and BFCL/exploratory API-Bank results remain. The current anonymous ACM manuscript is a **four-page restored draft**, including references; original red passages, `xxx`, and the unrun multi-verifier claim are preserved in the Introduction. Actual experiments use three generators and one Jev verifier. The prior four-page revision is saved in [paper/versions/2026-10-21-before-polished-text-restore/](paper/versions/2026-10-21-before-polished-text-restore/). On 2026-10-24, the displayed acronym became **DMGFC**; following the user's PR comment, the paper title retains **with Cumulative Verification Feedback**. The `dmfc` API remains compatible, and other restored wording is preserved. See [restoration and upload checklist](docs/overleaf-polished-text-restore-2026-10-21.md) and [paper build notes](paper/README.md). Previous sources and PDFs are saved under [paper/versions/](paper/versions/).
+On 2026-10-21, the supplied polished Abstract and Introduction were restored exactly, together with the original Task Definition heading, at the author’s request. Added methods and BFCL/exploratory API-Bank results remain. The current anonymous ACM manuscript is a **four-page restored draft**, including references; original red passages, `xxx`, and the unrun multi-verifier claim are preserved in the Introduction. Actual experiments use three generators and one Jev verifier. The prior four-page revision is saved in [paper/versions/2026-10-21-before-polished-text-restore/](paper/versions/2026-10-21-before-polished-text-restore/). On 2026-10-24, the displayed acronym became **DMGFC**; following the user's PR comment, the paper title retains **with Cumulative Verification Feedback**. The public API now uses `dmgfc.DMGFC`; older `dmfc.DMFC` and `jbfc.JBFC` imports remain compatible. Other restored wording is preserved. See [restoration and upload checklist](docs/overleaf-polished-text-restore-2026-10-21.md) and [paper build notes](paper/README.md). Previous sources and PDFs are saved under [paper/versions/](paper/versions/).
 
 The experiment code lives in [`src/jev_fc`](src/jev_fc) and the manuscript in [`paper/main.tex`](paper/main.tex). DMGFC's loop in the library *is* `jev_fc.pipeline.run_example`, and offline tests check that the library sends the same prompts as the experiments. The runs started at threshold 0.8 with the last proposal returned; the paper's numbers come from rerunning the Jev methods at threshold 0.5 from the same first proposals and keeping the first proposal when none passes (`make final`).
 
@@ -432,6 +432,18 @@ make paper         # rebuild paper/main.pdf
 python scripts/analyze_results.py results/final/gpt-5-nano_run1   # the first run's numbers quoted in Results
 ```
 
+New evaluation commands use `dmgfc-eval` and the public method names:
+
+```bash
+dmgfc-eval --help
+dmgfc-eval run --help
+# For a separately authorized run: --methods direct,dmgfc,dmgfc-f,dmgfc-a,dmgfc-latest
+```
+
+The CLI translates these names to the recorded `jev_*` IDs shown above.
+`dmfc-eval` and `jev-fc` remain command aliases for existing reproduction scripts.
+These help commands make no model requests.
+
 The added Claude and API-Bank runs use `scripts/run_additional_evaluation.py`; their fixed plans, amendments, and completed summaries are under [`docs/evaluation/`](docs/evaluation/). [`scripts/additional_paper_tables.py`](scripts/additional_paper_tables.py) validates historical and added grids before producing the combined Table 1. The [additional evaluation protocol](docs/overleaf-extra-evaluation-protocol.md) explains the adapted API-Bank score and exploratory input changes. These runs are separate from the historical BFCL traces described below.
 
 The historical BFCL GPT runs used an Azure OpenAI deployment of `gpt-5-nano` behind an Azure API Management gateway. Jev went through the same gateway until it stopped serving it; later requests, including every threshold-0.5 run behind the paper's tables, call TypeSafe directly with `TYPESAFE_API_KEY` (same model; recorded in each run's manifest). The final rule needs no new requests: the loop runs the same way, and `make final` only picks the first proposal of trajectories that never passed. See [`docs/apim-gateway.md`](docs/apim-gateway.md). With `WORKERS=8`, Table 2 took about two hours and $2.4 at list prices, extending it to ten repairs about 30 minutes and $1.4, the `gpt-5.4-mini` Direct run (`make compare`) about 8 minutes and $2.2, `make r3` about 26 minutes and $3.6, `make repeat` about 47 minutes and $12, `make threshold THRESHOLD=0.5` about 28 minutes and $5.4, and `make t05` about 32 minutes and $1.7. Completed records are reused when a run resumes. Run notes and checks are in [`docs/validation.md`](docs/validation.md).
@@ -440,9 +452,10 @@ The historical BFCL GPT runs used an Azure OpenAI deployment of `gpt-5-nano` beh
 <summary><b>Repository layout</b></summary>
 
 ```text
-src/dmfc/      public library: DMGFC, providers, Jev, tools
-src/jbfc/      compatibility library for existing import jbfc applications
-src/jev_fc/    experiment code: repair loop, Jev client, BFCL data and scoring, CLI (jev-fc)
+src/dmgfc/     public library: DMGFC, providers, Jev, tools, evaluation CLI
+src/dmfc/      compatibility imports for existing dmfc applications
+src/jbfc/      compatibility imports for existing jbfc applications
+src/jev_fc/    frozen experiment engine: repair loop, Jev client, BFCL data and scoring
 scripts/       table runs, run extension for Figure 2, analysis, paper build and checks
 paper/         manuscript and PDF
 tests/         offline tests

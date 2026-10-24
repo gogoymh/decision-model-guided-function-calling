@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from dmfc.perplexity import PerplexityDecider, fingerprint  # noqa: E402
+from dmgfc.perplexity import PerplexityDecider, fingerprint  # noqa: E402
 from jev_fc.benchmarks import BFCL_REVISION, DEFAULT_CATEGORIES  # noqa: E402
 from jev_fc.cli import _source_hash  # noqa: E402
 from jev_fc.jev import validate_calls  # noqa: E402

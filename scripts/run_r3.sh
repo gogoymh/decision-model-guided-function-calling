@@ -52,14 +52,14 @@ preflight() {  # reasoning effort none, as in the source runs; Jev through the g
 note "1/5 preflight gpt-5-nano"
 use_model gpt-5-nano
 preflight "results/r${LIMIT}_nano_preflight.env"
-note "2/5 gpt-5-nano: raise $NANO_SOURCE from r=2 to r=$LIMIT (DMFC from $NANO_JBFC)"
+note "2/5 gpt-5-nano: raise $NANO_SOURCE from r=2 to r=$LIMIT (DMGFC from $NANO_JBFC)"
 uv run python scripts/raise_limit.py "$NANO_SOURCE" --max-repairs "$LIMIT" --reuse "jev_joint=$NANO_JBFC" \
   --output "$NANO_OUT" --workers "$WORKERS" --resume 2>&1 | stamp
 
 note "3/5 preflight gpt-5.4-mini"
 use_model gpt-5.4-mini
 preflight "results/r${LIMIT}_mini_preflight.env"
-note "4/5 gpt-5.4-mini: add DMFC (r=$LIMIT) to $MINI_SOURCE from its saved first proposals"
+note "4/5 gpt-5.4-mini: add DMGFC (r=$LIMIT) to $MINI_SOURCE from its saved first proposals"
 uv run python scripts/raise_limit.py "$MINI_SOURCE" --max-repairs "$LIMIT" --add jev_joint \
   --output "$MINI_OUT" --workers "$WORKERS" --resume 2>&1 | stamp
 

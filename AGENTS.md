@@ -1,5 +1,17 @@
 # Research repository instructions
 
+## Canonical DMGFC Python library (user instruction, 2026-10-24)
+
+The latest user request makes `dmgfc` the distribution and public import, `DMGFC`
+the class, and `dmgfc-eval` the current evaluation command. New examples and
+method options use `dmgfc`, `dmgfc-f`, `dmgfc-a`, and `dmgfc-latest`. Keep
+`dmfc.DMFC`, `jbfc.JBFC`, their submodule imports and old commands/options as
+compatibility aliases. This supersedes the older canonical public API names below.
+Move the current library implementation into `src/dmgfc` without changing the
+frozen `src/jev_fc` implementation, recorded method IDs, source hashes or results.
+The default verifier, prompts, thresholds, repair limits and dispatch behavior stay
+the same. New experiment manifests must hash the actual canonical source files.
+
 ## DMGFC naming and DGX Spark preparation (user instruction, 2026-10-24)
 
 The repository is now `gogoymh/decision-model-guided-function-calling`. The current

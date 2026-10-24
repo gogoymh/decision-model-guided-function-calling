@@ -8,8 +8,8 @@ from pathlib import Path
 import httpx
 import pytest
 
-import dmfc
-from dmfc.perplexity import (CALIBRATION_TEMPERATURE, DeciderError, INHERITED_SERVER_MODEL,
+import dmgfc
+from dmgfc.perplexity import (CALIBRATION_TEMPERATURE, DeciderError, INHERITED_SERVER_MODEL,
                              MODEL_ID, MODEL_REVISION, PerplexityDecider, fingerprint)
 from jev_fc.jev import ARGUMENT_QUESTION, FUNCTION_QUESTION, JevVerifier
 
@@ -52,9 +52,9 @@ def test_explicit_export_keeps_default_jev_and_no_environment_routes(monkeypatch
     monkeypatch.setenv("API_GATEWAY", "apim")
     monkeypatch.setenv("TYPESAFE_BASE_URL", "https://wrong.invalid")
     monkeypatch.setenv("TYPESAFE_MODEL", "wrong-model")
-    instance = dmfc.PerplexityDecider()
+    instance = dmgfc.PerplexityDecider()
     assert instance.base_url == "http://127.0.0.1:18081" and instance.gateway == "native_systemone"
-    assert dmfc.Jev is not dmfc.PerplexityDecider
+    assert dmgfc.Jev is not dmgfc.PerplexityDecider
     assert isinstance(instance, JevVerifier)
     assert "wrong-model" not in repr(instance)
     instance.close()

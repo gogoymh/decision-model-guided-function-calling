@@ -1,7 +1,7 @@
 # Native Perplexity Decider experiments on DGX Spark
 
 The added adapter is an explicit alternative verifier for new experiments. The
-default `dmfc.Jev` and the frozen `src/jev_fc` implementation remain unchanged.
+default `dmgfc.Jev` and the frozen `src/jev_fc` implementation remain unchanged.
 Existing result IDs, dataset files, traces and initial-proposal caches are not
 renamed or rewritten. No additional benchmark performance is claimed here.
 
@@ -139,10 +139,10 @@ ssh -N -L 18081:127.0.0.1:18081 dgx_spark
 ## Explicit adapter usage and bounded smoke
 
 ```python
-import dmfc
+import dmgfc
 
-with dmfc.PerplexityDecider(base_url="http://127.0.0.1:18081") as decider:
-    agent = dmfc.DMFC(generator, tools=tools, jev=decider)
+with dmgfc.PerplexityDecider(base_url="http://127.0.0.1:18081") as decider:
+    agent = dmgfc.DMGFC(generator, tools=tools, jev=decider)
     result = agent.call("The user's request")  # no application tool execution
 ```
 
@@ -225,7 +225,8 @@ pinned evaluator. Keep their bytes unchanged and avoid copying credentials.
 ```
 
 The preparation script sends no network requests. It hashes the real files,
-adapter/frozen sources, model identity and each cached initial proposal. It
+canonical `src/dmgfc` implementation, compatibility wrappers, frozen experiment
+sources, model identity and each cached initial proposal. It
 rejects duplicate/foreign IDs, partial replicates, mismatched cache config IDs
 and a dataset that differs from the source manifest's declared digest. Legacy
 caches without per-row config IDs require the matching source records: every

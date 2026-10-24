@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from dmfc.perplexity import PerplexityDecider, fingerprint  # noqa: E402
+from dmgfc.perplexity import PerplexityDecider, fingerprint  # noqa: E402
 from dgx_decider_smoke import write_new_json  # noqa: E402
 
 
@@ -106,7 +106,8 @@ def prepare(dataset: Path, initials: Path, generator_manifest: Path, *, base_url
             "source_record_proof": source_record_proof,
             "decision_model": decision_configuration,
             "source_sha256": {str(path.relative_to(ROOT)): sha256_file(path) for path in sorted(
-                list((ROOT / "src/dmfc").glob("*.py")) + list((ROOT / "src/jev_fc").glob("*.py")))},
+                list((ROOT / "src/dmgfc").glob("*.py")) + list((ROOT / "src/dmfc").glob("*.py"))
+                + list((ROOT / "src/jev_fc").glob("*.py")))},
             "proposed_comparison": {"repair_limits": [0, 1, 2, 3, 5, 7, 10],
                 "threshold": 0.5, "final_rule": "keep_first", "shared_initial_proposal": True,
                 "execute_tools": False, "workers": 1,

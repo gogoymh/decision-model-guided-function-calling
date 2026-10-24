@@ -8,9 +8,9 @@ Development selection always happens first. Optional test-prefix reports only
 describe smaller stopping caps; they never choose the budget. No keys are
 embedded here. --resume requires matching code, data, models and configuration.
 Alternative configurations save reports without replacing manuscript tables.
-The development search uses DMFC only. Its chosen limit is shared by all test
-repair methods. All seven methods share their initial LLM proposal. DMFC-L runs
-its own repairs with only the latest feedback; it is never replayed from DMFC.
+The development search uses DMGFC only. Its chosen limit is shared by all test
+repair methods. All seven methods share their initial LLM proposal. DMGFC-L runs
+its own repairs with only the latest feedback; it is never replayed from DMGFC.
 """
 
 import argparse
@@ -67,7 +67,7 @@ def main(argv=None):
                    cwd=root, check=True)
     selection = select_repair_budget(development, grid=args.repair_grid)
     if selection.get("selection_method") != BUDGET_SELECTION_METHOD:
-        raise ValueError("The repair budget must be selected from the DMFC development method.")
+        raise ValueError("The repair budget must be selected from the DMGFC development method.")
     selected_budget = selection["selected_max_repairs"]
     if isinstance(selected_budget, bool) or not isinstance(selected_budget, int) or selected_budget not in args.repair_grid:
         raise ValueError("The development selection did not return a budget in the requested grid.")
@@ -77,17 +77,17 @@ def main(argv=None):
             raise ValueError("The saved repair-budget selection differs; choose a new --results-dir.")
     else:
         selection_path.write_text(json.dumps(selection, indent=2, ensure_ascii=False, allow_nan=False) + "\n")
-    print(f"Development selection chose r={selected_budget} using DMFC; saved {selection_path}.")
+    print(f"Development selection chose r={selected_budget} using DMGFC; saved {selection_path}.")
     if args.dev_only:
         print("Development run and selection complete. Test data were not used.")
         return 0
 
-    print(f"Test evaluation compares {len(METHODS)} methods with the shared DMFC-selected repair limit.")
+    print(f"Test evaluation compares {len(METHODS)} methods with the shared DMGFC-selected repair limit.")
     subprocess.run(common + ["--split", "test", "--methods", ",".join(METHODS),
                              "--output", str(test), "--max-repairs", str(selected_budget),
                              "--repair-budget-selection", str(selection_path)], cwd=root, check=True)
     if not args.main_only:
-        # These stopping-cap diagnostics use only recorded cumulative DMFC runs.
+        # These stopping-cap diagnostics use only recorded cumulative DMGFC runs.
         for repairs in args.repair_grid:
             if repairs < selected_budget:
                 derive_policy_run(test, results / "test_prefix_diagnostics" / f"budget_{repairs}",

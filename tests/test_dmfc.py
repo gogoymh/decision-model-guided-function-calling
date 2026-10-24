@@ -1,4 +1,4 @@
-"""The DMFC public API and compatibility with the former JBFC package."""
+"""Compatibility of the former DMFC and JBFC public APIs with canonical DMGFC."""
 
 import importlib
 import json
@@ -7,6 +7,7 @@ import tomllib
 
 import pytest
 
+import dmgfc
 import dmfc
 import jbfc
 from jev_fc.llm import SYSTEM_PROMPT
@@ -47,9 +48,9 @@ class DecisionModel:
 
 
 def test_public_types_and_prompts_are_shared_with_legacy_imports():
-    assert dmfc.DMFC.__name__ == "DMFC"
-    assert dmfc.DMFC.__module__ == "dmfc.core"
-    assert jbfc.JBFC is jbfc.DMFC is dmfc.DMFC
+    assert dmfc.DMFC.__name__ == "DMGFC"
+    assert dmfc.DMFC.__module__ == "dmgfc.core"
+    assert jbfc.JBFC is jbfc.DMFC is dmfc.DMFC is dmgfc.DMGFC
     assert dmfc.SYSTEM_PROMPT is jbfc.SYSTEM_PROMPT is SYSTEM_PROMPT
     for name in ("Jev", "Result", "Verdict", "OpenAI", "Anthropic", "Gemini", "Provider", "tool", "verify"):
         assert getattr(dmfc, name) is getattr(jbfc, name)
@@ -59,17 +60,18 @@ def test_public_types_and_prompts_are_shared_with_legacy_imports():
 
 
 @pytest.mark.parametrize("canonical, legacy, internal", [
-    ("dmfc", "jbfc", "jev_joint"),
-    ("dmfc-latest", "jbfc-latest", "jev_joint_latest"),
-    ("dmfc-f", "jev-function", "jev_function"),
-    ("dmfc-a", "jev-arguments", "jev_arguments"),
+    ("dmgfc", "jbfc", "jev_joint"),
+    ("dmgfc-latest", "jbfc-latest", "jev_joint_latest"),
+    ("dmgfc-f", "jev-function", "jev_function"),
+    ("dmgfc-a", "jev-arguments", "jev_arguments"),
 ])
 def test_method_aliases_keep_frozen_ids_and_return_canonical_names(canonical, legacy, internal):
-    for name in (canonical, canonical.upper(), canonical.replace("-", "_"), legacy, internal):
+    for name in (canonical, canonical.upper(), canonical.replace("-", "_"),
+                 canonical.replace("dmgfc", "dmfc"), legacy, internal):
         agent = dmfc.DMFC(Model(RIGHT), jev=DecisionModel(), tools=[WEATHER], method=name)
         assert agent.method == internal
         assert agent.call("Weather in Seoul?").method == canonical
-        assert repr(agent).startswith("DMFC(") and f"method={canonical!r}" in repr(agent)
+        assert repr(agent).startswith("DMGFC(") and f"method={canonical!r}" in repr(agent)
 
 
 def test_short_latest_alias_and_legacy_class_use_the_same_history_rules():
@@ -82,7 +84,7 @@ def test_short_latest_alias_and_legacy_class_use_the_same_history_rules():
     assert [len(history) for history in cumulative_model.histories] == [0, 1, 2]
     assert [len(history) for history in latest_model.histories] == [0, 1, 1]
     assert latest_model.histories[-1][0]["round"] == 2
-    assert cumulative.method == "dmfc" and latest.method == "dmfc-latest"
+    assert cumulative.method == "dmgfc" and latest.method == "dmgfc-latest"
 
 
 def test_canonical_default_preserves_the_frozen_loop_and_first_proposal_rule():
@@ -136,11 +138,11 @@ def test_new_and_old_tool_decorators_preserve_metadata_in_both_directions():
 def test_metadata_builds_both_imports_and_keeps_the_old_cli_alias():
     root = Path(__file__).resolve().parents[1]
     metadata = tomllib.loads((root / "pyproject.toml").read_text())
-    assert metadata["project"]["name"] == "dmfc"
+    assert metadata["project"]["name"] == "dmgfc"
     assert metadata["project"]["scripts"]["dmfc-eval"] == metadata["project"]["scripts"]["jev-fc"]
     assert set(metadata["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]) == {
-        "src/dmfc", "src/jbfc", "src/jev_fc",
+        "src/dmgfc", "src/dmfc", "src/jbfc", "src/jev_fc",
     }
     locked = tomllib.loads((root / "uv.lock").read_text())
     editable = [package for package in locked["package"] if package.get("source") == {"editable": "."}]
-    assert len(editable) == 1 and editable[0]["name"] == "dmfc"
+    assert len(editable) == 1 and editable[0]["name"] == "dmgfc"

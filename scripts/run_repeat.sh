@@ -57,7 +57,7 @@ run_model() {  # runs $RUNS of one generator
     note "$model" "$log" "run $run: Direct on all 3,051 examples with new first proposals -> $direct"
     uv run jev-fc run --split all --methods direct --max-repairs 2 --replicates 1 \
       --workers "$WORKERS" --output "$direct" --resume 2>&1 | stamp "$model" "$log"
-    note "$model" "$log" "run $run: add DMFC (r=$LIMIT) from those first proposals -> $out"
+    note "$model" "$log" "run $run: add DMGFC (r=$LIMIT) from those first proposals -> $out"
     uv run python scripts/raise_limit.py "$direct" --max-repairs "$LIMIT" --add jev_joint \
       --output "$out" --workers "$WORKERS" --resume 2>&1 | stamp "$model" "$log"
   done

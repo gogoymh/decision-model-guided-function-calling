@@ -36,7 +36,7 @@ uv run python scripts/preflight.py "$OUT/preflight.env" 2>&1 | stamp
 source "$OUT/preflight.env"
 note "settings: deployment=$LLM_MODEL effort='${LLM_REASONING_EFFORT}' jev=$JEV_GATEWAY workers=$WORKERS source=$SOURCE"
 
-note "2/3 extend DMFC from $SOURCE to r=$MAX_R"
+note "2/3 extend DMGFC from $SOURCE to r=$MAX_R"
 uv run python scripts/extend_run.py "$SOURCE" --max-repairs "$MAX_R" --workers "$WORKERS" --output "$OUT" --resume 2>&1 | stamp
 
 note "3/3 cut at r=1,2,3,5,7,10 (the paper's Figure 2 uses threshold 0.5 and comes from make t05 and make final)"

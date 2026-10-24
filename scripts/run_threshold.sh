@@ -64,14 +64,14 @@ run_model() {  # reruns DMFC on $RUNS of one generator
   for run in $RUNS; do
     source="$(source_run "$model" "$run")"
     out="results/jbfc_${TAG}_${model}_run${run}"
-    note "$model" "$log" "run $run: DMFC with threshold $THRESHOLD from the first proposals of $source -> $out"
+    note "$model" "$log" "run $run: DMGFC with threshold $THRESHOLD from the first proposals of $source -> $out"
     uv run python scripts/rethreshold.py "$source" --threshold "$THRESHOLD" --output "$out" \
       --workers "$WORKERS" --resume 2>&1 | stamp "$model" "$log"
   done
   note "$model" "$log" "done: runs $RUNS of $model"
 }
 
-note all "$LOG" "DMFC with threshold $THRESHOLD, runs $RUNS for: $MODELS (workers=$WORKERS per generator, parallel=$PARALLEL)"
+note all "$LOG" "DMGFC with threshold $THRESHOLD, runs $RUNS for: $MODELS (workers=$WORKERS per generator, parallel=$PARALLEL)"
 # Each generator runs in a background subshell so that any failing step stops it (errexit stays active there).
 failed=0
 pids=()
@@ -88,7 +88,7 @@ if [ "$failed" != 0 ]; then
   exit 1
 fi
 
-note all "$LOG" "comparison with Direct and DMFC at the runs' threshold (scripts/threshold_compare.py)"
+note all "$LOG" "comparison with Direct and DMGFC at the runs' threshold (scripts/threshold_compare.py)"
 uv run python scripts/threshold_compare.py --threshold "$THRESHOLD" --json "results/threshold_${TAG#t}.json" \
   2>&1 >/dev/null | stamp all "$LOG"
 note all "$LOG" "table of every threshold run so far: docs/threshold.md (scripts/threshold_table.py)"

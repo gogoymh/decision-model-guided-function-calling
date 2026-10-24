@@ -35,7 +35,7 @@ for method in jev_function jev_arguments jev_joint_latest; do
   uv run python scripts/rethreshold.py "$SOURCE" --method "$method" --threshold 0.5 \
     --output "results/${method}_t0.5_${MODEL}_run1" --workers "$WORKERS" --resume 2>&1 | stamp
 done
-note "DMFC at 0.5 continued from r=3 to r=10 -> results/table3_${MODEL}_r10_t0.5"
+note "DMGFC at 0.5 continued from r=3 to r=10 -> results/table3_${MODEL}_r10_t0.5"
 uv run python scripts/extend_run.py "$JBFC" --max-repairs 10 --output "results/table3_${MODEL}_r10_t0.5" \
   --workers "$WORKERS" --resume 2>&1 | stamp
 note "done: the runs for Table 2 and Figure 2 at threshold 0.5 are complete (the paper is filled next)"

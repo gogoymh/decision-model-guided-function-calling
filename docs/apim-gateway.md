@@ -27,7 +27,7 @@ APIM을 사용할 경우 `.env.example`의 연결 설정을 복사하고 해당 
 make check-config
 make smoke
 make table2 WORKERS=8   # 일곱 방법, r=2 (Table 1·2의 원본 실행)
-make table3 WORKERS=8   # Figure 2: DMFC를 r=10까지 이어 실행
+make table3 WORKERS=8   # Figure 2: DMGFC를 r=10까지 이어 실행
 make compare WORKERS=8  # gpt-5.4-mini Direct
 make r3 WORKERS=8       # 과거 BFCL 실행을 r=3으로 올리기
 ```

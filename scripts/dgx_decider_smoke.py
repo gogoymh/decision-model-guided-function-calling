@@ -13,8 +13,8 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from dmfc.perplexity import DeciderError, PerplexityDecider, fingerprint  # noqa: E402
-from dmfc import DMFC  # noqa: E402
+from dmgfc.perplexity import DeciderError, PerplexityDecider, fingerprint  # noqa: E402
+from dmgfc import DMGFC  # noqa: E402
 
 WEATHER = {"type": "function", "function": {
     "name": "get_weather", "description": "Get weather for the city named by the user.",
@@ -66,9 +66,9 @@ def run_smoke(verifier: PerplexityDecider, cases: list[dict] | None = None) -> d
 
     scripted = ScriptedGenerator([{ "name": "get_weather", "arguments": {}}],
                                  [{"name": "get_weather", "arguments": {"city": "Seoul"}}])
-    repaired = DMFC(scripted, jev=verifier, tools=[WEATHER], max_repairs=1).call("What is the weather in Seoul?")
+    repaired = DMGFC(scripted, jev=verifier, tools=[WEATHER], max_repairs=1).call("What is the weather in Seoul?")
     no_call_generator = ScriptedGenerator([])
-    no_call = DMFC(no_call_generator, jev=verifier, tools=[WEATHER], max_repairs=0).call(
+    no_call = DMGFC(no_call_generator, jev=verifier, tools=[WEATHER], max_repairs=0).call(
         "Say hello. Do not request weather.")
     trajectories = [{"name": "fictional-repair-loop", "calls": repaired.calls, "accepted": repaired.accepted,
                      "repairs": repaired.repairs, "trace": repaired.trace, "executed": repaired.executed},

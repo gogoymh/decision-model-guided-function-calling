@@ -27,7 +27,7 @@ uv run python scripts/preflight.py "$OUT/preflight.env" 2>&1 | stamp
 source "$OUT/preflight.env"
 note "settings: deployment=$LLM_MODEL effort='${LLM_REASONING_EFFORT}' api-version=$AZURE_OPENAI_API_VERSION workers=$WORKERS"
 
-note "2/3 run: Direct and DMFC on all 3,051 examples, one run, r=2"
+note "2/3 run: Direct and DMGFC on all 3,051 examples, one run, r=2"
 uv run jev-fc run --split all --methods direct,jev_joint --max-repairs 2 --replicates 1 \
   --workers "$WORKERS" --output "$OUT" --resume 2>&1 | stamp
 

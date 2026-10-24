@@ -16,7 +16,12 @@ It preserves other restored Abstract and Introduction wording, measured values,
 experiment method IDs, input fingerprints, and raw traces. `src/jev_fc` and
 historical papers under `paper/versions/` retain their original contents. Dated
 migration and review notes retain the names used at the time they were written.
-The existing `import dmfc` / `dmfc.DMFC` Python API remains compatible.
+The public distribution and import are `dmgfc`, the agent class is
+`dmgfc.DMGFC`, and the evaluation command is `dmgfc-eval`. Public method options
+are `dmgfc`, `dmgfc-f`, `dmgfc-a`, and `dmgfc-latest`. Existing `dmfc.DMFC`,
+`jbfc.JBFC`, and old method/command names remain compatibility aliases. The
+[migration guide](dmgfc-public-api-migration-2026-10-24.md) lists the exact changes.
+This API rename does not rewrite historical result IDs or source hashes.
 
 ## PDF and upload source
 

@@ -1,7 +1,7 @@
-"""Compatibility alias for :mod:`dmfc.tools`; new code should import ``dmfc``."""
+"""Compatibility alias for :mod:`dmgfc.tools`; new code should import ``dmgfc``."""
 
 import sys
 
-from dmfc import tools as _implementation
+from dmgfc import tools as _implementation
 
 sys.modules[__name__] = _implementation

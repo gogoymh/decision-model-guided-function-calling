@@ -3,7 +3,7 @@
 Usage: uv run python scripts/analyze_results.py results/table2_gpt-5-nano_r3
        (or results/table1_gpt-5.4-mini_r3 for the gpt-5.4-mini columns)
 
-It reads summary.json and the Direct and DMFC (jev_joint) records: accuracy and the
+It reads summary.json and the Direct and DMGFC (jev_joint) records: accuracy and the
 paired difference, fixes and regressions against the shared initial proposal, repairs,
 time and cost, then the no-call analysis for Irrelevance and Live irrelevance and the
 reject/fix/break counts for categories with reference calls.
@@ -17,8 +17,8 @@ from pathlib import Path
 
 REFERENCE = {"simple_python", "multiple", "live_simple", "live_multiple"}
 DISPLAY_NAMES = {"direct": "Direct", "schema_only": "Schema repair", "self_refine": "Self-refine",
-                 "jev_function": "DMFC-F", "jev_arguments": "DMFC-A", "jev_joint": "DMFC",
-                 "jev_joint_latest": "DMFC-L"}
+                 "jev_function": "DMGFC-F", "jev_arguments": "DMGFC-A", "jev_joint": "DMGFC",
+                 "jev_joint_latest": "DMGFC-L"}
 
 
 def no_call(calls):
@@ -35,7 +35,7 @@ def main(run: Path) -> None:
                 rows[record["method"]][record["id"]] = record
     direct, joint = rows["direct"], rows["jev_joint"]
     if set(direct) != set(joint) or not joint:
-        raise SystemExit("The run needs Direct and DMFC records for the same examples.")
+        raise SystemExit("The run needs Direct and DMGFC records for the same examples.")
     scored = [i for i, r in joint.items() if r["category"] != "live_relevance"]
     accuracy = {m: sum(rows[m][i]["score"]["correct"] for i in scored) / len(scored) for m in ("direct", "jev_joint")}
     fixes = sum(1 for i in scored if not joint[i]["trace"][0]["score"]["correct"] and joint[i]["score"]["correct"])
@@ -71,7 +71,7 @@ def main(run: Path) -> None:
               f"{len(nones)} initial no-calls; rejected calls {len(rejected)}, withheld after feedback "
               f"{len(withheld)}, accepted calls {len(calls) - len(rejected)}, kept calling "
               f"{len(rejected) - len(withheld)}; no-calls turned into calls after a rejection {len(lost)}; "
-              f"DMFC errors {len(ids) - correct}")
+              f"DMGFC errors {len(ids) - correct}")
     reference = [i for i, r in joint.items() if r["category"] in REFERENCE]
     wrong = [i for i in reference if not joint[i]["trace"][0]["score"]["correct"]]
     print(f"reference-call categories: {len(wrong)} wrong initial proposals, "
@@ -83,7 +83,7 @@ def main(run: Path) -> None:
               f"{100 * value['ci95'][1]:.1f}]")
     history = summary.get("history_ablation")
     if history and history.get("delta") is not None:
-        print(f"DMFC minus DMFC-L: {100 * history['delta']:.2f} [{100 * history['ci95'][0]:.2f}, "
+        print(f"DMGFC minus DMGFC-L: {100 * history['delta']:.2f} [{100 * history['ci95'][0]:.2f}, "
               f"{100 * history['ci95'][1]:.2f}]")
 
 
