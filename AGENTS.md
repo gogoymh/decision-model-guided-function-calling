@@ -3,7 +3,8 @@
 ## DMGFC naming and DGX Spark preparation (user instruction, 2026-10-24)
 
 The repository is now `gogoymh/decision-model-guided-function-calling`. The current
-paper title is **Decision-Model-Guided Function Calling** and its displayed method
+paper title is **Decision-Model-Guided Function Calling with Cumulative Verification
+Feedback** (subtitle retained following the user's PR comment) and its displayed method
 names are **DMGFC**, **DMGFC-F**, **DMGFC-A**, and **DMGFC-L**. This explicitly permits
 title/acronym substitutions in otherwise frozen current manuscript passages,
 figures, generated display labels, and current documentation. Preserve all other

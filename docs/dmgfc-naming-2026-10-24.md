@@ -1,7 +1,8 @@
 # Current manuscript naming
 
-The current paper is **Decision-Model-Guided Function Calling**, abbreviated
-**DMGFC**. Its ablations are **DMGFC-F** (function judgments), **DMGFC-A**
+The current paper title is **Decision-Model-Guided Function Calling with Cumulative
+Verification Feedback**, retaining the subtitle as requested in the user's PR
+comment. The method is abbreviated **DMGFC**. Its ablations are **DMGFC-F** (function judgments), **DMGFC-A**
 (argument judgments), and **DMGFC-L** (latest feedback only).
 
 The repository is now

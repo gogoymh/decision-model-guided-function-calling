@@ -1,4 +1,4 @@
-# Decision-Model-Guided Function Calling
+# Decision-Model-Guided Function Calling with Cumulative Verification Feedback
 
 Read the latest paper in **[main.pdf](main.pdf)**. Its source entry point is
 **[main.tex](main.tex)**; the original Abstract is written directly there and also
@@ -17,10 +17,11 @@ Claude and exploratory API-Bank results remain in the experiment section and
 Claude's BFCL decrease remains in the conclusion. The frozen Abstract and
 Introduction do not include these later results. Do not silently rewrite them.
 
-On **2026-10-24**, the current title was shortened to **Decision-Model-Guided
-Function Calling**, and its displayed method labels became **DMGFC**, **DMGFC-F**,
-**DMGFC-A**, and **DMGFC-L**. This naming-only revision preserves all other
-restored Abstract and Introduction wording, experiment data, and archived papers.
+On **2026-10-24**, the displayed method labels became **DMGFC**, **DMGFC-F**,
+**DMGFC-A**, and **DMGFC-L**. Following the user's PR comment, the full paper title
+remains **Decision-Model-Guided Function Calling with Cumulative Verification
+Feedback**. This naming-only revision preserves all other restored Abstract and
+Introduction wording, experiment data, and archived papers.
 
 The current manuscript keeps `sigconf,anonymous,review`, ACM CCS and WWW 2027
 metadata, and omits author identities and acknowledgements. It is a **four-page

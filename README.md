@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/dmgfc-hero.png" alt="Decision-Model-Guided Function Calling (DMGFC). The LLM proposes a call, the decision model and schema check assess it, and rejected candidates return as cumulative feedback. The library executes an accepted call only at final dispatch." width="100%">
+  <img src="docs/assets/dmgfc-hero.png" alt="Decision-Model-Guided Function Calling with Cumulative Verification Feedback (DMGFC). The LLM proposes a call, the decision model and schema check assess it, and rejected candidates return as cumulative feedback. The library executes an accepted call only at final dispatch." width="100%">
 </p>
 
 <p align="center">
@@ -32,7 +32,7 @@
   <a href="#reproduce-the-paper"><b>Reproduce</b></a>
 </p>
 
-Current paper: **[paper/main.pdf](paper/main.pdf)** · source: **[paper/main.tex](paper/main.tex)** · [Overleaf comment resolutions](docs/overleaf-comment-resolution-2026-10-20.md). The manuscript and displayed method name use **DMGFC** (Decision-Model-Guided Function Calling). The existing `dmfc` Python API remains compatible. Recorded experiment IDs and result directories keep their original names for reproducibility; `import jbfc` remains compatible.
+Current paper: **[paper/main.pdf](paper/main.pdf)** · source: **[paper/main.tex](paper/main.tex)** · [Overleaf comment resolutions](docs/overleaf-comment-resolution-2026-10-20.md). Its full title is **Decision-Model-Guided Function Calling with Cumulative Verification Feedback**. The displayed method name uses **DMGFC** (Decision-Model-Guided Function Calling). The existing `dmfc` Python API remains compatible. Recorded experiment IDs and result directories keep their original names for reproducibility; `import jbfc` remains compatible.
 
 LLMs call the wrong function, invent argument values, and call tools when no tool applies. A JSON schema cannot catch that, because a wrong call can be perfectly well formed. **DMGFC** puts a verifier between the model and your code. [Jev](https://typesafe.ai) answers two yes/no questions about every proposed call: *is this the right function?* and *are these the right arguments?* When a check fails, the same model gets the verdicts back and repairs the call. Only a call that passes runs.
 
@@ -410,7 +410,7 @@ The largest BFCL gain came from GPT-5-nano withdrawing unnecessary calls. GPT-5.
 
 Read **[paper/main.pdf](paper/main.pdf)** for the current manuscript and edit **[paper/main.tex](paper/main.tex)** as its source entry point. The Abstract is inline in `main.tex`; active sections are loaded from `paper/sec/`. `paper/sec/abstract.tex` is a required empty input, and `paper/sigconf*.tex` files are ACM template examples.
 
-On 2026-10-21, the supplied polished Abstract and Introduction were restored exactly, together with the original Task Definition heading, at the author’s request. Added methods and BFCL/exploratory API-Bank results remain. The current anonymous ACM manuscript is a **four-page restored draft**, including references; original red passages, `xxx`, and the unrun multi-verifier claim are preserved in the Introduction. Actual experiments use three generators and one Jev verifier. The prior four-page revision is saved in [paper/versions/2026-10-21-before-polished-text-restore/](paper/versions/2026-10-21-before-polished-text-restore/). On 2026-10-24, the title and displayed acronym were changed to **Decision-Model-Guided Function Calling (DMGFC)**; the `dmfc` API remains compatible. Other restored wording is preserved. See [restoration and upload checklist](docs/overleaf-polished-text-restore-2026-10-21.md) and [paper build notes](paper/README.md). Previous sources and PDFs are saved under [paper/versions/](paper/versions/).
+On 2026-10-21, the supplied polished Abstract and Introduction were restored exactly, together with the original Task Definition heading, at the author’s request. Added methods and BFCL/exploratory API-Bank results remain. The current anonymous ACM manuscript is a **four-page restored draft**, including references; original red passages, `xxx`, and the unrun multi-verifier claim are preserved in the Introduction. Actual experiments use three generators and one Jev verifier. The prior four-page revision is saved in [paper/versions/2026-10-21-before-polished-text-restore/](paper/versions/2026-10-21-before-polished-text-restore/). On 2026-10-24, the displayed acronym became **DMGFC**; following the user's PR comment, the paper title retains **with Cumulative Verification Feedback**. The `dmfc` API remains compatible, and other restored wording is preserved. See [restoration and upload checklist](docs/overleaf-polished-text-restore-2026-10-21.md) and [paper build notes](paper/README.md). Previous sources and PDFs are saved under [paper/versions/](paper/versions/).
 
 The experiment code lives in [`src/jev_fc`](src/jev_fc) and the manuscript in [`paper/main.tex`](paper/main.tex). DMGFC's loop in the library *is* `jev_fc.pipeline.run_example`, and offline tests check that the library sends the same prompts as the experiments. The runs started at threshold 0.8 with the last proposal returned; the paper's numbers come from rerunning the Jev methods at threshold 0.5 from the same first proposals and keeping the first proposal when none passes (`make final`).
 
@@ -455,7 +455,7 @@ docs/          benchmark, gateway, literature and validation notes; README image
 
 ```bibtex
 @misc{yu2026dmgfc,
-  title  = {Decision-Model-Guided Function Calling},
+  title  = {Decision-Model-Guided Function Calling with Cumulative Verification Feedback},
   author = {Yu, Minhyeong and Seo, Wonduk},
   year   = {2026},
   note   = {Manuscript}
