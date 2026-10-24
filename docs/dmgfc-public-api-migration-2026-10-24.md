@@ -18,6 +18,18 @@ dependency declarations that named `dmfc` to use the renamed repository or
 distribution. These instructions install the checkout; they do not imply that a
 new package has been published to PyPI.
 
+If this environment already has the earlier `dmfc` distribution installed,
+remove it before reinstalling the checkout so that two distributions do not own
+the same compatibility modules and console commands:
+
+```bash
+python -m pip uninstall dmfc
+python -m pip install -e .
+```
+
+The renamed distribution includes the old import paths; uninstalling the earlier
+distribution does not require rewriting existing applications.
+
 ## Public names
 
 | Interface | Current name | Compatible earlier name |
