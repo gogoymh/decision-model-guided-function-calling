@@ -153,10 +153,12 @@ must also pass deterministic schema checks. Inputs contain only observable
 messages, tool definitions and proposed calls. Dataset IDs, categories, ground
 truth and offline scores are not added to model state.
 
-Run a five-case fictional protocol smoke on the DGX itself or through the tunnel:
+Run the fictional protocol smoke from the repository on the DGX using its
+prepared Python environment. For a Mac client, use a local Python environment
+with this repository's dependencies and the SSH tunnel described above.
 
 ```bash
-uv run --frozen python scripts/dgx_decider_smoke.py \
+/home/enhans/.local/share/decision-model-guided-function-calling/venv/bin/python scripts/dgx_decider_smoke.py \
   --base-url http://127.0.0.1:18081 \
   --output results/dgx-decider-smoke/receipt-001.json
 ```
@@ -213,7 +215,7 @@ dataset, its existing initial cache, the matching generator manifest and the
 pinned evaluator. Keep their bytes unchanged and avoid copying credentials.
 
 ```bash
-uv run --frozen python scripts/prepare_dgx_decider_experiment.py \
+/home/enhans/.local/share/decision-model-guided-function-calling/venv/bin/python scripts/prepare_dgx_decider_experiment.py \
   --dataset <prepared-dataset.jsonl> \
   --initials <matching-initial.jsonl> \
   --generator-manifest <source-manifest.json> \
@@ -249,7 +251,7 @@ For the transferred DGX inputs, an offline preflight command is:
 
 ```bash
 inputs="$HOME/.local/share/decision-model-guided-function-calling/inputs-20261024"
-uv run --frozen python scripts/run_dgx_decider_experiment.py \
+/home/enhans/.local/share/decision-model-guided-function-calling/venv/bin/python scripts/run_dgx_decider_experiment.py \
   --dataset "$inputs/data/bfcl/examples.jsonl" \
   --dataset-manifest "$inputs/data/bfcl/manifest.json" \
   --initials "$inputs/results/table1_gpt-5-nano_r2/initial.jsonl" \
@@ -299,6 +301,22 @@ recognized, including reported cached-input tokens. Native usage/POST counts,
 control GETs, question branches and forward batches stay separate. Execution
 wall time excludes historical initial generation; its recorded latency is
 reported separately. Local hardware and total dollar cost remain `null`.
+
+## Verified preparation on October 24, 2026
+
+The GB10 service passed actual native inference and remains available at
+`127.0.0.1:18081`. The first two-question Noul request took 19.7168 seconds,
+including initial kernel compilation. The subsequent fictional function,
+argument, repair and no-call smoke completed eight POSTs, 13 question branches
+and eight forward batches in 4.9864 seconds total. Scripted repair and no-call
+paths were accepted, with no paid generator requests or tool execution.
+These are protocol smoke measurements, not benchmark accuracy or representative
+latency measurements.
+
+All 48 checkpoint files were verified. The prepared 3,051-example BFCL inputs
+and both original generator caches passed offline preflight with zero model API
+calls. Existing DGX containers were preserved. The explicit live experiment
+still needs `APIM_SUBSCRIPTION_KEY`; no credentials were copied to the device.
 
 Before a full experiment, fix the generator models/settings, evaluator revision,
 comparison arms, repair limits, repeated runs, concurrency and budget. Use the
