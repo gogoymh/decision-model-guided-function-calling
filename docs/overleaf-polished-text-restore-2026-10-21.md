@@ -1,5 +1,7 @@
 # 최초 ZIP의 확정 문구 복원 및 업로드 파일
 
+> Historical revision record (2026-10-21). Names and archive filenames below describe that revision. The current method and library are **DMGFC** / `dmgfc.DMGFC`, with `dmgfc-eval` as the current command. See the [current naming guide](dmgfc-naming-2026-10-24.md) and [API migration guide](dmgfc-public-api-migration-2026-10-24.md).
+
 사용자의 2026년 10월 21일 요청에 따라 최초 ZIP에 이미 작성되어 있던 논문 문구를 복원했습니다. 앞선 추가 피드백 반영과 4쪽 압축 과정에서 초록과 서론을 다시 쓰고 방법 절 제목을 바꿨던 변경을 되돌린 것입니다. 이 요청이 이전 문장 수정 허용보다 우선합니다.
 
 | 파일 | 복원한 부분 | 검증 |

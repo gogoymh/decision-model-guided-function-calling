@@ -1,5 +1,7 @@
 # DMFC 공개 이름과 익명 심사본 변경
 
+> Historical revision record (2026-10-20). Names and archive filenames below describe that revision. The current method and library are **DMGFC** / `dmgfc.DMGFC`, with `dmgfc-eval` as the current command. See the [current naming guide](dmgfc-naming-2026-10-24.md) and [API migration guide](dmgfc-public-api-migration-2026-10-24.md).
+
 2026년 10월 20일 추가 요청에 따라 논문과 공개 라이브러리의 이름을 **Decision-Model-Guided Function Calling (DMFC)**로 통일했습니다. 이 변경은 새로운 검증 모델 비교 실험을 뜻하지 않습니다. 실제 검증 모델은 Jev 1.13.0 하나이며, 생성 모델 비교와 구분합니다.
 
 | 이전 공개 이름·형식 | 현재 이름·형식 | 확인한 동작 |

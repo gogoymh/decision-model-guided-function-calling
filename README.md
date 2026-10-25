@@ -469,7 +469,7 @@ docs/          benchmark, gateway, literature and validation notes; README image
 ```bibtex
 @misc{yu2026dmgfc,
   title  = {Decision-Model-Guided Function Calling with Cumulative Verification Feedback},
-  author = {Yu, Minhyeong and Seo, Wonduk},
+  author = {Yu, Minhyeong and Seo, Wonduk and Lee, Seunghyun},
   year   = {2026},
   note   = {Manuscript}
 }

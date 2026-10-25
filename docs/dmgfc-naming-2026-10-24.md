@@ -23,6 +23,28 @@ are `dmgfc`, `dmgfc-f`, `dmgfc-a`, and `dmgfc-latest`. Existing `dmfc.DMFC`,
 [migration guide](dmgfc-public-api-migration-2026-10-24.md) lists the exact changes.
 This API rename does not rewrite historical result IDs or source hashes.
 
+## Naming audit (October 25, 2026)
+
+Current README examples, package metadata, command help, manuscript labels and
+README artwork use **DMGFC**. The paper build README now also points to
+`dmgfc.DMGFC` and `dmgfc-eval`; its earlier wording incorrectly presented
+`dmfc.DMFC` as the current API. Current-paper verification examples use DMGFC.
+The repository's citation lists Minhyeong Yu, Wonduk Seo and Seunghyun Lee.
+
+Remaining old names belong to the following preserved interfaces or records:
+
+| Location | Why the old name remains |
+|---|---|
+| `dmfc.DMFC`, `dmfc-eval`, older method options and tool metadata | Backward compatibility for existing applications |
+| `paired_dmfc_minus_direct` and prepared experiment metadata | Recorded result schemas and input fingerprints |
+| Research scripts recorded in experiment manifests | Even a comment change would alter the source hashes used to verify completed experiments |
+| Dated revision notes, archived manuscripts and PDFs | Historical names at the time of that revision; earlier linked notes are explicitly marked historical |
+| Archived-paper and compatibility tests | Verification that earlier papers and import paths remain supported |
+
+Use the current names for new code and documentation. Do not mass-replace
+historical identifiers or alter completed experiment sources to remove a search
+match.
+
 ## PDF and upload source
 
 Build the current multi-file manuscript with `make paper`. Check its short-paper

@@ -16,9 +16,9 @@ def short_pages():
     return [
         "ABSTRACT\n1 Introduction\nCited work [1, 2].\n"
         "Figure 1: Comparison of evaluated mechanisms (schematic; not measured results).",
-        "2 Methodology\nAlgorithm 1 DMFC: verification and prompt repair\n"
+        "2 Methodology\nAlgorithm 1 DMGFC: verification and prompt repair\n"
         "3 Experiment Setting & Results\nTable 1: Main experiment.\nTable 2: Ablation study.",
-        "Figure 2: DMFC accuracy and API time by repair limit; r=3 matches Table 2.\n"
+        "Figure 2: DMGFC accuracy and API time by repair limit; r=3 matches Table 2.\n"
         "4 Conclusion\nReferences\n[1] A paper.",
     ]
 
@@ -36,9 +36,9 @@ def test_short_budget_includes_references(short_pages, capsys):
     ("4 Conclusion", "", "Missing requested section heading: Conclusion"),
     ("Table 2: Ablation study.", "", "exactly Tables 1 and 2"),
     ("Table 2: Ablation study.", "Table 2: Ablation study.\nTable 3: Old rules table.", "exactly Tables 1 and 2"),
-    ("Figure 2: DMFC accuracy and API time by repair limit; r=3 matches Table 2.", "",
+    ("Figure 2: DMGFC accuracy and API time by repair limit; r=3 matches Table 2.", "",
      "Missing accuracy/API-time plot"),
-    ("Algorithm 1 DMFC", "Algorithm unavailable DMFC", "Missing Algorithm 1"),
+    ("Algorithm 1 DMGFC", "Algorithm unavailable DMGFC", "Missing Algorithm 1"),
     ("Cited work [1, 2].", "Cited work [?].", "Unresolved citations"),
     ("Cited work [1, 2].", "See Table ?? and cited work [1].", "Unresolved citations"),
     ("Cited work [1, 2].", "No numbered citation.", "No resolved numeric citations"),

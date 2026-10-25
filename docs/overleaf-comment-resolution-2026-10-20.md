@@ -1,5 +1,7 @@
 # Overleaf 추가 코멘트 반영표
 
+> Historical revision record (2026-10-20). Names and archive filenames below describe that revision. The current method and library are **DMGFC** / `dmgfc.DMGFC`, with `dmgfc-eval` as the current command. See the [current naming guide](dmgfc-naming-2026-10-24.md) and [API migration guide](dmgfc-public-api-migration-2026-10-24.md).
+
 > **2026-10-21 후속 원문 복원:** 아래는 10월 20일 수정본의 이력입니다. 현재 초록·서론은 최초 ZIP 원문으로 돌아갔으며 총 4쪽입니다. 현재 업로드 파일은 [원문 복원 체크리스트](overleaf-polished-text-restore-2026-10-21.md)를 확인하세요.
 
 확인 기준: 2026년 10월 20일. 아래 내용은 사용자가 전달한 네 장의 Overleaf 화면에서 **실제로 보이는 코멘트**와 현재 원고·사전 선언 실험 계획을 대응한 기록입니다. 작성자는 모두 **Wonduk Seo**입니다. 화면의 코멘트 작성일은 10월 19일이며, 화면을 저장한 시각은 10월 20일 오후입니다.

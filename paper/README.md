@@ -39,8 +39,9 @@ files. See [current naming and build notes](../docs/dmgfc-naming-2026-10-24.md);
 records the original text restoration.
 API-Bank remains an exploratory 156-case first-call exact-match adaptation,
 rather than the official execution benchmark. The public display name is DMGFC;
-the compatible Python API remains
-`import dmfc`, `dmfc.DMFC`, with historical experiment IDs preserved.
+the current Python API is `import dmgfc` and `dmgfc.DMGFC`, and the current
+evaluation command is `dmgfc-eval`. `dmfc.DMFC` and `jbfc.JBFC` remain backward
+compatibility aliases. Historical experiment IDs are preserved.
 
 Previous source/PDF copies are preserved under [`versions/`](versions/), including
 the original JBFC paper, the ACM import, and the revision before the Overleaf comments.

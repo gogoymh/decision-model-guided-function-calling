@@ -1,5 +1,7 @@
 # Overleaf 업로드 파일과 검증 결과
 
+> Historical revision record (2026-10-20). Names and archive filenames below describe that revision. The current method and library are **DMGFC** / `dmgfc.DMGFC`, with `dmgfc-eval` as the current command. See the [current naming guide](dmgfc-naming-2026-10-24.md) and [API migration guide](dmgfc-public-api-migration-2026-10-24.md).
+
 > **2026-10-21 후속 원문 복원:** 아래는 10월 20일 수정본의 이력입니다. 현재 초록·서론은 최초 ZIP 원문으로 돌아갔으며 총 4쪽입니다. 현재 업로드 파일은 [원문 복원 체크리스트](overleaf-polished-text-restore-2026-10-21.md)를 확인하세요.
 
 2026년 10월 20일에 현재 저장소 원고를 직접 검사했습니다. 업로드용 ZIP은 **`DMFC-Overleaf-anonymous-review-2026-10-20.zip`**이며, 아래 필수 소스 10개만 포함합니다. ZIP 최상위에 `main.tex`가 있고, 절 파일은 `sec/` 안에 있습니다. PDF, 이전 버전, ACM 예제, 컴파일 부산물은 넣지 않았습니다.
