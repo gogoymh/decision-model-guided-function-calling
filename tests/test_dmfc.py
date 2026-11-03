@@ -138,11 +138,11 @@ def test_new_and_old_tool_decorators_preserve_metadata_in_both_directions():
 def test_metadata_builds_both_imports_and_keeps_the_old_cli_alias():
     root = Path(__file__).resolve().parents[1]
     metadata = tomllib.loads((root / "pyproject.toml").read_text())
-    assert metadata["project"]["name"] == "dmgfc"
+    assert metadata["project"]["name"] == "dmcall"
     assert metadata["project"]["scripts"]["dmfc-eval"] == metadata["project"]["scripts"]["jev-fc"]
     assert set(metadata["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]) == {
-        "src/dmgfc", "src/dmfc", "src/jbfc", "src/jev_fc",
+        "src/dmcall", "src/dmgfc", "src/dmfc", "src/jbfc", "src/jev_fc",
     }
     locked = tomllib.loads((root / "uv.lock").read_text())
     editable = [package for package in locked["package"] if package.get("source") == {"editable": "."}]
-    assert len(editable) == 1 and editable[0]["name"] == "dmgfc"
+    assert len(editable) == 1 and editable[0]["name"] == "dmcall"

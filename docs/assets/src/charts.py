@@ -43,10 +43,10 @@ def text(x, y, s, color, size=12.5, weight=400, anchor="start"):
 
 
 def categories(t, rows):
-    """Per category, an arrow from Direct (ring) to DMGFC (dot) for each generator (colour)."""
+    """Per category, an arrow from Direct (ring) to DM-Call (dot) for each generator (colour)."""
     width, left, x0, x1 = W - 56, 0, 168, 500
     models = (("gpt-5-nano", t["blue"]), ("gpt-5.4-mini", t["orange"]))
-    cols = (590, 660, 750, 820)  # right edges: nano Direct, nano DMGFC, mini Direct, mini DMGFC
+    cols = (590, 660, 750, 820)  # right edges: nano Direct, nano DM-Call, mini Direct, mini DM-Call
     row_h, top = 36, 44
     height = top + row_h * len(rows) + 30
 
@@ -61,7 +61,7 @@ def categories(t, rows):
         center = (pair[0] + pair[1]) / 2 - 18
         out.append(f'<circle cx="{center - len(name) * 3.4 - 9}" cy="{top - 32}" r="4" fill="{color}"/>')
         out.append(text(center, top - 32, name, t["ink2"], 11.5, 600, "middle"))
-        for x, label in zip(pair, ("Direct", "DMGFC")):
+        for x, label in zip(pair, ("Direct", "DM-Call")):
             out.append(text(x, top - 14, label, t["muted"], 11, 500, "end"))
     for i, (label, *values) in enumerate(rows):
         y = top + row_h * i + row_h / 2
@@ -73,7 +73,7 @@ def categories(t, rows):
             direct, dmfc = values[2 * k], values[2 * k + 1]
             dy = -5 if k == 0 else 5  # the two generators sit just above and below the row line
             a, b = sx(direct), sx(dmfc)
-            if abs(b - a) > 9:  # arrow from Direct to DMGFC, stopping short of the dot
+            if abs(b - a) > 9:  # arrow from Direct to DM-Call, stopping short of the dot
                 tip = b - 7 if b > a else b + 7
                 wing = -5 if b > a else 5
                 out.append(f'<line x1="{a}" y1="{y + dy}" x2="{tip}" y2="{y + dy}" stroke="{color}" stroke-width="1.6" stroke-opacity="0.55"/>')
@@ -106,7 +106,7 @@ def methods(t, rows):
         out.append(text(x, top - 14, name, t["muted"], 11, 500, "end"))
     for i, (label, note, accuracy, seconds, usd) in enumerate(rows):
         y = top + row_h * i + row_h / 2
-        star = label == "DMGFC"
+        star = label == "DM-Call"
         out.append(text(0, y, label, t["ink"] if star else t["ink2"], 13.5, 650 if star else 450))
         if note:
             out.append(text(66, y, note, t["muted"], 11.5))
@@ -168,12 +168,12 @@ def main(data_path, out_dir, html_only=False):
     jobs = []
     for mode, t in THEMES.items():
         jobs.append((f"chart-categories-{mode}.png", page(t, "Accuracy by BFCL category",
-                     "BFCL GPT runs · 3,035 scored / 3,051 prepared · mean of three runs · arrow: Direct (ring) to DMGFC with at most 3 repairs (dot) · bold: highest in the row",
+                     "BFCL GPT runs · 3,035 scored / 3,051 prepared · mean of three runs · arrow: Direct (ring) to DM-Call with at most 3 repairs (dot) · bold: highest in the row",
                      [("gpt-5-nano", t["blue"]), ("gpt-5.4-mini", t["orange"])], categories(t, data["categories"]))))
         jobs.append((f"chart-methods-{mode}.png", page(t, "Call accuracy by method",
                      "gpt-5-nano · first run · same first proposal for every method · at most 3 repairs · time and cost per request at right",
                      [], methods(t, data["methods"]))))
-        jobs.append((f"chart-limits-{mode}.png", page(t, "DMGFC by repair limit r",
+        jobs.append((f"chart-limits-{mode}.png", page(t, "DM-Call by repair limit r",
                      "Call accuracy and cost · one run continued from r=3 to r=10 and cut at each limit, so every limit shares its first attempts",
                      [], limits(t, data["limits"]))))
     out_dir.mkdir(parents=True, exist_ok=True)
