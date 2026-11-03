@@ -43,7 +43,7 @@ wheels = [
 ]
 
 [[package]]
-name = "dmgfc"
+name = "dmcall"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

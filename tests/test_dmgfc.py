@@ -200,10 +200,11 @@ def test_module_entry_point_help_uses_canonical_command_name(monkeypatch, capsys
 def test_new_distribution_packages_canonical_api_and_keeps_original_entry_points():
     root = Path(__file__).resolve().parents[1]
     metadata = tomllib.loads((root / "pyproject.toml").read_text())
-    assert metadata["project"]["name"] == "dmgfc"
+    assert metadata["project"]["name"] == "dmcall"
     assert metadata["project"]["scripts"] == {
-        "dmgfc-eval": "dmgfc.cli:main", "dmfc-eval": "jev_fc.cli:main", "jev-fc": "jev_fc.cli:main",
+        "dmcall-eval": "dmcall.cli:main", "dmgfc-eval": "dmgfc.cli:main",
+        "dmfc-eval": "jev_fc.cli:main", "jev-fc": "jev_fc.cli:main",
     }
     assert set(metadata["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]) == {
-        "src/dmgfc", "src/dmfc", "src/jbfc", "src/jev_fc",
+        "src/dmcall", "src/dmgfc", "src/dmfc", "src/jbfc", "src/jev_fc",
     }
