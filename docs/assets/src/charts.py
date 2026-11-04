@@ -3,7 +3,7 @@
 Usage: python docs/assets/src/charts.py docs/assets/src/data.json docs/assets
 Use --html-only to export browser previews without launching Chromium.
 The PNG renderer needs Playwright with Chromium and the Inter font. The numbers in data.json must equal
-the current paper's runs: BFCL categories of the Table 1 GPT runs, Table 3 (archived replay) and
+the current paper's runs: BFCL categories of the Table 1 GPT runs, Table 2 (archived replay) and
 Figure 2; colors are a validated categorical palette.
 """
 import json

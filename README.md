@@ -341,13 +341,13 @@ Most of `gpt-5-nano`'s gain came from requests where no tool applies (Irrelevanc
   <img alt="Call accuracy by method with gpt-5-nano on BFCL, archived runs replayed, mean of three runs, at most three repairs: DM-Call 74.3, DM-Call-A 73.6, DM-Call-F 73.1, DM-Call-L 73.0, Self-refine 69.9, Schema repair 66.2, Direct 64.1, with retained API seconds and USD per 1,000 cases." src="docs/assets/chart-methods-light.png" width="100%">
 </picture>
 
-The paper's Table 3 replays archived `gpt-5-nano` BFCL trajectories (three runs, Jev, at most three repairs) under the current rules; every method starts from the same first answers. Time and cost sum the retained requests, so they are references rather than fresh measurements, and Self-refine's retained cost is unknown.
+The paper's Table 2 replays archived `gpt-5-nano` BFCL trajectories (three runs, Jev, at most three repairs) under the current rules; every method starts from the same first answers. Time and cost sum the retained requests, so they are references rather than fresh measurements, and Self-refine's retained cost is unknown.
 
 - Schema repair and Self-refine gained 2.1 and 5.8 points over Direct; the decision-model variants gained 8.9 to 10.2.
 - Both checks together gave the highest call accuracy, and argument-only feedback (DM-Call-A) the highest argument accuracy given the right function.
 - Keeping the whole history scored 1.27 points above showing only the latest rejection (95% CI 0.87 to 1.69).
 - Self-refine spends four proposals on every request: 5.71 retained API seconds per case, against 2.11 to 2.50 for the decision-model variants.
-- In the paper's Table 2, Hybrid feedback was clearly better than probabilities alone only for `gpt-5-nano` on BFCL (+0.6 points) and never clearly worse, so it is the default.
+- In the paper's Table 3, Hybrid feedback was clearly better than probabilities alone only for `gpt-5-nano` on BFCL (+0.6 points) and never clearly worse, so it is the default.
 
 <a id="more-repairs"></a>
 ### Repair limit
@@ -374,7 +374,7 @@ BFCL categories, Direct → DM-Call with Jev, mean of three runs (%):
 | Live irrelevance | 884 | 47.5 → 66.6 | 80.6 → 82.3 | 86.4 → 87.1 | 85.6 → 86.2 |
 | Total (excl. 16 live relevance) | 3,035 | 64.1 → 74.6 | 81.6 → 82.5 | 88.2 → 88.6 | 86.7 → 86.9 |
 
-Ablations, `gpt-5-nano` on BFCL, archived runs replayed, mean ± s.d. of three runs (the paper's Table 3; time and cost are retained references):
+Ablations, `gpt-5-nano` on BFCL, archived runs replayed, mean ± s.d. of three runs (the paper's Table 2; time and cost are retained references):
 
 | Method | Call (%) | Function (%) | Arguments, given the right function (%) | API s | USD / 1k cases |
 |---|---:|---:|---:|---:|---:|
@@ -386,7 +386,7 @@ Ablations, `gpt-5-nano` on BFCL, archived runs replayed, mean ± s.d. of three r
 | DM-Call-L (latest feedback only) | 73.05 ± 0.24 | 83.61 ± 0.22 | 82.05 ± 0.16 | 2.50 | 0.167 |
 | DM-Call | 74.32 ± 0.22 | 84.80 ± 0.26 | 82.18 ± 0.13 | 2.45 | 0.171 |
 
-Feedback representation at three repairs, mean ± s.d. of three runs (the paper's Table 2; `gemma-4-31b-it` reuses Table 1's first answers, the others archived ones):
+Feedback representation at three repairs, mean ± s.d. of three runs (the paper's Table 3; `gemma-4-31b-it` reuses Table 1's first answers, the others archived ones):
 
 | Benchmark | Generator | Numeric (%) | Text (%) | Hybrid (%) |
 |---|---|---:|---:|---:|
