@@ -26,4 +26,5 @@ method name (`"dmcall"`), which selects the same loop as `"dmgfc"`.
   The README's method figure is now Figure 1 of the paper (`docs/assets/dm-call-figure1.png`),
   whose third panel title reads "DM-Call (Ours)".
 - The legacy manuscript pipeline under `paper/` and `scripts/` keeps its DMGFC labels. The
-  current manuscript is maintained separately and uses DM-Call.
+  current manuscript is maintained separately and uses DM-Call; `paper/main.pdf` is an
+  anonymous review copy of it (2026-11-04).

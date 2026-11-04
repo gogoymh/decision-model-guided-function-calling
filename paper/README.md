@@ -1,6 +1,11 @@
 # Decision-Model-Guided Function Calling with Cumulative Verification Feedback
 
-Read the latest paper in **[main.pdf](main.pdf)**. Its source entry point is
+**[main.pdf](main.pdf)** is an anonymous review copy of the current DM-Call manuscript,
+updated on 2026-11-04 (four pages). Its LaTeX source is kept outside this repository, so the
+files in this folder do not rebuild it. The `.tex` files here are the earlier manuscript, which
+uses the DMGFC labels; its PDF is in the git history up to commit 082ec02.
+
+In the earlier manuscript, the source entry point is
 **[main.tex](main.tex)**; the original Abstract is written directly there and also
 loads the supplied empty `sec/abstract.tex`. Other sections are loaded from `sec/`.
 The `sigconf*.tex` files are ACM template examples.
