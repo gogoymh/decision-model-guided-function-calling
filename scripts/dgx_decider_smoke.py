@@ -68,7 +68,10 @@ def run_smoke(verifier: PerplexityDecider, cases: list[dict] | None = None) -> d
                                  [{"name": "get_weather", "arguments": {"city": "Seoul"}}])
     repaired = DMGFC(scripted, jev=verifier, tools=[WEATHER], max_repairs=1).call("What is the weather in Seoul?")
     no_call_generator = ScriptedGenerator([])
-    no_call = DMGFC(no_call_generator, jev=verifier, tools=[WEATHER], max_repairs=0).call(
+    # This v1 adapter smoke explicitly tests the native no-call judgment, rather
+    # than the public API's default initial-no-call preservation policy.
+    no_call = DMGFC(no_call_generator, jev=verifier, tools=[WEATHER], max_repairs=0,
+                   preserve_initial_no_call=False).call(
         "Say hello. Do not request weather.")
     trajectories = [{"name": "fictional-repair-loop", "calls": repaired.calls, "accepted": repaired.accepted,
                      "repairs": repaired.repairs, "trace": repaired.trace, "executed": repaired.executed},
