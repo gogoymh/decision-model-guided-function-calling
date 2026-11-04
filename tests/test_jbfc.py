@@ -393,14 +393,15 @@ def test_without_a_passing_proposal_the_first_one_is_final():
         return city
 
     # A no-call is rejected, then a wrong city: nothing passes within one repair.
-    agent = jbfc.JBFC(ScriptedModel([], busan()), jev=ScriptedJev(), tools=[get_weather], max_repairs=1)
+    agent = jbfc.JBFC(ScriptedModel([], busan()), jev=ScriptedJev(), tools=[get_weather], max_repairs=1,
+                      preserve_initial_no_call=False)
     result = agent.run("Weather in Seoul?", execute_unverified=True)
     assert result.exhausted and result.accepted is False and result.repairs == 1
     assert result.no_call and result.final_attempt == 0 and not result.executed and ran == []
     assert result.text == "No tool fits." and result.probabilities == {"function": 0.05, "arguments": None}
     assert [step["calls"] for step in result.attempts] == [[], busan()]
     last = jbfc.JBFC(ScriptedModel([], busan()), jev=ScriptedJev(), tools=[get_weather], max_repairs=1,
-                     on_exhaustion="last")
+                     on_exhaustion="last", preserve_initial_no_call=False)
     result = last.run("Weather in Seoul?", execute_unverified=True)
     assert result.calls == busan() and result.final_attempt == 1 and result.executed and ran == ["Busan"]
     # Per call, and only for a run that ends without a passing proposal.
@@ -430,8 +431,8 @@ def test_unreadable_proposal_is_repaired_and_never_run():
 def test_no_call_decision():
     jev = ScriptedJev(no_call=0.97)
     result = jbfc.JBFC(ScriptedModel([]), jev=jev, tools=[WEATHER]).run("Tell me a joke.")
-    assert result.no_call and result.accepted and not result.executed and result.text == "No tool fits."
-    assert "arguments_correct" not in jev.requests[0]["questions"]
+    assert result.no_call and result.accepted is None and not result.executed and result.text == "No tool fits."
+    assert result.initial_no_call_preserved and jev.requests == []
 
 
 def test_methods(monkeypatch):

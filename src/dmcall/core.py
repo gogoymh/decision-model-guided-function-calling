@@ -10,6 +10,8 @@ from __future__ import annotations
 from dmgfc import core as _shared
 from dmgfc.core import DMFC, DMGFC, JBFC, Result, Verdict, verify  # noqa: F401
 
+from .feedback import HybridFeedbackGenerator
+
 __all__ = ["DMCall", "DMGFC", "DMFC", "JBFC", "METHODS", "Result", "Verdict", "verify", "public_method"]
 
 # Public DM-Call method names and the earlier names they share a loop with.
@@ -31,12 +33,25 @@ def public_method(name) -> str:
     return _ALIASES.get(key, name)
 
 
+FEEDBACK = ("hybrid", "numeric")
+# Methods whose repair feedback carries decision-model probabilities.
+_DECISION_METHODS = {"jev_joint", "jev_joint_latest", "jev_function", "jev_arguments"}
+
+
 class DMCall(DMGFC):
     """Decision-model-guided function calling (DM-Call).
 
-    Same constructor and behavior as :class:`dmgfc.DMGFC`; the default method is ``"dmcall"``
-    (both checks, cumulative feedback).
+    Same constructor as :class:`dmgfc.DMGFC`, with the paper's settings as defaults: the
+    method is ``"dmcall"`` (both checks, cumulative feedback), a readable initial no-call is
+    returned without a check (``preserve_initial_no_call=True``), and repair feedback is
+    ``"hybrid"``: each decision-model probability keeps its value and gains a verbal label.
+    ``feedback="numeric"`` sends the probabilities alone, as :class:`dmgfc.DMGFC` does.
     """
 
-    def __init__(self, model, *, method: str = "dmcall", **options):
+    def __init__(self, model, *, method: str = "dmcall", feedback: str = "hybrid", **options):
+        if feedback not in FEEDBACK:
+            raise ValueError(f"feedback must be one of {', '.join(FEEDBACK)}.")
         super().__init__(model, method=public_method(method), **options)
+        self.feedback = feedback
+        if feedback == "hybrid" and self.method in _DECISION_METHODS:
+            self.model = HybridFeedbackGenerator(self.model)

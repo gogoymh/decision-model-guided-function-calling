@@ -1,6 +1,8 @@
-"""DMGFC: a model proposes one function call (or none), Jev checks it before it runs,
-and the same model repairs it with the accumulated feedback until it passes or the
-repair limit is reached. The loop is the paper's own implementation, ``jev_fc``."""
+"""DMGFC preserves an initial no-call and verifies proposed function calls.
+
+Nonempty initial candidates use the byte-preserved ``jev_fc`` repair engine with
+accumulated feedback. An explicit opt-out retains its historical no-call checks.
+"""
 
 from __future__ import annotations
 
@@ -10,8 +12,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from jev_fc.pipeline import run_example
-
+from .initial_no_call import run_example
 from .jev import Jev, validate_calls
 from .providers import provider as make_provider
 from .tools import _plain, invoke, normalize_calls, toolset
@@ -157,7 +158,9 @@ class Result:
     ``calls`` is the final proposal as ``[{"name", "arguments"}]``: ``[]`` is a decision to
     make no call, and ``None`` an unreadable proposal (cut off, filtered or refused).
     ``accepted`` says whether it passed the checks (``None`` for methods without a
-    verifier). When no proposal passed within the repair limit (``exhausted``), the final
+    verifier or an initial no-call preserved without a judgment). The explicit
+    ``initial_no_call_preserved`` flag identifies that policy. When no proposal
+    passed within the repair limit (``exhausted``), the final
     proposal is the first one by default (``on_exhaustion="first"``, as in the paper) or the
     last one; ``final_attempt`` is its index in ``trace``, which keeps every proposal, verdict
     and feedback in order.
@@ -174,6 +177,7 @@ class Result:
     latency_s: float = 0.0
     trace: list[dict] = field(default_factory=list, repr=False)
     final_attempt: int | None = None
+    initial_no_call_preserved: bool = False
 
     @property
     def call(self) -> dict | None:
@@ -200,7 +204,8 @@ class Result:
             check = step.get("verification") or {}
             rounds.append({
                 "calls": deepcopy(step["proposal"].get("calls")),
-                "accepted": step.get("gate_pass") if verified else None,
+                "accepted": (step.get("gate_pass") if verified
+                             and check.get("kind") != "initial_no_call_preserved" else None),
                 "function_probability": check.get("function_probability"),
                 "arguments_probability": check.get("arguments_probability"),
                 "schema_errors": deepcopy((step.get("schema") or {}).get("errors", [])),
@@ -296,16 +301,23 @@ class DMGFC:
     ``threshold`` is Jev's pass mark for both checks (0.5, as in the paper). When no proposal
     passes within the limit, ``on_exhaustion`` picks the final one: ``"first"`` (the paper's
     rule: a repair replaces the model's first answer only once it passes) or ``"last"``.
+    By default, a readable initial ``calls=[]`` is returned without any verifier
+    request or repair. ``preserve_initial_no_call=False`` restores the historical
+    check-and-repair behavior. This rule does not apply to later repaired no-calls
+    or unreadable proposals, and explicit ``verify()`` always performs its checks.
     """
 
     def __init__(self, model, *, tools=None, functions: dict[str, Callable] | None = None,
                  jev: Jev | None = None, method: str = "dmgfc", max_repairs: int = 3,
                  threshold: float | None = None, on_exhaustion: str = "first", execute_unverified: bool = False,
-                 jev_api_key: str | None = None, **model_options):
+                 jev_api_key: str | None = None, preserve_initial_no_call: bool = True, **model_options):
         self.method = _method(method)
         self.max_repairs = _repairs(max_repairs)
         self.on_exhaustion = _on_exhaustion(on_exhaustion)
         self.execute_unverified = bool(execute_unverified)
+        if not isinstance(preserve_initial_no_call, bool):
+            raise ValueError("preserve_initial_no_call must be a boolean.")
+        self.preserve_initial_no_call = preserve_initial_no_call
         self.tools = list(tools) if isinstance(tools, (list, tuple)) else ([] if tools is None else [tools])
         self.functions = dict(functions or {})
         toolset(self.tools, self.functions)  # fail fast on a bad tool
@@ -390,7 +402,8 @@ class DMGFC:
         # The loop runs a passing call (or, without a verifier, its final call); nothing else runs inside it.
         record = run_example(example, self.model, self.jev, method=self.method,
                              max_repairs=self.max_repairs if max_repairs is None else _repairs(max_repairs),
-                             exhaustion_policy="abstain", executor=executor if execute else None)
+                             exhaustion_policy="abstain", executor=executor if execute else None,
+                             preserve_initial_no_call=self.preserve_initial_no_call)
         trace, final, calls = record["trace"], len(record["trace"]) - 1, record["calls"]
         if record["exhausted"]:  # no proposal passed within the limit
             if rule == "first":
@@ -400,7 +413,8 @@ class DMGFC:
         return Result(calls=deepcopy(calls), accepted=record["accepted"], exhausted=record["exhausted"],
                       repairs=record["repairs"], method=_PUBLIC[self.method],
                       text=trace[final]["proposal"].get("content"), executed=bool(executed), outputs=outputs,
-                      latency_s=record["wall_time_s"], trace=trace, final_attempt=final)
+                      latency_s=record["wall_time_s"], trace=trace, final_attempt=final,
+                      initial_no_call_preserved=record.get("initial_no_call_preserved", False))
 
     def close(self) -> None:
         """Close the HTTP clients this object created."""
@@ -415,7 +429,8 @@ class DMGFC:
 
     def __repr__(self) -> str:
         return (f"DMGFC(model={self.model!r}, method={_PUBLIC[self.method]!r}, max_repairs={self.max_repairs}, "
-                f"on_exhaustion={self.on_exhaustion!r}, jev={self.jev!r})")
+                f"on_exhaustion={self.on_exhaustion!r}, preserve_initial_no_call={self.preserve_initial_no_call!r}, "
+                f"jev={self.jev!r})")
 
 
 # Legacy imports share this class and the same implementation.
