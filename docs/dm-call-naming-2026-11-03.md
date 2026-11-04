@@ -22,8 +22,9 @@ method name (`"dmcall"`), which selects the same loop as `"dmgfc"`.
 
 - Recorded experiment IDs, result directories, manifests and historical reports keep their
   original names for reproducibility.
-- The README images (`docs/assets/*.png`) were rendered before the rename and still show
-  DMGFC. Their sources in `docs/assets/src/` now say DM-Call; re-render them with Playwright
-  and the Inter font to update the PNGs.
+- The README images (`docs/assets/*.png`) were re-rendered on 2026-11-04 and now say DM-Call.
+  The README's method figure is now Figure 1 of the paper (`docs/assets/dm-call-figure1.png`),
+  whose third panel title reads "DM-Call (Ours)".
 - The legacy manuscript pipeline under `paper/` and `scripts/` keeps its DMGFC labels. The
-  current manuscript is maintained separately and uses DM-Call.
+  current manuscript is maintained separately and uses DM-Call; `paper/main.pdf` is an
+  anonymous review copy of it (2026-11-04).
