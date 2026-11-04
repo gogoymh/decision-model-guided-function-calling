@@ -3,7 +3,8 @@
 Usage: python docs/assets/src/charts.py docs/assets/src/data.json docs/assets
 Use --html-only to export browser previews without launching Chromium.
 The PNG renderer needs Playwright with Chromium and the Inter font. The numbers in data.json must equal
-the filled paper results (Tables 1-2 and Figure 2); colors are a validated categorical palette.
+the current paper's runs: BFCL categories of the Table 1 GPT runs, Table 3 (archived replay) and
+Figure 2; colors are a validated categorical palette.
 """
 import json
 import sys
@@ -116,7 +117,7 @@ def methods(t, rows):
                    f'V{y + bar / 2 - r} Q{end},{y + bar / 2} {end - r},{y + bar / 2} H{x0} Z" fill="{color}"/>')
         out.append(text(end + 8, y, f"{accuracy:.1f}%", t["ink"] if star else t["ink2"], 13, 650 if star else 450))
         out.append(text(cols["API s"], y, f"{seconds:.2f}", t["ink2"], 12.5, 450, "end"))
-        out.append(text(cols["USD / 1k"], y, f"${usd:.3f}", t["ink2"], 12.5, 450, "end"))
+        out.append(text(cols["USD / 1k"], y, "–" if usd is None else f"${usd:.3f}", t["ink2"], 12.5, 450, "end"))  # no retained cost
     out.append("</svg>")
     return "".join(out)
 
@@ -128,7 +129,7 @@ def limits(t, rows):
     height = top + plot_h + 40
     out = [f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}">']
     specs = [("Call accuracy (%)", 1, (70, 80, (70, 75, 80)), t["blue"], lambda v: f"{v:.1f}"),
-             ("Cost, USD per 1,000 requests", 2, (0, 0.5, (0, 0.1, 0.2, 0.3, 0.4, 0.5)), t["orange"], lambda v: f"${v:.3f}")]
+             ("Cost, USD per 1,000 cases", 2, (0, 0.5, (0, 0.1, 0.2, 0.3, 0.4, 0.5)), t["orange"], lambda v: f"${v:.3f}")]
     for k, (label, index, (lo, hi, ticks), color, fmt) in enumerate(specs):
         ox = k * (panel + gap)
         px0, px1 = ox + 40, ox + panel - 18
@@ -168,13 +169,13 @@ def main(data_path, out_dir, html_only=False):
     jobs = []
     for mode, t in THEMES.items():
         jobs.append((f"chart-categories-{mode}.png", page(t, "Accuracy by BFCL category",
-                     "BFCL GPT runs · 3,035 scored / 3,051 prepared · mean of three runs · arrow: Direct (ring) to DM-Call with at most 3 repairs (dot) · bold: highest in the row",
+                     "BFCL · 3,035 cases · mean of three runs · arrow: Direct (ring) to DM-Call with Jev and at most 3 repairs (dot) · bold: highest in the row",
                      [("gpt-5-nano", t["blue"]), ("gpt-5.4-mini", t["orange"])], categories(t, data["categories"]))))
         jobs.append((f"chart-methods-{mode}.png", page(t, "Call accuracy by method",
-                     "gpt-5-nano · first run · same first proposal for every method · at most 3 repairs · time and cost per request at right",
+                     "gpt-5-nano on BFCL · archived runs replayed, mean of three · same first proposal for every method · at most 3 repairs · retained time and cost per case at right",
                      [], methods(t, data["methods"]))))
         jobs.append((f"chart-limits-{mode}.png", page(t, "DM-Call by repair limit r",
-                     "Call accuracy and cost · one run continued from r=3 to r=10 and cut at each limit, so every limit shares its first attempts",
+                     "Call accuracy and cost · gpt-5-nano on BFCL with Jev · mean of three runs, each continued to r=10 and cut at each limit",
                      [], limits(t, data["limits"]))))
     out_dir.mkdir(parents=True, exist_ok=True)
     if html_only:
