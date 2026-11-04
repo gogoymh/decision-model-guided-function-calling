@@ -2,7 +2,7 @@
 
 The DM-Call hero is native HTML/SVG (`hero.html`). The six theme-specific charts use
 `data.json`, which holds the current paper's numbers: BFCL category accuracy of the Table 1
-GPT runs (Direct and DM-Call with Jev, mean of three runs), Table 3 (archived `gpt-5-nano`
+GPT runs (Direct and DM-Call with Jev, mean of three runs), Table 2 (archived `gpt-5-nano`
 runs replayed; time and cost are retained references, and Self-refine's cost is unknown)
 and Figure 2 (accuracy and cost by repair limit).
 
