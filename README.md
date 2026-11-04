@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/dmgfc-hero.png" alt="Decision-Model-Guided Function Calling with Cumulative Verification Feedback (DM-Call). The LLM proposes a call, the decision model and schema check assess it, and rejected candidates return as cumulative feedback. The library executes an accepted call only at final dispatch." width="100%">
+  <img src="docs/assets/dm-call-hero.png" alt="Decision-Model-Guided Function Calling with Cumulative Verification Feedback (DM-Call). The LLM proposes a call, the decision model and schema check assess it, and rejected candidates return as cumulative feedback. The library executes an accepted call only at final dispatch." width="100%">
 </p>
 
 <p align="center">
@@ -48,9 +48,9 @@ agent.run("Is it jacket weather in Seoul tonight?")  # runs the call only if Jev
 
 ## How it works
 
-![DM-Call: the model proposes a call, Jev checks it, and rejected calls return to the model as a growing feedback history](docs/assets/dmgfc-framework.png)
+![Figure 1 of the paper. Direct / Schema Repair returns the candidate or fixes local schema errors. Generic Self-Review revises with the generator's own critique. DM-Call (Ours) has a decision model judge function selection and arguments, accepts a passing candidate, and sends rejected candidates back to the generator as cumulative feedback.](docs/assets/dm-call-figure1.png)
 
-**(a)** The LLM proposes a call $c_t$, one function with its arguments, or no call. A local schema check and Jev judge it: Jev sees the request, the available functions and the call, and answers *right function?* and, when there is a call, *right arguments?* as probabilities of yes. A check passes at 0.5 or more. A rejected call and its verdicts $d_t$ are appended to the feedback history $H_t$, and the model tries again. **(b)** The history goes *before* the original request, oldest first, and is marked as not executed, so the model sees every earlier attempt and can change the function, the arguments, or decide not to call. (The probabilities in (b) are illustrative, not measured benchmark results.)
+The figure is Figure 1 of the paper. Direct generation returns the model's first call, schema repair fixes only what a local schema check reports, and generic self-review asks the model to critique itself. In DM-Call the LLM proposes a call $c_t$, one function with its arguments, or no call. A local schema check and Jev judge it: Jev sees the request, the available functions and the call, and answers *right function?* and, when there is a call, *right arguments?* as probabilities of yes. A check passes at 0.5 or more. A rejected call and its verdicts $d_t$ are appended to the feedback history $H_t$, and the model tries again. The history goes *before* the original request, oldest first, and is marked as not executed, so the model sees every earlier attempt and can change the function, the arguments, or decide not to call.
 
 Each history record contains a candidate and the verifier's actual judgments, without reference answers. The [many-shot in-context learning](https://arxiv.org/abs/2404.11018) literature motivates studying how prior examples affect later proposals. DM-Call uses rejected candidates as feedback; its cumulative-history ablation and repair-limit analysis appear in [Results](#results).
 

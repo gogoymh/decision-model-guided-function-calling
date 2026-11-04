@@ -109,7 +109,7 @@ def methods(t, rows):
         star = label == "DM-Call"
         out.append(text(0, y, label, t["ink"] if star else t["ink2"], 13.5, 650 if star else 450))
         if note:
-            out.append(text(66, y, note, t["muted"], 11.5))
+            out.append(text(78, y, note, t["muted"], 11.5))  # clears "DM-Call-L" at 13.5px
         end, r = sx(accuracy), 4
         color = t["blue"] if star else t["gray"]
         out.append(f'<path d="M{x0},{y - bar / 2} H{end - r} Q{end},{y - bar / 2} {end},{y - bar / 2 + r} '
