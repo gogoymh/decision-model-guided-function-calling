@@ -1,0 +1,2396 @@
+{
+ "note": "check_schema(tools, calls). Error messages follow Python jsonschema's wording; errors are sorted by str(list(path)) of the jsonschema error, then by the order jsonschema reports them.",
+ "cases": [
+  {
+   "name": "valid call",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": "Seoul"
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": true,
+    "accepted": true,
+    "well_formed": true,
+    "errors": [],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": true,
+     "schema_errors": []
+    }
+   }
+  },
+  {
+   "name": "no call",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": true,
+    "accepted": true,
+    "well_formed": true,
+    "errors": [],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": true,
+     "schema_errors": []
+    }
+   }
+  },
+  {
+   "name": "missing required",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "get_weather",
+     "arguments": {}
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": true,
+    "errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "'city' is a required property"
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments",
+       "message": "'city' is a required property"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "wrong type",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": 3
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": true,
+    "errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"city\"]",
+      "message": "3 is not of type 'string'"
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"city\"]",
+       "message": "3 is not of type 'string'"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "unknown parameter",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": "Seoul",
+      "invented": 1,
+      "also": true
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": true,
+    "errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "Unknown parameter: also."
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "Unknown parameter: invented."
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments",
+       "message": "Unknown parameter: also."
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments",
+       "message": "Unknown parameter: invented."
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "enum not enforced",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": "Seoul",
+      "unit": "kelvin"
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": true,
+    "accepted": true,
+    "well_formed": true,
+    "errors": [],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": true,
+     "schema_errors": []
+    }
+   }
+  },
+  {
+   "name": "unknown function",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "invented",
+     "arguments": {}
+    }
+   ],
+   "expected": {
+    "function_pass": false,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": true,
+    "errors": [
+     {
+      "check": "function",
+      "path": "calls[0].name",
+      "message": "Selected function is not available."
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "Cannot validate arguments for an unavailable function."
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": false,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "function",
+       "path": "calls[0].name",
+       "message": "Selected function is not available."
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments",
+       "message": "Cannot validate arguments for an unavailable function."
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "two calls",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    },
+    {
+     "type": "function",
+     "function": {
+      "name": "get_time",
+      "description": "Current local time in a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": "Seoul"
+     }
+    },
+    {
+     "name": "get_time",
+     "arguments": {
+      "city": "Seoul"
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": true,
+    "accepted": true,
+    "well_formed": true,
+    "errors": [],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": true,
+     "schema_errors": []
+    }
+   }
+  },
+  {
+   "name": "not a list",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": null,
+   "expected": {
+    "function_pass": false,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": false,
+    "errors": [
+     {
+      "check": "function",
+      "path": "calls",
+      "message": "Proposed calls must be a list."
+     },
+     {
+      "check": "arguments",
+      "path": "calls",
+      "message": "No valid call collection to inspect."
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": false,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "function",
+       "path": "calls",
+       "message": "Proposed calls must be a list."
+      },
+      {
+       "check": "arguments",
+       "path": "calls",
+       "message": "No valid call collection to inspect."
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "call not an object",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    "get_weather"
+   ],
+   "expected": {
+    "function_pass": false,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": false,
+    "errors": [
+     {
+      "check": "function",
+      "path": "calls[0]",
+      "message": "Each call must be an object."
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0]",
+      "message": "No argument object to inspect."
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": false,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "function",
+       "path": "calls[0]",
+       "message": "Each call must be an object."
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0]",
+       "message": "No argument object to inspect."
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "empty name",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "",
+     "arguments": {}
+    }
+   ],
+   "expected": {
+    "function_pass": false,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": false,
+    "errors": [
+     {
+      "check": "function",
+      "path": "calls[0].name",
+      "message": "Name must be a nonempty string."
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "Cannot validate arguments for an unavailable function."
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": false,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "function",
+       "path": "calls[0].name",
+       "message": "Name must be a nonempty string."
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments",
+       "message": "Cannot validate arguments for an unavailable function."
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "missing name",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "arguments": {}
+    }
+   ],
+   "expected": {
+    "function_pass": false,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": false,
+    "errors": [
+     {
+      "check": "function",
+      "path": "calls[0].name",
+      "message": "Name must be a nonempty string."
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "Cannot validate arguments for an unavailable function."
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": false,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "function",
+       "path": "calls[0].name",
+       "message": "Name must be a nonempty string."
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments",
+       "message": "Cannot validate arguments for an unavailable function."
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "arguments not an object",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "get_weather",
+     "arguments": "{}"
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": false,
+    "errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "Arguments must be a JSON object."
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments",
+       "message": "Arguments must be a JSON object."
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "arguments null",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "get_weather",
+     "arguments": null
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": false,
+    "errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "Arguments must be a JSON object."
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments",
+       "message": "Arguments must be a JSON object."
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "book valid",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "book",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "genre": {
+         "type": "string",
+         "enum": [
+          "Horror",
+          "Comedy"
+         ]
+        },
+        "rooms": {
+         "type": "integer",
+         "minimum": 1
+        },
+        "metrics": {
+         "type": "array",
+         "enum": [
+          "view",
+          "trust"
+         ],
+         "items": {
+          "type": "string"
+         }
+        },
+        "start": {
+         "type": "string",
+         "default": null
+        },
+        "end": {
+         "type": "string"
+        },
+        "filters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        },
+        "tags": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        "pair": {
+         "type": "array",
+         "prefixItems": [
+          {
+           "type": "integer"
+          },
+          {
+           "type": "string"
+          }
+         ]
+        },
+        "price": {
+         "type": "number"
+        },
+        "flag": {
+         "type": "boolean"
+        },
+        "either": {
+         "anyOf": [
+          {
+           "type": "string"
+          },
+          {
+           "type": "integer"
+          }
+         ]
+        },
+        "one": {
+         "oneOf": [
+          {
+           "type": "string",
+           "enum": [
+            "a"
+           ]
+          },
+          {
+           "type": "string",
+           "maxLength": 1
+          }
+         ]
+        },
+        "maybe": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "ref": {
+         "$ref": "#/$defs/point"
+        }
+       },
+       "$defs": {
+        "point": {
+         "type": "object",
+         "properties": {
+          "x": {
+           "type": "number"
+          }
+         },
+         "required": [
+          "x"
+         ],
+         "additionalProperties": false
+        }
+       },
+       "required": [
+        "genre"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "book",
+     "arguments": {
+      "genre": "Any",
+      "rooms": 0,
+      "metrics": [
+       "view"
+      ],
+      "start": null,
+      "filters": {
+       "city": "Seoul"
+      },
+      "tags": [
+       "a"
+      ],
+      "pair": [
+       1,
+       "x"
+      ],
+      "price": 2,
+      "flag": false,
+      "either": 3,
+      "one": "abc",
+      "maybe": null,
+      "ref": {
+       "x": 1.5
+      }
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": true,
+    "accepted": true,
+    "well_formed": true,
+    "errors": [],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": true,
+     "schema_errors": []
+    }
+   }
+  },
+  {
+   "name": "book many errors",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "book",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "genre": {
+         "type": "string",
+         "enum": [
+          "Horror",
+          "Comedy"
+         ]
+        },
+        "rooms": {
+         "type": "integer",
+         "minimum": 1
+        },
+        "metrics": {
+         "type": "array",
+         "enum": [
+          "view",
+          "trust"
+         ],
+         "items": {
+          "type": "string"
+         }
+        },
+        "start": {
+         "type": "string",
+         "default": null
+        },
+        "end": {
+         "type": "string"
+        },
+        "filters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        },
+        "tags": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        "pair": {
+         "type": "array",
+         "prefixItems": [
+          {
+           "type": "integer"
+          },
+          {
+           "type": "string"
+          }
+         ]
+        },
+        "price": {
+         "type": "number"
+        },
+        "flag": {
+         "type": "boolean"
+        },
+        "either": {
+         "anyOf": [
+          {
+           "type": "string"
+          },
+          {
+           "type": "integer"
+          }
+         ]
+        },
+        "one": {
+         "oneOf": [
+          {
+           "type": "string",
+           "enum": [
+            "a"
+           ]
+          },
+          {
+           "type": "string",
+           "maxLength": 1
+          }
+         ]
+        },
+        "maybe": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "ref": {
+         "$ref": "#/$defs/point"
+        }
+       },
+       "$defs": {
+        "point": {
+         "type": "object",
+         "properties": {
+          "x": {
+           "type": "number"
+          }
+         },
+         "required": [
+          "x"
+         ],
+         "additionalProperties": false
+        }
+       },
+       "required": [
+        "genre"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "book",
+     "arguments": {
+      "genre": true,
+      "rooms": "2",
+      "metrics": "view",
+      "end": null,
+      "filters": {},
+      "tags": [
+       "a",
+       2
+      ],
+      "pair": [
+       "x",
+       1
+      ],
+      "price": "1",
+      "flag": 1,
+      "either": 1.5,
+      "one": 3,
+      "maybe": 1,
+      "ref": {
+       "y": 1
+      },
+      "extra": [
+       1,
+       {
+        "a": null
+       }
+      ]
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": true,
+    "errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"either\"]",
+      "message": "1.5 is not valid under any of the given schemas"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"end\"]",
+      "message": "None is not of type 'string'"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"filters\"]",
+      "message": "'city' is a required property"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"flag\"]",
+      "message": "1 is not of type 'boolean'"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"genre\"]",
+      "message": "True is not of type 'string'"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"maybe\"]",
+      "message": "1 is not of type 'string', 'null'"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"metrics\"]",
+      "message": "'view' is not of type 'array'"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"one\"]",
+      "message": "3 is not valid under any of the given schemas"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"pair\"][0]",
+      "message": "'x' is not of type 'integer'"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"pair\"][1]",
+      "message": "1 is not of type 'string'"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"price\"]",
+      "message": "'1' is not of type 'number'"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"ref\"]",
+      "message": "'x' is a required property"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"ref\"]",
+      "message": "Additional properties are not allowed ('y' was unexpected)"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"rooms\"]",
+      "message": "'2' is not of type 'integer'"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"tags\"][1]",
+      "message": "2 is not of type 'string'"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "Unknown parameter: extra."
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"either\"]",
+       "message": "1.5 is not valid under any of the given schemas"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"end\"]",
+       "message": "None is not of type 'string'"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"filters\"]",
+       "message": "'city' is a required property"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"flag\"]",
+       "message": "1 is not of type 'boolean'"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"genre\"]",
+       "message": "True is not of type 'string'"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"maybe\"]",
+       "message": "1 is not of type 'string', 'null'"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"metrics\"]",
+       "message": "'view' is not of type 'array'"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"one\"]",
+       "message": "3 is not valid under any of the given schemas"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"pair\"][0]",
+       "message": "'x' is not of type 'integer'"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"pair\"][1]",
+       "message": "1 is not of type 'string'"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"price\"]",
+       "message": "'1' is not of type 'number'"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"ref\"]",
+       "message": "'x' is a required property"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"ref\"]",
+       "message": "Additional properties are not allowed ('y' was unexpected)"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"rooms\"]",
+       "message": "'2' is not of type 'integer'"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"tags\"][1]",
+       "message": "2 is not of type 'string'"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments",
+       "message": "Unknown parameter: extra."
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "book missing required only",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "book",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "genre": {
+         "type": "string",
+         "enum": [
+          "Horror",
+          "Comedy"
+         ]
+        },
+        "rooms": {
+         "type": "integer",
+         "minimum": 1
+        },
+        "metrics": {
+         "type": "array",
+         "enum": [
+          "view",
+          "trust"
+         ],
+         "items": {
+          "type": "string"
+         }
+        },
+        "start": {
+         "type": "string",
+         "default": null
+        },
+        "end": {
+         "type": "string"
+        },
+        "filters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        },
+        "tags": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        "pair": {
+         "type": "array",
+         "prefixItems": [
+          {
+           "type": "integer"
+          },
+          {
+           "type": "string"
+          }
+         ]
+        },
+        "price": {
+         "type": "number"
+        },
+        "flag": {
+         "type": "boolean"
+        },
+        "either": {
+         "anyOf": [
+          {
+           "type": "string"
+          },
+          {
+           "type": "integer"
+          }
+         ]
+        },
+        "one": {
+         "oneOf": [
+          {
+           "type": "string",
+           "enum": [
+            "a"
+           ]
+          },
+          {
+           "type": "string",
+           "maxLength": 1
+          }
+         ]
+        },
+        "maybe": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "ref": {
+         "$ref": "#/$defs/point"
+        }
+       },
+       "$defs": {
+        "point": {
+         "type": "object",
+         "properties": {
+          "x": {
+           "type": "number"
+          }
+         },
+         "required": [
+          "x"
+         ],
+         "additionalProperties": false
+        }
+       },
+       "required": [
+        "genre"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "book",
+     "arguments": {
+      "rooms": 1
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": true,
+    "errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "'genre' is a required property"
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments",
+       "message": "'genre' is a required property"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "integer-valued float for integer",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "book",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "genre": {
+         "type": "string",
+         "enum": [
+          "Horror",
+          "Comedy"
+         ]
+        },
+        "rooms": {
+         "type": "integer",
+         "minimum": 1
+        },
+        "metrics": {
+         "type": "array",
+         "enum": [
+          "view",
+          "trust"
+         ],
+         "items": {
+          "type": "string"
+         }
+        },
+        "start": {
+         "type": "string",
+         "default": null
+        },
+        "end": {
+         "type": "string"
+        },
+        "filters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        },
+        "tags": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        "pair": {
+         "type": "array",
+         "prefixItems": [
+          {
+           "type": "integer"
+          },
+          {
+           "type": "string"
+          }
+         ]
+        },
+        "price": {
+         "type": "number"
+        },
+        "flag": {
+         "type": "boolean"
+        },
+        "either": {
+         "anyOf": [
+          {
+           "type": "string"
+          },
+          {
+           "type": "integer"
+          }
+         ]
+        },
+        "one": {
+         "oneOf": [
+          {
+           "type": "string",
+           "enum": [
+            "a"
+           ]
+          },
+          {
+           "type": "string",
+           "maxLength": 1
+          }
+         ]
+        },
+        "maybe": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "ref": {
+         "$ref": "#/$defs/point"
+        }
+       },
+       "$defs": {
+        "point": {
+         "type": "object",
+         "properties": {
+          "x": {
+           "type": "number"
+          }
+         },
+         "required": [
+          "x"
+         ],
+         "additionalProperties": false
+        }
+       },
+       "required": [
+        "genre"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "book",
+     "arguments": {
+      "genre": "x",
+      "rooms": 2.0
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": true,
+    "accepted": true,
+    "well_formed": true,
+    "errors": [],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": true,
+     "schema_errors": []
+    }
+   }
+  },
+  {
+   "name": "closed object",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "closed",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "additionalProperties": false,
+       "properties": {
+        "q": {
+         "type": "string"
+        }
+       },
+       "required": [
+        "q"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "closed",
+     "arguments": {
+      "q": "x",
+      "z": 1,
+      "a": 2
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": true,
+    "errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "Additional properties are not allowed ('a', 'z' were unexpected)"
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments",
+       "message": "Additional properties are not allowed ('a', 'z' were unexpected)"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "open object",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "open",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "additionalProperties": true,
+       "properties": {
+        "q": {
+         "type": "string"
+        }
+       }
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "open",
+     "arguments": {
+      "q": "x",
+      "z": 1
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": true,
+    "accepted": true,
+    "well_formed": true,
+    "errors": [],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": true,
+     "schema_errors": []
+    }
+   }
+  },
+  {
+   "name": "typed additional properties",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "typed_extra",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "q": {
+         "type": "string"
+        }
+       },
+       "additionalProperties": {
+        "type": "integer"
+       }
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "typed_extra",
+     "arguments": {
+      "q": "x",
+      "n": 1,
+      "s": "no"
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": true,
+    "errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"s\"]",
+      "message": "'no' is not of type 'integer'"
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"s\"]",
+       "message": "'no' is not of type 'integer'"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "no parameters declared",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "ping",
+      "description": "Ping."
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "ping",
+     "arguments": {}
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": true,
+    "accepted": true,
+    "well_formed": true,
+    "errors": [],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": true,
+     "schema_errors": []
+    }
+   }
+  },
+  {
+   "name": "no parameters declared with argument",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "ping",
+      "description": "Ping."
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "ping",
+     "arguments": {
+      "x": 1
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": true,
+    "errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "Unknown parameter: x."
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments",
+       "message": "Unknown parameter: x."
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "nested error path",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "book",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "genre": {
+         "type": "string",
+         "enum": [
+          "Horror",
+          "Comedy"
+         ]
+        },
+        "rooms": {
+         "type": "integer",
+         "minimum": 1
+        },
+        "metrics": {
+         "type": "array",
+         "enum": [
+          "view",
+          "trust"
+         ],
+         "items": {
+          "type": "string"
+         }
+        },
+        "start": {
+         "type": "string",
+         "default": null
+        },
+        "end": {
+         "type": "string"
+        },
+        "filters": {
+         "type": "object",
+         "properties": {
+          "city": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "city"
+         ]
+        },
+        "tags": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        "pair": {
+         "type": "array",
+         "prefixItems": [
+          {
+           "type": "integer"
+          },
+          {
+           "type": "string"
+          }
+         ]
+        },
+        "price": {
+         "type": "number"
+        },
+        "flag": {
+         "type": "boolean"
+        },
+        "either": {
+         "anyOf": [
+          {
+           "type": "string"
+          },
+          {
+           "type": "integer"
+          }
+         ]
+        },
+        "one": {
+         "oneOf": [
+          {
+           "type": "string",
+           "enum": [
+            "a"
+           ]
+          },
+          {
+           "type": "string",
+           "maxLength": 1
+          }
+         ]
+        },
+        "maybe": {
+         "type": [
+          "string",
+          "null"
+         ]
+        },
+        "ref": {
+         "$ref": "#/$defs/point"
+        }
+       },
+       "$defs": {
+        "point": {
+         "type": "object",
+         "properties": {
+          "x": {
+           "type": "number"
+          }
+         },
+         "required": [
+          "x"
+         ],
+         "additionalProperties": false
+        }
+       },
+       "required": [
+        "genre"
+       ]
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "book",
+     "arguments": {
+      "genre": "x",
+      "filters": {
+       "city": [
+        "Seoul"
+       ]
+      }
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": true,
+    "errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"filters\"][\"city\"]",
+      "message": "['Seoul'] is not of type 'string'"
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"filters\"][\"city\"]",
+       "message": "['Seoul'] is not of type 'string'"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "false subschema property",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "a": false,
+        "b": {
+         "type": "array",
+         "items": false
+        }
+       }
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "f",
+     "arguments": {
+      "a": 1
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": true,
+    "errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "False schema does not allow 1"
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments",
+       "message": "False schema does not allow 1"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "false items subschema",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "a": false,
+        "b": {
+         "type": "array",
+         "items": false
+        }
+       }
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "f",
+     "arguments": {
+      "b": [
+       1
+      ]
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": true,
+    "errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"b\"]",
+      "message": "Expected at most 0 items but found 1 extra: 1"
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"b\"]",
+       "message": "Expected at most 0 items but found 1 extra: 1"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "false items subschema, empty array",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "a": false,
+        "b": {
+         "type": "array",
+         "items": false
+        }
+       }
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "f",
+     "arguments": {
+      "b": []
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": true,
+    "accepted": true,
+    "well_formed": true,
+    "errors": [],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": true,
+     "schema_errors": []
+    }
+   }
+  }
+ ],
+ "configuration_errors": [
+  {
+   "name": "invalid parameter schema",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "a": {
+         "type": "nonsense"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "duplicate names",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    },
+    {
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "description": "Current weather for a city.",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "city": {
+         "type": "string",
+         "description": "City name."
+        },
+        "unit": {
+         "type": "string",
+         "enum": [
+          "celsius",
+          "fahrenheit"
+         ],
+         "default": "celsius"
+        }
+       },
+       "required": [
+        "city"
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "parameters not an object",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "parameters": []
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,717 @@
+{
+ "labels": [
+  {
+   "p": 0,
+   "label": "very likely incorrect"
+  },
+  {
+   "p": 0.1,
+   "label": "very likely incorrect"
+  },
+  {
+   "p": 0.19999,
+   "label": "very likely incorrect"
+  },
+  {
+   "p": 0.2,
+   "label": "likely incorrect"
+  },
+  {
+   "p": 0.39,
+   "label": "likely incorrect"
+  },
+  {
+   "p": 0.4,
+   "label": "uncertain"
+  },
+  {
+   "p": 0.48,
+   "label": "uncertain"
+  },
+  {
+   "p": 0.5,
+   "label": "uncertain"
+  },
+  {
+   "p": 0.52,
+   "label": "uncertain"
+  },
+  {
+   "p": 0.59,
+   "label": "uncertain"
+  },
+  {
+   "p": 0.6,
+   "label": "likely correct"
+  },
+  {
+   "p": 0.79,
+   "label": "likely correct"
+  },
+  {
+   "p": 0.8,
+   "label": "very likely correct"
+  },
+  {
+   "p": 0.95,
+   "label": "very likely correct"
+  },
+  {
+   "p": 1,
+   "label": "very likely correct"
+  },
+  {
+   "p": null,
+   "label": null
+  }
+ ],
+ "invalid_probabilities": [
+  -0.1,
+  1.1,
+  "0.5",
+  true
+ ],
+ "represent": [
+  {
+   "representation": "hybrid",
+   "feedback": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": true,
+      "probability_yes": 0.95,
+      "threshold": 0.5,
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": false,
+      "pass": false,
+      "probability_yes": 0.12,
+      "threshold": 0.5,
+      "schema_pass": false
+     }
+    },
+    "failed_checks": [
+     "arguments"
+    ],
+    "schema_errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "'city' is a required property"
+     }
+    ],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   },
+   "expected": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": true,
+      "probability_yes": 0.95,
+      "feedback_label": "very likely correct",
+      "threshold": 0.5,
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": false,
+      "pass": false,
+      "probability_yes": 0.12,
+      "feedback_label": "very likely incorrect",
+      "threshold": 0.5,
+      "schema_pass": false
+     }
+    },
+    "failed_checks": [
+     "arguments"
+    ],
+    "schema_errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "'city' is a required property"
+     }
+    ],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   }
+  },
+  {
+   "representation": "numeric",
+   "feedback": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": true,
+      "probability_yes": 0.95,
+      "threshold": 0.5,
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": false,
+      "pass": false,
+      "probability_yes": 0.12,
+      "threshold": 0.5,
+      "schema_pass": false
+     }
+    },
+    "failed_checks": [
+     "arguments"
+    ],
+    "schema_errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "'city' is a required property"
+     }
+    ],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   },
+   "expected": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": true,
+      "probability_yes": 0.95,
+      "threshold": 0.5,
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": false,
+      "pass": false,
+      "probability_yes": 0.12,
+      "threshold": 0.5,
+      "schema_pass": false
+     }
+    },
+    "failed_checks": [
+     "arguments"
+    ],
+    "schema_errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "'city' is a required property"
+     }
+    ],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   }
+  },
+  {
+   "representation": "text",
+   "feedback": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": true,
+      "probability_yes": 0.95,
+      "threshold": 0.5,
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": false,
+      "pass": false,
+      "probability_yes": 0.12,
+      "threshold": 0.5,
+      "schema_pass": false
+     }
+    },
+    "failed_checks": [
+     "arguments"
+    ],
+    "schema_errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "'city' is a required property"
+     }
+    ],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   },
+   "expected": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": true,
+      "feedback_label": "very likely correct",
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": false,
+      "pass": false,
+      "feedback_label": "very likely incorrect",
+      "schema_pass": false
+     }
+    },
+    "failed_checks": [
+     "arguments"
+    ],
+    "schema_errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "'city' is a required property"
+     }
+    ],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The feedback labels are verifier judgments, not ground truth or explanations."
+   }
+  },
+  {
+   "representation": "hybrid",
+   "feedback": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": false,
+      "probability_yes": 0.05,
+      "threshold": 0.5,
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": true,
+      "pass": null,
+      "probability_yes": null,
+      "threshold": 0.5,
+      "schema_pass": true
+     }
+    },
+    "failed_checks": [
+     "function_selection"
+    ],
+    "schema_errors": [],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   },
+   "expected": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": false,
+      "probability_yes": 0.05,
+      "feedback_label": "very likely incorrect",
+      "threshold": 0.5,
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": true,
+      "pass": null,
+      "probability_yes": null,
+      "feedback_label": null,
+      "threshold": 0.5,
+      "schema_pass": true
+     }
+    },
+    "failed_checks": [
+     "function_selection"
+    ],
+    "schema_errors": [],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   }
+  },
+  {
+   "representation": "numeric",
+   "feedback": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": false,
+      "probability_yes": 0.05,
+      "threshold": 0.5,
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": true,
+      "pass": null,
+      "probability_yes": null,
+      "threshold": 0.5,
+      "schema_pass": true
+     }
+    },
+    "failed_checks": [
+     "function_selection"
+    ],
+    "schema_errors": [],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   },
+   "expected": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": false,
+      "probability_yes": 0.05,
+      "threshold": 0.5,
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": true,
+      "pass": null,
+      "probability_yes": null,
+      "threshold": 0.5,
+      "schema_pass": true
+     }
+    },
+    "failed_checks": [
+     "function_selection"
+    ],
+    "schema_errors": [],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   }
+  },
+  {
+   "representation": "text",
+   "feedback": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": false,
+      "probability_yes": 0.05,
+      "threshold": 0.5,
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": true,
+      "pass": null,
+      "probability_yes": null,
+      "threshold": 0.5,
+      "schema_pass": true
+     }
+    },
+    "failed_checks": [
+     "function_selection"
+    ],
+    "schema_errors": [],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   },
+   "expected": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": false,
+      "feedback_label": "very likely incorrect",
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": true,
+      "pass": null,
+      "feedback_label": null,
+      "schema_pass": true
+     }
+    },
+    "failed_checks": [
+     "function_selection"
+    ],
+    "schema_errors": [],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The feedback labels are verifier judgments, not ground truth or explanations."
+   }
+  },
+  {
+   "representation": "hybrid",
+   "feedback": {
+    "function_probability": 0.41,
+    "arguments_probability": 1,
+    "function_threshold": 0.7,
+    "nested": [
+     {
+      "probability_yes": 0.2
+     },
+     {
+      "p_f": 0,
+      "p_a": 0.6
+     }
+    ],
+    "instruction": "The probabilities differ."
+   },
+   "expected": {
+    "function_probability": 0.41,
+    "function_label": "uncertain",
+    "arguments_probability": 1,
+    "arguments_label": "very likely correct",
+    "function_threshold": 0.7,
+    "nested": [
+     {
+      "probability_yes": 0.2,
+      "feedback_label": "likely incorrect"
+     },
+     {
+      "p_f": 0,
+      "function_label": "very likely incorrect",
+      "p_a": 0.6,
+      "arguments_label": "likely correct"
+     }
+    ],
+    "instruction": "The probabilities differ."
+   }
+  },
+  {
+   "representation": "numeric",
+   "feedback": {
+    "function_probability": 0.41,
+    "arguments_probability": 1,
+    "function_threshold": 0.7,
+    "nested": [
+     {
+      "probability_yes": 0.2
+     },
+     {
+      "p_f": 0,
+      "p_a": 0.6
+     }
+    ],
+    "instruction": "The probabilities differ."
+   },
+   "expected": {
+    "function_probability": 0.41,
+    "arguments_probability": 1,
+    "function_threshold": 0.7,
+    "nested": [
+     {
+      "probability_yes": 0.2
+     },
+     {
+      "p_f": 0,
+      "p_a": 0.6
+     }
+    ],
+    "instruction": "The probabilities differ."
+   }
+  },
+  {
+   "representation": "text",
+   "feedback": {
+    "function_probability": 0.41,
+    "arguments_probability": 1,
+    "function_threshold": 0.7,
+    "nested": [
+     {
+      "probability_yes": 0.2
+     },
+     {
+      "p_f": 0,
+      "p_a": 0.6
+     }
+    ],
+    "instruction": "The probabilities differ."
+   },
+   "expected": {
+    "function_label": "uncertain",
+    "arguments_label": "very likely correct",
+    "nested": [
+     {
+      "feedback_label": "likely incorrect"
+     },
+     {
+      "function_label": "very likely incorrect",
+      "arguments_label": "likely correct"
+     }
+    ],
+    "instruction": "The feedback labels differ."
+   }
+  }
+ ],
+ "single_check": [
+  {
+   "keep": "function",
+   "feedback": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": true,
+      "probability_yes": 0.95,
+      "threshold": 0.5,
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": false,
+      "pass": false,
+      "probability_yes": 0.12,
+      "threshold": 0.5,
+      "schema_pass": false
+     }
+    },
+    "failed_checks": [
+     "arguments"
+    ],
+    "schema_errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "'city' is a required property"
+     }
+    ],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   },
+   "expected": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": true,
+      "probability_yes": 0.95,
+      "threshold": 0.5,
+      "schema_pass": true
+     }
+    },
+    "failed_checks": [],
+    "schema_errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "'city' is a required property"
+     }
+    ],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   }
+  },
+  {
+   "keep": "arguments",
+   "feedback": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": true,
+      "probability_yes": 0.95,
+      "threshold": 0.5,
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": false,
+      "pass": false,
+      "probability_yes": 0.12,
+      "threshold": 0.5,
+      "schema_pass": false
+     }
+    },
+    "failed_checks": [
+     "arguments"
+    ],
+    "schema_errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "'city' is a required property"
+     }
+    ],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   },
+   "expected": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "arguments": {
+      "skipped": false,
+      "pass": false,
+      "probability_yes": 0.12,
+      "threshold": 0.5,
+      "schema_pass": false
+     }
+    },
+    "failed_checks": [
+     "arguments"
+    ],
+    "schema_errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments",
+      "message": "'city' is a required property"
+     }
+    ],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   }
+  },
+  {
+   "keep": "function",
+   "feedback": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": false,
+      "probability_yes": 0.05,
+      "threshold": 0.5,
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": true,
+      "pass": null,
+      "probability_yes": null,
+      "threshold": 0.5,
+      "schema_pass": true
+     }
+    },
+    "failed_checks": [
+     "function_selection"
+    ],
+    "schema_errors": [],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   },
+   "expected": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": false,
+      "probability_yes": 0.05,
+      "threshold": 0.5,
+      "schema_pass": true
+     }
+    },
+    "failed_checks": [
+     "function_selection"
+    ],
+    "schema_errors": [],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   }
+  },
+  {
+   "keep": "arguments",
+   "feedback": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "function_selection": {
+      "pass": false,
+      "probability_yes": 0.05,
+      "threshold": 0.5,
+      "schema_pass": true
+     },
+     "arguments": {
+      "skipped": true,
+      "pass": null,
+      "probability_yes": null,
+      "threshold": 0.5,
+      "schema_pass": true
+     }
+    },
+    "failed_checks": [
+     "function_selection"
+    ],
+    "schema_errors": [],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   },
+   "expected": {
+    "source": "jev_noul_and_deterministic_schema_validation",
+    "checks": {
+     "arguments": {
+      "skipped": true,
+      "pass": null,
+      "probability_yes": null,
+      "threshold": 0.5,
+      "schema_pass": true
+     }
+    },
+    "failed_checks": [],
+    "schema_errors": [],
+    "instruction": "Reconsider the failed dimensions using the original request and available function definitions, then submit a complete replacement call collection. The probabilities are verifier judgments, not ground truth or explanations."
+   }
+  }
+ ],
+ "conflicts": {
+  "representations": [
+   "hybrid",
+   "text"
+  ],
+  "feedback": [
+   {
+    "function_probability": 0.4,
+    "p_f": 0.4
+   },
+   {
+    "probability_yes": 0.5,
+    "feedback_label": "x"
+   }
+  ]
+ }
+}

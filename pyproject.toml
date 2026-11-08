@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dmcall"
+version = "1.0.0"
+description = "DM-Call: Decision-Model-Guided Function Calling with Cumulative Verification Feedback"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+keywords = ["dm-call", "llm", "function-calling", "tool-use", "verification", "decision-model", "agents"]
+dependencies = ["httpx>=0.27,<1", "jsonschema>=4.23,<5"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.9,<1"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dmcall"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/src/dmcall", "/tests", "/spec", "/README.md", "/LICENSE", "/pyproject.toml"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
