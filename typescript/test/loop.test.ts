@@ -170,7 +170,8 @@ test("an unreadable candidate is repaired and never run", async () => {
 });
 
 test("an initial no call is returned without verification", async () => {
-  const preserved = agent([[]], { decision: new ScriptedJev("Seoul", 0.95, 0.97) });
+  const preserved = agent([[]], { decision: new ScriptedJev("Seoul", 0.95, 0.97),
+    functions: { get_weather: () => assert.fail("a no-call never executes") } });
   let result = await preserved.loop.run("Tell me a joke.");
   assert.ok(result.noCall && result.accepted === null && result.initialNoCallPreserved);
   assert.equal(result.executed, false);

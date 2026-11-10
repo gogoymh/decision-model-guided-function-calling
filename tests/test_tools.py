@@ -6,7 +6,7 @@ from typing import Annotated, Literal, Optional, TypedDict
 import pytest
 
 import dmcall
-from conftest import WEATHER
+from conftest import WEATHER, ScriptedJev, ScriptedModel
 
 
 class Unit(enum.Enum):
@@ -114,16 +114,49 @@ def test_tool_decorator_and_definition_formats():
     assert set(registry) == {"weather", "get_weather"}
 
 
+def test_capital_types_are_lowered_only_in_schemas():
+    gemini = {"name": "plan", "description": "", "parameters": {"type": "OBJECT", "properties": {
+        "tier": {"type": "OBJECT", "enum": [{"type": "PREMIUM"}, {"type": "BASIC"}], "default": {"type": "PREMIUM"}},
+        "kind": {"const": {"type": "FIXED"}, "examples": [{"type": "SAMPLE"}]},
+        "default": {"type": "STRING"}, "enum": {"type": "ARRAY", "items": {"type": ["STRING", "NULL"]}},
+        "type": {"type": "INTEGER"}}}}
+    assert dmcall.schema_of(gemini)["function"]["parameters"] == {"type": "object", "properties": {
+        "tier": {"type": "object", "enum": [{"type": "PREMIUM"}, {"type": "BASIC"}], "default": {"type": "PREMIUM"}},
+        "kind": {"const": {"type": "FIXED"}, "examples": [{"type": "SAMPLE"}]},
+        "default": {"type": "string"}, "enum": {"type": "array", "items": {"type": ["string", "null"]}},
+        "type": {"type": "integer"}}}
+
+
+def test_one_unresolvable_annotation_leaves_the_other_parameters_typed():
+    # "Decimal" is not defined here, as with an import that exists only under TYPE_CHECKING.
+    def pay(amount: "int", currency: "Literal['USD', 'KRW']", price: "Decimal" = None,  # noqa: F821
+            unit: "Unit" = Unit.CELSIUS):
+        return unit
+
+    assert dmcall.schema_of(pay)["function"]["parameters"]["properties"] == {
+        "amount": {"type": "integer"}, "currency": {"type": "string", "enum": ["USD", "KRW"]},
+        "price": {"default": None},
+        "unit": {"type": "string", "enum": ["celsius", "fahrenheit"], "default": "celsius"}}
+    assert dmcall.invoke(pay, {"amount": 1, "currency": "USD", "unit": "fahrenheit"}) is Unit.FAHRENHEIT
+
+
 @pytest.mark.parametrize("bad, error", [
     (lambda city: city, ValueError),
     ("get_weather", TypeError),
     ({"name": "", "parameters": {"type": "object"}}, ValueError),
     ({"name": "x", "parameters": {"type": "array"}}, ValueError),
     ({"name": "x", "parameters": {"type": "object", "properties": {"a": {"type": "nonsense"}}}}, ValueError),
-], ids=["unnamed-lambda", "string", "no-name", "not-object", "invalid-schema"])
+    ({"name": "x", "parameters": {"type": "object", "properties": {"a": {"$ref": "#/$defs/missing"}}}}, ValueError),
+    ({"name": "x", "parameters": {"type": "object", "properties": {"a": {"$ref": "https://example.com/a.json"}}}},
+     ValueError),
+    ({"name": "x", "parameters": {"type": "object", "properties": {"a": {"$ref": "#/properties/a"}}}}, ValueError),
+], ids=["unnamed-lambda", "string", "no-name", "not-object", "invalid-schema", "missing-ref", "remote-ref", "self-ref"])
 def test_bad_tools(bad, error):
     with pytest.raises(error):
         dmcall.toolset([bad])
+    if isinstance(bad, dict) and "$ref" in str(bad):  # the client refuses it too, before any request
+        with pytest.raises(ValueError, match=r"\$ref"):
+            dmcall.DMCall(ScriptedModel(), decision_model=ScriptedJev().jev, tools=[bad])
 
 
 def test_unsupported_signatures():

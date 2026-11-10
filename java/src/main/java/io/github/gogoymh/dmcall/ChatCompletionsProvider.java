@@ -114,6 +114,14 @@ public abstract class ChatCompletionsProvider extends Provider {
                     : TextNode.valueOf("{}");
             appendCall(calls, errors, function.get("name"), arguments, true);
         }
+        JsonNode legacy = message.get("function_call");  // the single call of the API before tool_calls
+        if (nativeCalls.isEmpty() && !Py.isNone(legacy)) {
+            if (!legacy.isObject()) {
+                throw new ProviderException("The response contained an invalid function-call object.");
+            }
+            JsonNode arguments = legacy.has("arguments") ? legacy.get("arguments") : TextNode.valueOf("{}");
+            appendCall(calls, errors, legacy.get("name"), arguments, true);
+        }
         JsonNode content = message.get("content");
         if (content != null && content.isTextual() && !content.textValue().isEmpty()) {
             text.add(content.textValue());

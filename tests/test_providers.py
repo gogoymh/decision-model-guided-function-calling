@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 import dmcall
-from conftest import EXAMPLE, HISTORY, SECRET, WEATHER, ScriptedModel, chat, client, seoul
+from conftest import EXAMPLE, HISTORY, SECRET, WEATHER, ScriptedJev, ScriptedModel, chat, client, seoul
 
 
 def test_openai_request_and_decoding():
@@ -49,13 +49,58 @@ def test_history_lists_rounds_oldest_first():
     (chat(finish="content_filter"), None, "content_filter"),
     (chat(refusal="I can't help with that."), None, "refusal"),
     (chat([("get_weather", "{not json")]), [{"name": "get_weather", "arguments": None}], None),
-], ids=["text", "empty", "length", "content-filter", "refusal", "bad-json"])
+    (chat([("get_weather", "3")]), [{"name": "get_weather", "arguments": None}], None),
+], ids=["text", "empty", "length", "content-filter", "refusal", "bad-json", "not-an-object"])
 def test_openai_outcomes(body, calls, incomplete):
     model = dmcall.OpenAI("m", api_key="k", client=client(lambda r: httpx.Response(200, json=body)))
     proposal = model.generate(EXAMPLE)
     assert proposal["calls"] == calls and proposal["incomplete"] == incomplete
     if incomplete or calls and calls[0]["arguments"] is None:
         assert proposal["parse_errors"]
+
+
+@pytest.mark.parametrize("call, calls", [
+    ({"tool_calls": [{"id": "c", "type": "function", "function": {"name": "get_weather", "arguments": {"city": "Seoul"}}}]},
+     seoul()),
+    ({"tool_calls": [{"id": "c", "type": "function", "function": {"name": "get_weather", "arguments": None}}]},
+     [{"name": "get_weather", "arguments": {}}]),
+    ({"tool_calls": [{"id": "c", "type": "function", "function": {"name": "get_weather", "arguments": 3}}]},
+     [{"name": "get_weather", "arguments": None}]),
+    ({"function_call": {"name": "get_weather", "arguments": '{"city": "Seoul"}'}}, seoul()),
+], ids=["object-arguments", "null-arguments", "number-arguments", "legacy-function-call"])
+def test_openai_compatible_servers_that_bend_the_protocol(call, calls):
+    """Arguments sent as an object or null, and the older function_call field, are still a call."""
+    body = {"choices": [{"finish_reason": "tool_calls", "message": {"role": "assistant", "content": None, **call}}]}
+    model = dmcall.OpenAICompatible("m", base_url="http://localhost:8000/v1",
+                                    client=client(lambda r: httpx.Response(200, json=body)))
+    proposal = model.generate(EXAMPLE)
+    assert proposal["calls"] == calls and proposal["incomplete"] is None
+    assert bool(proposal["parse_errors"]) == (calls[0]["arguments"] is None)
+
+
+def test_redirects_are_not_followed():
+    seen = []
+    model = dmcall.Anthropic("m", api_key=SECRET, client=client(
+        lambda r: httpx.Response(307, headers={"location": "https://elsewhere.example/v1/messages"}), seen))
+    with pytest.raises(dmcall.ProviderError, match="HTTP 307"):
+        model.generate(EXAMPLE)
+    assert len(seen) == 1 and seen[0].url.host == "api.anthropic.com"  # the key never leaves for another host
+
+
+def test_malformed_gemini_native_call_is_repaired_instead_of_preserved_as_no_call():
+    responses = iter([
+        {"candidates": [{"finishReason": "STOP", "content": {"parts": [{"functionCall": "invalid"}]}}]},
+        {"candidates": [{"finishReason": "STOP", "content": {"parts": [
+            {"functionCall": {"name": "get_weather", "args": {"city": "Seoul"}}}]}}]},
+    ])
+    seen = []
+    model = dmcall.Gemini("m", api_key="KEY", client=client(lambda r: httpx.Response(200, json=next(responses)), seen))
+    decision = ScriptedJev()
+    agent = dmcall.DMCall(model, tools=[WEATHER], decision_model=decision.jev)
+    result = agent.call("Weather in Seoul?")
+    assert result.repairs == 1 and result.accepted and not result.initial_no_call_preserved
+    assert result.attempts[0]["calls"] is None and result.calls == seoul()
+    assert len(seen) == 2 and len(decision.requests) == 1
 
 
 def test_filtered_prompt_is_an_unreadable_candidate_not_an_error():
@@ -211,11 +256,28 @@ def test_gemini_request_and_decoding():
     ({"candidates": [{"finishReason": "SAFETY"}]}, "content_filter"),
     ({"candidates": [{"finishReason": "MALFORMED_FUNCTION_CALL"}]}, "malformed_call"),
     ({"promptFeedback": {"blockReason": "SAFETY"}}, "prompt_filter"),
-], ids=["length", "safety", "malformed", "blocked-prompt"])
+    ({"candidates": [{"finishReason": "OTHER"}]}, "abnormal_stop"),
+    ({"candidates": [{"finishReason": "MALFORMED_RESPONSE", "content": {"parts": [{"text": "x"}]}}]}, "abnormal_stop"),
+    ({"candidates": [{"finishReason": "TOO_MANY_TOOL_CALLS"}]}, "abnormal_stop"),
+    ({"candidates": [{"finishReason": "A_REASON_ADDED_LATER"}]}, "abnormal_stop"),
+    ({"candidates": [{"finishReason": "FINISH_REASON_UNSPECIFIED"}]}, "abnormal_stop"),
+    ({"candidates": [{}]}, "abnormal_stop"),
+], ids=["length", "safety", "malformed", "blocked-prompt", "other", "malformed-response", "too-many-calls",
+        "unknown-reason", "unspecified-without-content", "empty-candidate"])
 def test_gemini_unreadable_outputs(body, incomplete):
     model = dmcall.Gemini("g", api_key="k", client=client(lambda r: httpx.Response(200, json=body)))
     proposal = model.generate(EXAMPLE)
-    assert proposal["calls"] is None and proposal["incomplete"] == incomplete
+    assert proposal["calls"] is None and proposal["incomplete"] == incomplete and proposal["parse_errors"]
+
+
+def test_gemini_finished_answers_without_a_call_are_no_calls():
+    call = {"functionCall": {"name": "get_weather", "args": {"city": "Seoul"}}}
+    for body, calls in (({"candidates": [{"finishReason": "STOP"}]}, []),
+                        ({"candidates": [{"finishReason": "STOP", "content": {"parts": [{"text": "No."}]}}]}, []),
+                        ({"candidates": [{"content": {"parts": [call]}}]}, seoul())):
+        model = dmcall.Gemini("g", api_key="k", client=client(lambda r, body=body: httpx.Response(200, json=body)))
+        proposal = model.generate(EXAMPLE)
+        assert proposal["calls"] == calls and proposal["incomplete"] is None
 
 
 def test_provider_specs(monkeypatch):

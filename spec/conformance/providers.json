@@ -1047,6 +1047,210 @@
    }
   },
   {
+   "name": "openai object arguments",
+   "provider": "openai",
+   "response": {
+    "model": "resolved",
+    "choices": [
+     {
+      "finish_reason": "tool_calls",
+      "message": {
+       "role": "assistant",
+       "content": null,
+       "tool_calls": [
+        {
+         "id": "call_0",
+         "type": "function",
+         "function": {
+          "name": "get_weather",
+          "arguments": {
+           "city": "Seoul",
+           "days": 2
+          }
+         }
+        }
+       ]
+      }
+     }
+    ],
+    "usage": {
+     "prompt_tokens": 120,
+     "completion_tokens": 9,
+     "prompt_tokens_details": {
+      "cached_tokens": 64
+     }
+    }
+   },
+   "expected": {
+    "calls": [
+     {
+      "name": "get_weather",
+      "arguments": {
+       "city": "Seoul",
+       "days": 2
+      }
+     }
+    ],
+    "content": null,
+    "parse_errors": [],
+    "incomplete": null,
+    "usage": {
+     "input_tokens": 120,
+     "cached_input_tokens": 64,
+     "output_tokens": 9
+    },
+    "model": "resolved"
+   }
+  },
+  {
+   "name": "openai null arguments",
+   "provider": "openai",
+   "response": {
+    "model": "resolved",
+    "choices": [
+     {
+      "finish_reason": "tool_calls",
+      "message": {
+       "role": "assistant",
+       "content": null,
+       "tool_calls": [
+        {
+         "id": "call_0",
+         "type": "function",
+         "function": {
+          "name": "get_weather",
+          "arguments": null
+         }
+        }
+       ]
+      }
+     }
+    ],
+    "usage": {
+     "prompt_tokens": 120,
+     "completion_tokens": 9,
+     "prompt_tokens_details": {
+      "cached_tokens": 64
+     }
+    }
+   },
+   "expected": {
+    "calls": [
+     {
+      "name": "get_weather",
+      "arguments": {}
+     }
+    ],
+    "content": null,
+    "parse_errors": [],
+    "incomplete": null,
+    "usage": {
+     "input_tokens": 120,
+     "cached_input_tokens": 64,
+     "output_tokens": 9
+    },
+    "model": "resolved"
+   }
+  },
+  {
+   "name": "openai number arguments",
+   "provider": "openai",
+   "response": {
+    "model": "resolved",
+    "choices": [
+     {
+      "finish_reason": "tool_calls",
+      "message": {
+       "role": "assistant",
+       "content": null,
+       "tool_calls": [
+        {
+         "id": "call_0",
+         "type": "function",
+         "function": {
+          "name": "get_weather",
+          "arguments": 3
+         }
+        }
+       ]
+      }
+     }
+    ],
+    "usage": {
+     "prompt_tokens": 120,
+     "completion_tokens": 9,
+     "prompt_tokens_details": {
+      "cached_tokens": 64
+     }
+    }
+   },
+   "expected": {
+    "calls": [
+     {
+      "name": "get_weather",
+      "arguments": null
+     }
+    ],
+    "content": null,
+    "parse_errors": [
+     "Function arguments must be a JSON object."
+    ],
+    "incomplete": null,
+    "usage": {
+     "input_tokens": 120,
+     "cached_input_tokens": 64,
+     "output_tokens": 9
+    },
+    "model": "resolved"
+   }
+  },
+  {
+   "name": "openai legacy function_call",
+   "provider": "openai",
+   "response": {
+    "model": "resolved",
+    "choices": [
+     {
+      "finish_reason": "function_call",
+      "message": {
+       "role": "assistant",
+       "content": null,
+       "function_call": {
+        "name": "get_weather",
+        "arguments": "{\"city\": \"Seoul\"}"
+       }
+      }
+     }
+    ],
+    "usage": {
+     "prompt_tokens": 120,
+     "completion_tokens": 9,
+     "prompt_tokens_details": {
+      "cached_tokens": 64
+     }
+    }
+   },
+   "expected": {
+    "calls": [
+     {
+      "name": "get_weather",
+      "arguments": {
+       "city": "Seoul"
+      }
+     }
+    ],
+    "content": null,
+    "parse_errors": [],
+    "incomplete": null,
+    "usage": {
+     "input_tokens": 120,
+     "cached_input_tokens": 64,
+     "output_tokens": 9
+    },
+    "model": "resolved"
+   }
+  },
+  {
    "name": "anthropic call",
    "provider": "anthropic",
    "response": {
@@ -1314,6 +1518,142 @@
    }
   },
   {
+   "name": "gemini malformed native call 0",
+   "provider": "gemini",
+   "response": {
+    "candidates": [
+     {
+      "finishReason": "STOP",
+      "content": {
+       "parts": [
+        {
+         "functionCall": null
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "expected": {
+    "calls": null,
+    "content": null,
+    "parse_errors": [
+     "The model produced a malformed function call."
+    ],
+    "incomplete": "malformed_call",
+    "usage": {},
+    "model": null
+   }
+  },
+  {
+   "name": "gemini malformed native call 1",
+   "provider": "gemini",
+   "response": {
+    "candidates": [
+     {
+      "finishReason": "STOP",
+      "content": {
+       "parts": [
+        {
+         "functionCall": "bad"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "expected": {
+    "calls": null,
+    "content": null,
+    "parse_errors": [
+     "The model produced a malformed function call."
+    ],
+    "incomplete": "malformed_call",
+    "usage": {},
+    "model": null
+   }
+  },
+  {
+   "name": "gemini malformed native call 2",
+   "provider": "gemini",
+   "response": {
+    "candidates": [
+     {
+      "finishReason": "STOP",
+      "content": {
+       "parts": [
+        {
+         "functionCall": []
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "expected": {
+    "calls": null,
+    "content": null,
+    "parse_errors": [
+     "The model produced a malformed function call."
+    ],
+    "incomplete": "malformed_call",
+    "usage": {},
+    "model": null
+   }
+  },
+  {
+   "name": "gemini malformed native call 3",
+   "provider": "gemini",
+   "response": {
+    "candidates": [
+     {
+      "finishReason": "STOP",
+      "content": {
+       "parts": [
+        {
+         "functionCall": 3
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "expected": {
+    "calls": null,
+    "content": null,
+    "parse_errors": [
+     "The model produced a malformed function call."
+    ],
+    "incomplete": "malformed_call",
+    "usage": {},
+    "model": null
+   }
+  },
+  {
+   "name": "gemini numeric stop",
+   "provider": "gemini",
+   "response": {
+    "candidates": [
+     {
+      "finishReason": 3,
+      "content": {
+       "parts": []
+      }
+     }
+    ]
+   },
+   "expected": {
+    "calls": null,
+    "content": null,
+    "parse_errors": [
+     "The response stopped abnormally before a complete proposal."
+    ],
+    "incomplete": "abnormal_stop",
+    "usage": {},
+    "model": null
+   }
+  },
+  {
    "name": "gemini blocked prompt",
    "provider": "gemini",
    "response": {
@@ -1331,6 +1671,231 @@
     "usage": {},
     "model": null
    }
+  },
+  {
+   "name": "gemini other",
+   "provider": "gemini",
+   "response": {
+    "candidates": [
+     {
+      "finishReason": "OTHER"
+     }
+    ]
+   },
+   "expected": {
+    "calls": null,
+    "content": null,
+    "parse_errors": [
+     "The response stopped abnormally before a complete proposal."
+    ],
+    "incomplete": "abnormal_stop",
+    "usage": {},
+    "model": null
+   }
+  },
+  {
+   "name": "gemini malformed response with text",
+   "provider": "gemini",
+   "response": {
+    "candidates": [
+     {
+      "finishReason": "MALFORMED_RESPONSE",
+      "content": {
+       "parts": [
+        {
+         "text": "partial"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "expected": {
+    "calls": null,
+    "content": null,
+    "parse_errors": [
+     "The response stopped abnormally before a complete proposal."
+    ],
+    "incomplete": "abnormal_stop",
+    "usage": {},
+    "model": null
+   }
+  },
+  {
+   "name": "gemini too many tool calls",
+   "provider": "gemini",
+   "response": {
+    "candidates": [
+     {
+      "finishReason": "TOO_MANY_TOOL_CALLS"
+     }
+    ]
+   },
+   "expected": {
+    "calls": null,
+    "content": null,
+    "parse_errors": [
+     "The response stopped abnormally before a complete proposal."
+    ],
+    "incomplete": "abnormal_stop",
+    "usage": {},
+    "model": null
+   }
+  },
+  {
+   "name": "gemini reason added later",
+   "provider": "gemini",
+   "response": {
+    "candidates": [
+     {
+      "finishReason": "A_REASON_ADDED_LATER",
+      "content": {
+       "parts": [
+        {
+         "functionCall": {
+          "name": "get_weather",
+          "args": {
+           "city": "Seoul"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "expected": {
+    "calls": null,
+    "content": null,
+    "parse_errors": [
+     "The response stopped abnormally before a complete proposal."
+    ],
+    "incomplete": "abnormal_stop",
+    "usage": {},
+    "model": null
+   }
+  },
+  {
+   "name": "gemini unspecified reason without content",
+   "provider": "gemini",
+   "response": {
+    "candidates": [
+     {
+      "finishReason": "FINISH_REASON_UNSPECIFIED"
+     }
+    ]
+   },
+   "expected": {
+    "calls": null,
+    "content": null,
+    "parse_errors": [
+     "The response stopped abnormally before a complete proposal."
+    ],
+    "incomplete": "abnormal_stop",
+    "usage": {},
+    "model": null
+   }
+  },
+  {
+   "name": "gemini empty candidate",
+   "provider": "gemini",
+   "response": {
+    "candidates": [
+     {}
+    ]
+   },
+   "expected": {
+    "calls": null,
+    "content": null,
+    "parse_errors": [
+     "The response stopped abnormally before a complete proposal."
+    ],
+    "incomplete": "abnormal_stop",
+    "usage": {},
+    "model": null
+   }
+  },
+  {
+   "name": "gemini stop without content",
+   "provider": "gemini",
+   "response": {
+    "candidates": [
+     {
+      "finishReason": "STOP"
+     }
+    ]
+   },
+   "expected": {
+    "calls": [],
+    "content": null,
+    "parse_errors": [],
+    "incomplete": null,
+    "usage": {},
+    "model": null
+   }
+  },
+  {
+   "name": "gemini stop with text",
+   "provider": "gemini",
+   "response": {
+    "candidates": [
+     {
+      "finishReason": "STOP",
+      "content": {
+       "parts": [
+        {
+         "text": "No function applies."
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "expected": {
+    "calls": [],
+    "content": "No function applies.",
+    "parse_errors": [],
+    "incomplete": null,
+    "usage": {},
+    "model": null
+   }
+  },
+  {
+   "name": "gemini call without a finish reason",
+   "provider": "gemini",
+   "response": {
+    "candidates": [
+     {
+      "content": {
+       "parts": [
+        {
+         "functionCall": {
+          "name": "get_weather",
+          "args": {
+           "city": "Seoul"
+          }
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   "expected": {
+    "calls": [
+     {
+      "name": "get_weather",
+      "arguments": {
+       "city": "Seoul"
+      }
+     }
+    ],
+    "content": null,
+    "parse_errors": [],
+    "incomplete": null,
+    "usage": {},
+    "model": null
+   }
   }
  ],
  "filtered_prompt": {
@@ -1342,5 +1907,10 @@
    }
   },
   "expected_incomplete": "prompt_filter"
+ },
+ "redirect": {
+  "status": 307,
+  "location": "https://elsewhere.example/v1/chat/completions",
+  "rule": "A redirect is never followed. Exactly one request is sent, to the configured host, and the 3xx answer is a provider error (decision models: the same). Following it would re-send the body and key headers such as x-api-key, api-key and x-goog-api-key to the new host."
  }
 }

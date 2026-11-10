@@ -98,7 +98,31 @@ fn lower_types(schema: &Value) -> Value {
                             })
                             .collect(),
                     ),
-                    _ => lower_types(value),
+                    (
+                        "properties" | "patternProperties" | "$defs" | "definitions" | "dependentSchemas"
+                        | "dependencies",
+                        Value::Object(named),
+                    ) => Value::Object(named.iter().map(|(name, item)| (name.clone(), lower_types(item))).collect()),
+                    (
+                        "items"
+                        | "prefixItems"
+                        | "additionalItems"
+                        | "additionalProperties"
+                        | "unevaluatedItems"
+                        | "unevaluatedProperties"
+                        | "contains"
+                        | "propertyNames"
+                        | "allOf"
+                        | "anyOf"
+                        | "oneOf"
+                        | "not"
+                        | "if"
+                        | "then"
+                        | "else"
+                        | "contentSchema",
+                        _,
+                    ) => lower_types(value),
+                    _ => value.clone(),
                 };
                 result.insert(key.clone(), lowered);
             }

@@ -352,7 +352,7 @@ dmcall.DMCall(dmcall.OpenAICompatible("gemma-4-31b-it", base_url="http://localho
 | OpenRouter | `openrouter:<model>` | `OPENROUTER_API_KEY` | `dmcall.OpenRouter` |
 | Any OpenAI-compatible server | | optional | `dmcall.OpenAICompatible` |
 
-Provider objects take `max_output_tokens` (4,096 by default), `temperature`, `system_prompt`, `timeout`, `max_retries` and `headers`; OpenAI-style providers also take `reasoning_effort`, and Gemini takes `thinking_budget`. A response that is cut off, filtered or refused is an unreadable candidate: it is rejected and repaired, never read as "no call". Any object with `generate(example, history)` that returns `{"calls": ..., "content": ...}` can stand in for a provider. `dmcall.SYSTEM_PROMPT` is the generator prompt used in the paper.
+Provider objects take `max_output_tokens` (4,096 by default), `temperature`, `system_prompt`, `timeout`, `max_retries` and `headers`; OpenAI-style providers also take `reasoning_effort`, and Gemini takes `thinking_budget`. A response that is cut off, filtered, refused or stopped abnormally is an unreadable candidate: it is rejected and repaired, never read as "no call". Redirects are not followed, so a key is sent only to the host you configured. Any object with `generate(example, history)` that returns `{"calls": ..., "content": ...}` can stand in for a provider. `dmcall.SYSTEM_PROMPT` is the generator prompt used in the paper.
 
 Meta's Muse models reject `reasoning_effort="none"` and accept only `tool_choice="auto"`, so `dmcall.Meta` sends neither `reasoning_effort` nor `parallel_tool_calls` unless you set them. Muse models were not evaluated in the paper.
 
@@ -392,6 +392,8 @@ agent = dmcall.DMCall("openai:gpt-5-nano", tools=[get_weather, schema], function
 
 `dmcall.schema_of(fn)` shows the schema DM-Call sends, and `dmcall.check_schema(tools, calls)` runs the schema check $S$ alone.
 
+`run()` executes the accepted call, so every tool needs a synchronous Python function. A tool without one, or with an async function, raises before any request is sent; `call()` executes nothing and needs no functions. A `$ref` in a schema must point inside that schema, and a tool that breaks this rule is refused when the client is created.
+
 ## Verify calls from any framework
 
 Keep your agent and check its calls before you execute them. `verify` takes the conversation so far (earlier tool calls and tool results included) and the proposed calls, as plain dicts or as the message and tool-call objects of the OpenAI, Anthropic and Google SDKs.
@@ -418,7 +420,7 @@ dmcall.DMCall(
     decision_model=None,            # dmcall.Jev by default
     threshold=0.5,                  # pass mark of both questions (for the default Jev)
     max_repairs=3,                  # r: repairs after the first candidate
-    checks="both",                  # "function" or "arguments": ask one question only
+    checks="both",                  # "function" or "arguments": accept on that question alone
     history="cumulative",           # "latest": show only the latest rejected candidate
     feedback="hybrid",              # "numeric" or "text"
     on_exhaustion="first",          # if nothing is accepted: return c_0 ("last": the last repair)
@@ -432,14 +434,16 @@ The defaults are the paper's settings. The paper's variants map to options as fo
 | In the paper | Options |
 |---|---|
 | DM-Call | defaults |
-| DM-Call-Function: function question only | `checks="function"` |
-| DM-Call-Argument: argument question only | `checks="arguments"` |
+| DM-Call-Function: accepts on the function question alone | `checks="function"` |
+| DM-Call-Argument: accepts on the argument question alone | `checks="arguments"` |
 | DM-Call-Latest: only the latest rejection as feedback | `history="latest"` |
 | *Numeric* feedback, $\Phi(p)=p$ | `feedback="numeric"` |
 | *Text* feedback, $\Phi(p)=\ell(p)$ | `feedback="text"` |
 | *Hybrid* feedback, $\Phi(p)=(p,\ell(p))$ | `feedback="hybrid"` |
 
-`call()` and `run()` also take `max_repairs=` and `on_exhaustion=` per request, and `acall`, `arun` and `averify` run the same steps in a worker thread for async code. The paper's baselines (Self-Refine, MAD-FC and PF-FC) ran in its experiment code and are not part of this library.
+With `checks="function"` or `checks="arguments"` the decision model still answers both questions for each readable function call, as in the paper's runs, and both incur usage. The schema check and the chosen judgment decide acceptance; repair feedback includes that judgment.
+
+`call()` and `run()` also take `max_repairs=` and `on_exhaustion=` per request, and `acall`, `arun` and `averify` run the same steps in a worker thread for async code. Tools passed with a request replace the client's tools for that request, and a tool keeps the function the client already has under the same name. The paper's baselines (Self-Refine, MAD-FC and PF-FC) ran in its experiment code and are not part of this library.
 
 <details>
 <summary><b>The result object</b></summary>
@@ -505,7 +509,7 @@ Inference cost in USD for one run over the 3,035 BFCL cases, at list prices. Mod
 | DM-Call-Latest | 73.05 ± 0.24 | 83.61 ± 0.22 | 82.05 ± 0.16 |
 | DM-Call | 74.32 ± 0.22 | 84.80 ± 0.26 | 82.18 ± 0.13 |
 
-Every variant gained 8.9 to 10.2 points over Direct. Asking both questions gave the highest call accuracy, and DM-Call-Argument the highest argument accuracy. Showing only the latest rejection cost 1.3 points of call accuracy.
+Every variant gained 8.9 to 10.2 points over Direct. Requiring both judgments gave the highest call accuracy, and DM-Call-Argument the highest argument accuracy. Showing only the latest rejection cost 1.3 points of call accuracy.
 
 **Feedback representation** (Table 3): BFCL accuracy (%) at $r^\star=3$, three-run mean, from Table 1's first answers.
 

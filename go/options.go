@@ -207,8 +207,9 @@ func WithJevAPIKey(key string) Option {
 	return clientOption(func(c *clientConfig) error { c.jevAPIKey = &key; return nil })
 }
 
-// WithChecks selects the questions: ChecksBoth (DM-Call), ChecksFunction (DM-Call-Function) or
-// ChecksArguments (DM-Call-Argument).
+// WithChecks selects the verdicts used for acceptance and repair feedback: ChecksBoth
+// (DM-Call), ChecksFunction (DM-Call-Function) or ChecksArguments (DM-Call-Argument).
+// Both questions are sent for a readable call; a no call receives only the function question.
 func WithChecks(checks string) Option {
 	return clientOption(func(c *clientConfig) error { c.checks = &checks; return nil })
 }

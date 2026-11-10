@@ -89,6 +89,7 @@
   "content_filter": "The provider's content filter stopped the response before a complete proposal.",
   "refusal": "The response was a refusal and contains no proposal.",
   "prompt_filter": "The provider's content filter rejected the request; no response was generated.",
-  "malformed_call": "The model produced a malformed function call."
+  "malformed_call": "The model produced a malformed function call.",
+  "abnormal_stop": "The response stopped abnormally before a complete proposal."
  }
 }

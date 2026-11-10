@@ -265,7 +265,12 @@ func TestUnreadableCandidateIsRepairedAndNeverRun(t *testing.T) {
 
 func TestInitialNoCallIsReturnedWithoutVerification(t *testing.T) {
 	decision := newScriptedJev(t, "Seoul", 0.95, 0.97)
-	loop, model := agent(t, decision, [][]Call{{}})
+	loop, model := agent(t, decision, [][]Call{{}}, WithHandlers(map[string]Handler{
+		"get_weather": func(context.Context, *Object) (any, error) {
+			t.Fatal("a no-call must not execute")
+			return nil, nil
+		},
+	}))
 	result, err := loop.Run(ctx, Prompt("Tell me a joke."))
 	if err != nil {
 		t.Fatal(err)

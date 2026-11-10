@@ -20,6 +20,7 @@ def load(name):
 
 def test_prompts_file_matches_the_library():
     data = json.loads((SPEC / "prompts.json").read_text())
+    assert data["incomplete_reasons"] == dmcall.providers.INCOMPLETE
     assert data["system_prompt"] == dmcall.SYSTEM_PROMPT
     assert data["history_header"] == prompts.HISTORY_HEADER and data["history_footer"] == prompts.HISTORY_FOOTER
     assert data["function_question"] == dmcall.FUNCTION_QUESTION and data["argument_question"] == dmcall.ARGUMENT_QUESTION
@@ -63,6 +64,17 @@ def test_feedback():
 def test_normalize_calls():
     for case in load("normalize_calls.json")["cases"]:
         assert dmcall.normalize_calls(deepcopy(case["input"])) == case["expected"]
+
+
+@pytest.mark.parametrize("case", load("tools.json")["cases"], ids=lambda case: case["name"])
+def test_tool_definitions(case):
+    assert dmcall.schema_of(deepcopy(case["input"])) == {"type": "function", "function": case["expected"]}
+
+
+@pytest.mark.parametrize("case", load("tools.json")["configuration_errors"], ids=lambda case: case["name"])
+def test_tool_configuration_errors(case):
+    with pytest.raises(ValueError):
+        dmcall.schema_of(deepcopy(case["input"]))
 
 
 PROVIDERS = {"openai": dmcall.OpenAI, "anthropic": dmcall.Anthropic, "gemini": dmcall.Gemini}

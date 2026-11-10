@@ -109,7 +109,8 @@ public final class DMCall implements AutoCloseable {
      * With {@code executeUnverified} the final candidate also runs when none was accepted: the first
      * one, or the last with {@link OnExhaustion#LAST}.
      *
-     * @throws NoSuchElementException   if the call to run has no handler
+     * Every available tool must have a handler before any generator or decision-model request.
+     * @throws NoSuchElementException   if an available tool has no handler
      * @throws ToolExecutionException   if a handler throws a checked exception
      */
     public Result run(Object messages) {
@@ -253,8 +254,23 @@ public final class DMCall implements AutoCloseable {
             toolset = Tools.toolset(tools, merged);
         } else {
             toolset = Tools.toolset(options.tools, options.functions);
+            Map<String, ToolHandler> known = Tools.toolset(tools, functions).registry();
+            for (var schema : toolset.schemas()) {
+                String name = schema.get("function").get("name").textValue();
+                if (!toolset.registry().containsKey(name) && known.containsKey(name)) {
+                    toolset.registry().put(name, known.get(name));
+                }
+            }
         }
         ArrayNode schemas = toolset.schemas();
+        if (execute) {
+            for (var schema : schemas) {
+                String name = schema.get("function").get("name").textValue();
+                if (!toolset.registry().containsKey(name)) {
+                    throw new NoSuchElementException("No handler for tool " + Py.strRepr(name) + ".");
+                }
+            }
+        }
         ArrayNode conversation = Messages.forGenerator(messages);
         long started = System.nanoTime();
         List<ObjectNode> rejected = new ArrayList<>();

@@ -31,6 +31,7 @@ INCOMPLETE = {
     "refusal": "The response was a refusal and contains no proposal.",
     "prompt_filter": "The provider's content filter rejected the request; no response was generated.",
     "malformed_call": "The model produced a malformed function call.",
+    "abnormal_stop": "The response stopped abnormally before a complete proposal.",
 }
 
 
@@ -69,10 +70,12 @@ def _count(value):
 
 
 def _arguments(value, *, encoded):
-    """Malformed arguments stay a rejected, repairable call, never a no-call."""
-    if encoded:
-        if not isinstance(value, str):
-            raise ProviderError("Function arguments were not an encoded JSON string.")
+    """Malformed arguments stay a rejected, repairable call, never a no-call.
+
+    Chat Completions sends the arguments as JSON text (``encoded``). Some compatible servers
+    send the object itself, or null for no arguments; both are read like the other protocols.
+    """
+    if encoded and isinstance(value, str):
         try:
             value = json.loads(value) if value.strip() else {}
         except ValueError:
@@ -350,6 +353,11 @@ class OpenAICompatible(Provider):
                 raise ProviderError("The response contained an invalid function-call object.")
             _append_call(calls, errors, item["function"].get("name"), item["function"].get("arguments", "{}"),
                          encoded=True)
+        legacy = message.get("function_call")  # the single call of the API before tool_calls
+        if not native and legacy is not None:
+            if not isinstance(legacy, dict):
+                raise ProviderError("The response contained an invalid function-call object.")
+            _append_call(calls, errors, legacy.get("name"), legacy.get("arguments", "{}"), encoded=True)
         content = message.get("content")
         if isinstance(content, str) and content:
             text.append(content)
@@ -531,6 +539,8 @@ class Gemini(Provider):
     key_env = ("GEMINI_API_KEY", "GOOGLE_API_KEY")
     FILTERED = frozenset({"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "IMAGE_SAFETY",
                           "LANGUAGE"})
+    # The only finish reasons of a complete answer. Any other one leaves no readable proposal.
+    FINISHED = frozenset({"STOP", "FINISH_REASON_UNSPECIFIED"})
 
     def __init__(self, model: str, *, thinking_budget: int | None = None, **kwargs):
         super().__init__(model.removeprefix("models/") if isinstance(model, str) else model, **kwargs)
@@ -598,12 +608,19 @@ class Gemini(Provider):
             return _incomplete("content_filter")
         if reason in {"MALFORMED_FUNCTION_CALL", "UNEXPECTED_TOOL_CALL"}:
             return _incomplete("malformed_call")
-        parts = (candidate.get("content") or {}).get("parts") or []
+        content = candidate.get("content")
+        if reason is not None and reason not in self.FINISHED:
+            return _incomplete("abnormal_stop")  # OTHER, MALFORMED_RESPONSE, TOO_MANY_TOOL_CALLS, a future reason
+        if reason != "STOP" and not isinstance(content, dict):
+            return _incomplete("abnormal_stop")  # no content, and nothing says the model finished
+        parts = (content or {}).get("parts") or []
         calls, errors, text = [], [], []
         for part in parts:
             if not isinstance(part, dict):
                 raise ProviderError("A Gemini content part was malformed.")
-            if isinstance(part.get("functionCall"), dict):
+            if "functionCall" in part:
+                if not isinstance(part["functionCall"], dict):
+                    return _incomplete("malformed_call")
                 call = part["functionCall"]
                 _append_call(calls, errors, call.get("name"), call.get("args"), encoded=False)
             elif isinstance(part.get("text"), str) and part["text"] and not part.get("thought"):

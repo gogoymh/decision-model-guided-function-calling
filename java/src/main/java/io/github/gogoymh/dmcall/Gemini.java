@@ -21,6 +21,8 @@ public final class Gemini extends Provider {
             List.of("GEMINI_API_KEY", "GOOGLE_API_KEY"), true);
     private static final Set<String> FILTERED = Set.of("SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT",
             "SPII", "IMAGE_SAFETY", "LANGUAGE");
+    /** The only finish reasons of a complete answer. Any other one leaves no readable proposal. */
+    private static final Set<String> FINISHED = Set.of("STOP", "FINISH_REASON_UNSPECIFIED");
 
     private final Integer thinkingBudget;
 
@@ -137,7 +139,8 @@ public final class Gemini extends Provider {
         if (!candidate.isObject()) {
             throw new Py.ProtocolMismatch();
         }
-        String reason = Py.member(candidate.get("finishReason"));
+        JsonNode finish = candidate.get("finishReason");
+        String reason = Py.member(finish);
         if ("MAX_TOKENS".equals(reason)) {
             return Decoded.incomplete("length");
         }
@@ -147,7 +150,17 @@ public final class Gemini extends Provider {
         if ("MALFORMED_FUNCTION_CALL".equals(reason) || "UNEXPECTED_TOOL_CALL".equals(reason)) {
             return Decoded.incomplete("malformed_call");
         }
-        JsonNode content = Py.truthy(candidate.get("content")) ? candidate.get("content") : Json.object();
+        JsonNode content = candidate.get("content");
+        if (!Py.isNone(finish) && (reason == null || !FINISHED.contains(reason))) {
+            // OTHER, MALFORMED_RESPONSE, TOO_MANY_TOOL_CALLS, a future reason
+            return Decoded.incomplete("abnormal_stop");
+        }
+        if (!"STOP".equals(reason) && (content == null || !content.isObject())) {
+            return Decoded.incomplete("abnormal_stop");  // no content, and nothing says the model finished
+        }
+        if (!Py.truthy(content)) {
+            content = Json.object();
+        }
         if (!content.isObject()) {
             throw new Py.ProtocolMismatch();
         }
@@ -160,7 +173,10 @@ public final class Gemini extends Provider {
                 throw new ProviderException("A Gemini content part was malformed.");
             }
             JsonNode call = part.get("functionCall");
-            if (call != null && call.isObject()) {
+            if (part.has("functionCall")) {
+                if (!call.isObject()) {
+                    return Decoded.incomplete("malformed_call");
+                }
                 appendCall(calls, errors, call.get("name"), call.get("args"), false);
             } else if (part.get("text") != null && part.get("text").isTextual() && !part.get("text").textValue().isEmpty()
                     && !Py.truthy(part.get("thought"))) {

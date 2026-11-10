@@ -232,7 +232,11 @@ fn initial_no_call_is_returned_without_verification() {
     isolate_env();
     let model = Scripted::new(vec![none()]);
     let (jev, mock) = scripted_jev(0.97);
-    let loop_ = DMCall::builder(model.clone()).decision_model(jev).tool(weather()).build().unwrap();
+    let loop_ = DMCall::builder(model.clone())
+        .decision_model(jev)
+        .tool(weather().with_handler(|_| Ok(Value::Null)))
+        .build()
+        .unwrap();
     let result = loop_.run("Tell me a joke.").unwrap();
     assert!(result.no_call() && result.accepted.is_none() && result.initial_no_call_preserved);
     assert!(!result.executed && result.text.as_deref() == Some("No tool fits.") && mock.sent().is_empty());
@@ -419,4 +423,26 @@ fn clients_can_be_shared_across_threads() {
     shareable::<dmcall::OpenAI>();
     shareable::<dmcall::CallResult>();
     shareable::<Tool>();
+}
+
+#[test]
+fn run_missing_handler_fails_before_generation_or_judgment() {
+    isolate_env();
+    let (builder, model, decision) = agent(vec![]);
+    let error = builder.build().unwrap().run("Weather in Seoul?").unwrap_err();
+    assert!(matches!(error, Error::MissingHandler(ref name) if name == "get_weather"));
+    assert!(model.histories().is_empty());
+    assert!(decision.sent().is_empty());
+}
+
+#[test]
+fn per_call_tools_keep_registered_handlers_and_allow_replacement() {
+    isolate_env();
+    for replace in [false, true] {
+        let (builder, _, _) = agent(vec![seoul()]);
+        let agent = builder.handler("get_weather", |_| Ok(json!("registered"))).build().unwrap();
+        let tool = if replace { weather().with_handler(|_| Ok(json!("replacement"))) } else { weather() };
+        let result = agent.run_with("Weather?", CallOptions { tools: Some(vec![tool]), ..Default::default() }).unwrap();
+        assert_eq!(result.output().unwrap(), json!(if replace { "replacement" } else { "registered" }));
+    }
 }

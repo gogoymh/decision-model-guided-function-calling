@@ -279,7 +279,10 @@ export class DecisionModel implements Judge {
    * decision model that speaks another protocol.
    */
   async ask(state: DecisionState, questions: Questions): Promise<Answer> {
-    const stateJson = STATES.get(state) ?? fromPlain(state);
+    const original = STATES.get(state);
+    const current = fromPlain(state);
+    // Keep recorded number kinds only while the state has not been changed by an ask() override.
+    const stateJson = original && compactText(fromPlain(toPlain(original))) === compactText(current) ? original : current;
     const payload: JsonObject = new Map<string, Json>([
       ["model", this.model], ["state", stateJson], ["questions", fromPlain(questions)],
     ]);

@@ -10,6 +10,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -30,9 +31,83 @@ final class TypeSchemaValidator {
     }
 
     private final JsonNode root;
+    private final Set<JsonNode> schemaNodes = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
 
     TypeSchemaValidator(JsonNode typeSchema) {
         this.root = typeSchema;
+        collectSchemaNodes(root);
+        checkReferences(root, new IdentityHashMap<>());
+    }
+
+    private void collectSchemaNodes(JsonNode schema) {
+        if (schema.isArray()) {
+            schema.forEach(this::collectSchemaNodes);
+        } else if (schema.isObject()) {
+            schemaNodes.add(schema);
+            schema.fields().forEachRemaining(entry -> {
+                String key = entry.getKey();
+                JsonNode value = entry.getValue();
+                if (Set.of("properties", "patternProperties", "$defs", "definitions").contains(key)) {
+                    value.forEach(this::collectSchemaNodes);
+                } else if (Set.of("items", "prefixItems", "additionalProperties", "allOf", "anyOf").contains(key)) {
+                    collectSchemaNodes(value);
+                }
+            });
+        }
+    }
+
+    /** Check each schema, but do not interpret default values or property names as keywords. */
+    private void checkReferences(JsonNode schema, Map<JsonNode, Boolean> state) {
+        if (schema.isArray()) {
+            schema.forEach(item -> checkReferences(item, state));
+        } else if (schema.isObject()) {
+            followSameValue(schema, state);
+            schema.fields().forEachRemaining(entry -> {
+                String key = entry.getKey();
+                JsonNode value = entry.getValue();
+                if (Set.of("properties", "patternProperties", "$defs", "definitions").contains(key)) {
+                    value.forEach(item -> checkReferences(item, state));
+                } else if (Set.of("items", "prefixItems", "additionalProperties", "allOf", "anyOf").contains(key)) {
+                    checkReferences(value, state);
+                }
+            });
+        }
+    }
+
+    /** Cycles on the same value do not terminate; recursion into properties or items is allowed. */
+    private void followSameValue(JsonNode schema, Map<JsonNode, Boolean> state) {
+        Boolean active = state.get(schema);
+        if (Boolean.FALSE.equals(active)) {
+            return;
+        }
+        if (Boolean.TRUE.equals(active)) {
+            throw new IllegalArgumentException("An available function's JSON Schema has a $ref that cannot be resolved");
+        }
+        state.put(schema, true);
+        JsonNode ref = schema.get("$ref");
+        if (ref != null && ref.isTextual()) {
+            JsonNode target = resolve(ref.textValue());
+            if (!target.isObject() && !target.isBoolean()) {
+                throw new IllegalArgumentException("An available function's JSON Schema has a $ref that cannot be resolved");
+            }
+            if (target.isObject()) {
+                if (!schemaNodes.contains(target)) {
+                    throw new IllegalArgumentException("An available function's JSON Schema has a $ref that cannot be resolved");
+                }
+                followSameValue(target, state);
+            }
+        }
+        for (String key : List.of("allOf", "anyOf")) {
+            JsonNode branches = schema.get(key);
+            if (branches != null && branches.isArray()) {
+                branches.forEach(branch -> {
+                    if (branch.isObject()) {
+                        followSameValue(branch, state);
+                    }
+                });
+            }
+        }
+        state.put(schema, false);
     }
 
     /** A schema's types, required names and nesting without value constraints. */

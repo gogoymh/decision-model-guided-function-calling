@@ -138,6 +138,25 @@ describe("normalize_calls.json", () => {
   });
 });
 
+describe("tools.json", () => {
+  const data = conformance("tools.json");
+  for (const testCase of list(at(data, "cases"))) {
+    test(text(at(testCase, "name")), () => {
+      const input = at(testCase, "input") as unknown as dmcall.ToolInput;
+      assertJson(dmcall.schemaOf(input).function, at(testCase, "expected"), undefined, true);
+    });
+  }
+  for (const testCase of list(at(data, "configuration_errors"))) {
+    test(`configuration error: ${text(at(testCase, "name"))}`, () => {
+      const input = at(testCase, "input") as unknown as dmcall.ToolInput;
+      assert.throws(() => dmcall.schemaOf(input));
+      assert.throws(() => new dmcall.DMCall({ generate: () => {
+        assert.fail("invalid tools must fail before a request");
+      } }, { tools: [input], decisionModel: new dmcall.Jev("KEY") }));
+    });
+  }
+});
+
 const HEADERS = new Set(["authorization", "x-api-key", "api-key", "x-goog-api-key", "anthropic-version", "content-type"]);
 
 function listedHeaders(seen: Seen): Record<string, string> {

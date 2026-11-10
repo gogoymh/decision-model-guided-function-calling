@@ -126,15 +126,145 @@ func compileTools(tools []Tool) (*compiledTools, error) {
 		if !ok {
 			return nil, errors.New("dmcall: function parameters must be a JSON Schema object")
 		}
-		if err := checkMetaSchema(schema); err != nil {
+		validator, err := compileSchema(schema)
+		if err != nil {
 			return nil, fmt.Errorf("dmcall: an available function has an invalid JSON Schema: %w", err)
 		}
-		compiled.byName[definition.Value("name").(string)] = &compiledTool{
-			schema:    schema,
-			validator: &schemaValidator{root: typeSchema(schema), dialect: dialectOf(schema)},
-		}
+		compiled.byName[definition.Value("name").(string)] = &compiledTool{schema: schema, validator: validator}
 	}
 	return compiled, nil
+}
+
+// Cache immutable validators by schema text. Changed tools get a new validator;
+// bounded retention prevents dynamic schemas from growing the cache indefinitely.
+var compiledSchemas = struct {
+	sync.Mutex
+	entries map[string]*schemaValidator
+	order   []string
+}{entries: map[string]*schemaValidator{}}
+
+func compileSchema(schema *Object) (*schemaValidator, error) {
+	key, err := encodeJSON(schema, compactStyle)
+	if err != nil {
+		return nil, err
+	}
+	compiledSchemas.Lock()
+	defer compiledSchemas.Unlock()
+	if validator := compiledSchemas.entries[key]; validator != nil {
+		return validator, nil
+	}
+	if err := checkMetaSchema(schema); err != nil {
+		return nil, err
+	}
+	validator := &schemaValidator{root: typeSchema(schema), dialect: dialectOf(schema)}
+	if err := validator.checkReferences(); err != nil {
+		return nil, err
+	}
+	if len(compiledSchemas.order) >= 1024 {
+		delete(compiledSchemas.entries, compiledSchemas.order[0])
+		compiledSchemas.order = compiledSchemas.order[1:]
+	}
+	compiledSchemas.entries[key] = validator
+	compiledSchemas.order = append(compiledSchemas.order, key)
+	return validator, nil
+}
+
+var errUnresolvableReference = errors.New("dmcall: a JSON Schema $ref cannot be resolved inside the parameters")
+
+// Reject missing references and cycles applied to the same value. Recursion
+// through properties/items consumes part of the value and remains allowed.
+func (v *schemaValidator) checkReferences() error {
+	schemaNodes := map[*Object]bool{}
+	state := map[*Object]int{}
+	var follow func(*Object, int) error
+	follow = func(schema *Object, depth int) error {
+		if depth > maxSchemaDepth || state[schema] == 1 {
+			return errUnresolvableReference
+		}
+		if state[schema] == 2 {
+			return nil
+		}
+		state[schema] = 1
+		if reference, ok := schema.Value("$ref").(string); ok {
+			target, err := resolvePointer(v.root, reference)
+			if err != nil {
+				return errUnresolvableReference
+			}
+			switch target := target.(type) {
+			case *Object:
+				if !schemaNodes[target] {
+					return errUnresolvableReference
+				}
+				if err := follow(target, depth+1); err != nil {
+					return err
+				}
+			case bool:
+				if err := metaCheck(target, v.dialect, 0); err != nil {
+					return errUnresolvableReference
+				}
+			default:
+				return errUnresolvableReference
+			}
+			if v.dialect <= draft7 {
+				state[schema] = 2
+				return nil
+			}
+		}
+		for _, key := range []string{"allOf", "anyOf"} {
+			branches, _ := schema.Value(key).([]any)
+			for _, branch := range branches {
+				if child, ok := branch.(*Object); ok {
+					if err := follow(child, depth+1); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		state[schema] = 2
+		return nil
+	}
+	var walk func(any, int) error
+	walk = func(value any, depth int) error {
+		if depth > maxSchemaDepth {
+			return errUnresolvableReference
+		}
+		switch node := value.(type) {
+		case []any:
+			for _, item := range node {
+				if err := walk(item, depth+1); err != nil {
+					return err
+				}
+			}
+		case *Object:
+			schemaNodes[node] = true
+			for _, key := range node.keys {
+				switch key {
+				case "properties", "patternProperties", "$defs", "definitions":
+					if members, ok := node.Value(key).(*Object); ok {
+						for _, name := range members.keys {
+							if err := walk(members.Value(name), depth+1); err != nil {
+								return err
+							}
+						}
+					}
+				case "items", "prefixItems", "additionalProperties", "allOf", "anyOf":
+					if err := walk(node.Value(key), depth+1); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		return nil
+	}
+	if err := walk(v.root, 0); err != nil {
+		return err
+	}
+	for node := range schemaNodes {
+		if err := follow(node, 0); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *compiledTools) check(calls any) (*SchemaCheck, error) {

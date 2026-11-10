@@ -62,6 +62,7 @@ const (
 	IncompleteRefusal       = "refusal"
 	IncompletePromptFilter  = "prompt_filter"
 	IncompleteMalformedCall = "malformed_call"
+	IncompleteAbnormalStop  = "abnormal_stop"
 )
 
 // IncompleteReasons explain each Incomplete reason.
@@ -71,6 +72,7 @@ var IncompleteReasons = map[string]string{
 	IncompleteRefusal:       "The response was a refusal and contains no proposal.",
 	IncompletePromptFilter:  "The provider's content filter rejected the request; no response was generated.",
 	IncompleteMalformedCall: "The model produced a malformed function call.",
+	IncompleteAbnormalStop:  "The response stopped abnormally before a complete proposal.",
 }
 
 // ProviderError is a sanitized provider failure. It never contains keys or response bodies.
@@ -365,9 +367,12 @@ func (p *Provider) Model() string { return p.model }
 func (p *Provider) BaseURL() string { return p.baseURL }
 
 // String describes the provider without its key.
-func (p *Provider) String() string {
+func (p Provider) String() string {
 	return fmt.Sprintf("%s(model=%s, base_url=%s)", p.kind.class, pyStr(p.model), pyStr(p.baseURL))
 }
+
+// GoString uses the same sanitized representation for fmt's %#v format.
+func (p Provider) GoString() string { return p.String() }
 
 // pyQuote is Python's urllib.parse.quote(value, safe=""): every byte outside A-Z a-z 0-9 _.-~ is
 // percent-encoded.
@@ -759,11 +764,7 @@ func appendCall(calls []Call, errs []string, name any, arguments any, encoded bo
 	if !ok || text == "" {
 		return nil, nil, decodeError("The response contained an invalid function name.")
 	}
-	if encoded {
-		encodedText, ok := arguments.(string)
-		if !ok {
-			return nil, nil, decodeError("Function arguments were not an encoded JSON string.")
-		}
+	if encodedText, ok := arguments.(string); encoded && ok {
 		if strings.TrimSpace(encodedText) == "" {
 			arguments = NewObject()
 		} else if parsed, err := ParseJSON([]byte(encodedText)); err != nil {
@@ -833,6 +834,21 @@ func decodeChat(data *Object) (decoded, error) {
 		call, ok := item.(*Object)
 		function, isFunction := call.Value("function").(*Object)
 		if !ok || !isFunction {
+			return decoded{}, decodeError("The response contained an invalid function-call object.")
+		}
+		arguments, present := function.Get("arguments")
+		if !present {
+			arguments = "{}"
+		}
+		var err error
+		if calls, errs, err = appendCall(calls, errs, function.Value("name"), arguments, true); err != nil {
+			return decoded{}, err
+		}
+	}
+	// Legacy Chat Completions returns one function_call instead of tool_calls.
+	if len(items) == 0 && message.Value("function_call") != nil {
+		function, ok := message.Value("function_call").(*Object)
+		if !ok {
 			return decoded{}, decodeError("The response contained an invalid function-call object.")
 		}
 		arguments, present := function.Get("arguments")
@@ -925,6 +941,12 @@ func decodeGemini(data *Object) (decoded, error) {
 	case reason == "MALFORMED_FUNCTION_CALL" || reason == "UNEXPECTED_TOOL_CALL":
 		return incomplete(IncompleteMalformedCall), nil
 	}
+	if value := candidate.Value("finishReason"); value != nil && reason != "STOP" && reason != "FINISH_REASON_UNSPECIFIED" {
+		return incomplete(IncompleteAbnormalStop), nil
+	}
+	if _, ok := candidate.Value("content").(*Object); reason != "STOP" && !ok {
+		return incomplete(IncompleteAbnormalStop), nil
+	}
 	var parts []any
 	if content := candidate.Value("content"); truthy(content) {
 		object, ok := content.(*Object)
@@ -950,7 +972,11 @@ func decodeGemini(data *Object) (decoded, error) {
 		if !ok {
 			return decoded{}, decodeError("A Gemini content part was malformed.")
 		}
-		if call, ok := part.Value("functionCall").(*Object); ok {
+		if rawCall, present := part.Get("functionCall"); present {
+			call, ok := rawCall.(*Object)
+			if !ok {
+				return incomplete(IncompleteMalformedCall), nil
+			}
 			var err error
 			if calls, errs, err = appendCall(calls, errs, call.Value("name"), call.Value("args"), false); err != nil {
 				return decoded{}, err

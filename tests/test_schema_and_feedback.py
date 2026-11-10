@@ -84,6 +84,61 @@ def test_invalid_tool_schema_is_a_configuration_error():
         dmcall.check_schema([WEATHER, WEATHER], [])
 
 
+def _tool(parameters):
+    return [{"type": "function", "function": {"name": "f", "description": "", "parameters": parameters}}]
+
+
+@pytest.mark.parametrize("parameters", [
+    {"type": "object", "properties": {"a": {"$ref": "#/$defs/missing"}}},
+    {"type": "object", "properties": {"a": {"$ref": "https://example.com/a.json"}}},
+    {"type": "object", "properties": {"a": {"$ref": "#/properties/a"}}},
+    {"type": "object", "properties": {"a": {"$ref": "#/type"}}},
+    {"type": "object", "properties": {"a": {"$ref": "#/$defs/x"}}, "$defs": {"x": {"allOf": [{"$ref": "#/$defs/x"}]}}},
+], ids=["missing", "remote", "itself", "scalar", "loop-through-allOf"])
+def test_a_reference_that_cannot_be_followed_is_a_configuration_error(parameters):
+    """It fails when the tools are checked, not later with a call in hand, and nothing is fetched."""
+    with pytest.raises(ValueError, match=r"\$ref that cannot be resolved"):
+        dmcall.check_schema(_tool(parameters), [])
+
+
+def test_nested_resource_references_keep_their_own_scope():
+    parameters = {"type": "object", "properties": {"nested": {
+        "$id": "nested", "type": "object", "$defs": {"number": {"type": "integer"}},
+        "properties": {"value": {"$ref": "#/$defs/number"}},
+    }}}
+    definition = dmcall.schema_of({"name": "f", "parameters": parameters})
+    assert dmcall.check_schema([definition], [{"name": "f", "arguments": {"nested": {"value": 1}}}])["accepted"]
+    assert not dmcall.check_schema([definition], [{"name": "f", "arguments": {"nested": {"value": "one"}}}])["accepted"]
+
+
+def test_references_inside_the_parameters_and_recursive_schemas_work():
+    tree = _tool({"type": "object", "properties": {"root": {"$ref": "#/$defs/node"}}, "$defs": {"node": {
+        "type": "object", "properties": {"value": {"type": "integer"}, "child": {"$ref": "#/$defs/node"}},
+        "required": ["value"]}}})
+    good = [{"name": "f", "arguments": {"root": {"value": 1, "child": {"value": 2}}}}]
+    bad = [{"name": "f", "arguments": {"root": {"value": 1, "child": {"value": "two"}}}}]
+    assert dmcall.check_schema(tree, good)["accepted"]
+    assert dmcall.check_schema(tree, bad)["errors"] == [{
+        "check": "arguments", "path": 'calls[0].arguments["root"]["child"]["value"]',
+        "message": "'two' is not of type 'integer'"}]
+    # A value that only looks like a reference is data, and a property may be named "$ref".
+    data = _tool({"type": "object", "properties": {"a": {"type": "object", "default": {"$ref": "#/nope"}},
+                                                    "$ref": {"type": "string"}}})
+    assert dmcall.check_schema(data, [{"name": "f", "arguments": {"a": {}, "$ref": "x"}}])["accepted"]
+
+
+def test_a_tool_schema_is_compiled_once():
+    from dmcall.schema import _compiled
+
+    tools = _tool({"type": "object", "properties": {"only_here": {"type": "string"}}})
+    dmcall.check_schema(tools, [])
+    before = _compiled.cache_info()
+    for _ in range(3):
+        assert dmcall.check_schema(tools, [{"name": "f", "arguments": {"only_here": "x"}}])["accepted"]
+    after = _compiled.cache_info()
+    assert after.misses == before.misses and after.hits == before.hits + 3
+
+
 # Φ ---------------------------------------------------------------------------------------------
 @pytest.mark.parametrize("p, expected", [(0, "very likely incorrect"), (0.19, "very likely incorrect"),
                                          (0.2, "likely incorrect"), (0.48, "uncertain"), (0.52, "uncertain"),

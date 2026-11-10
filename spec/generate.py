@@ -130,6 +130,33 @@ FALSE_SUB = {"type": "function", "function": {"name": "f", "description": "", "p
     "type": "object", "properties": {"a": False, "b": {"type": "array", "items": False}}}}}
 
 
+# A schema may refer to itself through properties or items; that recursion ends with the value.
+TREE = {"type": "function", "function": {"name": "tree", "description": "", "parameters": {
+    "type": "object", "properties": {"root": {"$ref": "#/$defs/node"}},
+    "$defs": {"node": {"type": "object", "properties": {"value": {"type": "integer"},
+                                                         "children": {"type": "array", "items": {"$ref": "#/$defs/node"}}},
+                       "required": ["value"]}}}}}
+# A default that looks like a reference is data, and a property may be named "$ref".
+REF_DATA = {"type": "function", "function": {"name": "g", "description": "", "parameters": {
+    "type": "object", "properties": {"a": {"type": "object", "default": {"$ref": "#/nope"}},
+                                     "$ref": {"type": "string"}}}}}
+BAD_REF_TARGETS = [
+    ("$ref to invalid default data", {"type": "object", "properties": {"a": {"$ref": "#/default"}},
+                                    "default": {"type": "PREMIUM"}}),
+    ("$ref to a property mapping", {"type": "object", "properties": {"type": {"type": "string"},
+                                                                             "a": {"$ref": "#/properties"}}}),
+    ("$ref to schema-shaped default data", {"type": "object", "properties": {"a": {"$ref": "#/default"}},
+                                          "default": {"type": "integer", "minimum": 2}}),
+    ("$ref to data with a nested reference", {"type": "object", "properties": {"a": {"$ref": "#/default"}},
+                                            "default": {"type": "object", "properties": {
+                                                "child": {"$ref": "#/missing"}}}}),
+]
+
+
+def bad_reference(parameters):
+    return [{"type": "function", "function": {"name": "f", "description": "", "parameters": parameters}}]
+
+
 def call(name, arguments):
     return {"name": name, "arguments": arguments}
 
@@ -168,6 +195,12 @@ SCHEMA_CASES = [
     ("false subschema property", [FALSE_SUB], [call("f", {"a": 1})]),
     ("false items subschema", [FALSE_SUB], [call("f", {"b": [1]})]),
     ("false items subschema, empty array", [FALSE_SUB], [call("f", {"b": []})]),
+    ("reference to false schema", bad_reference({"type": "object", "properties": {
+        "a": {"$ref": "#/$defs/deny"}}, "$defs": {"deny": False}}), [call("f", {"a": 1})]),
+    ("recursive schema", [TREE], [call("tree", {"root": {"value": 1, "children": [{"value": 2, "children": []}]}})]),
+    ("recursive schema, nested error", [TREE], [call("tree", {"root": {"value": 1, "children": [
+        {"value": 2, "children": [{"value": "three"}, {}]}]}})]),
+    ("reference-like data and a property named $ref", [REF_DATA], [call("g", {"a": {}, "$ref": "x"})]),
 ]
 
 
@@ -176,10 +209,29 @@ def schema_check_file() -> dict:
     for name, tools, calls in SCHEMA_CASES:
         cases.append({"name": name, "tools": tools, "calls": calls, "expected": dmcall.check_schema(tools, deepcopy(calls))})
     invalid = []
+    for name, parameters in BAD_REF_TARGETS:
+        tools = bad_reference(parameters)
+        try:
+            dmcall.check_schema(tools, [])
+        except ValueError:
+            invalid.append({"name": name, "tools": tools})
+        else:
+            raise AssertionError(name)
     for name, tools in (("invalid parameter schema", [{"type": "function", "function": {"name": "f", "parameters": {
             "type": "object", "properties": {"a": {"type": "nonsense"}}}}}]),
                         ("duplicate names", [WEATHER, WEATHER]),
-                        ("parameters not an object", [{"type": "function", "function": {"name": "f", "parameters": []}}])):
+                        ("parameters not an object", [{"type": "function", "function": {"name": "f", "parameters": []}}]),
+                        ("$ref to a missing definition", bad_reference(
+                            {"type": "object", "properties": {"a": {"$ref": "#/$defs/missing"}}})),
+                        ("$ref to another document", bad_reference(
+                            {"type": "object", "properties": {"a": {"$ref": "https://example.com/a.json"}}})),
+                        ("$ref to itself", bad_reference(
+                            {"type": "object", "properties": {"a": {"$ref": "#/properties/a"}}})),
+                        ("$ref to scalar", bad_reference(
+                            {"type": "object", "properties": {"a": {"$ref": "#/type"}}})),
+                        ("$ref loop through allOf", bad_reference(
+                            {"type": "object", "properties": {"a": {"$ref": "#/$defs/x"}},
+                             "$defs": {"x": {"allOf": [{"$ref": "#/$defs/x"}]}}}))):
         try:
             dmcall.check_schema(tools, [])
         except ValueError:
@@ -187,8 +239,84 @@ def schema_check_file() -> dict:
         else:
             raise AssertionError(name)
     return {"note": "check_schema(tools, calls). Error messages follow Python jsonschema's wording; errors are sorted "
-                    "by str(list(path)) of the jsonschema error, then by the order jsonschema reports them.",
+                    "by str(list(path)) of the jsonschema error, then by the order jsonschema reports them. "
+                    "configuration_errors must be refused when the tools are checked, with no call in hand: a $ref "
+                    "must resolve inside the tool's own parameters (nothing is fetched) and must not lead back to "
+                    "its own schema without consuming part of the value. An object target must occupy an actual "
+                    "structural schema position, not a metadata value or a map of named schemas; boolean targets "
+                    "must be valid schemas for the selected draft.",
             "cases": cases, "configuration_errors": invalid}
+
+
+# tools.json: a tool definition in any SDK's format becomes one function definition --------------------
+PARAMETERS = WEATHER["function"]["parameters"]
+CAPITALS = {"name": "plan", "description": "Pick a plan.", "parameters": {"type": "OBJECT", "properties": {
+    "tier": {"type": "OBJECT", "enum": [{"type": "PREMIUM"}, {"type": "BASIC"}], "default": {"type": "PREMIUM"}},
+    "kind": {"const": {"type": "FIXED"}, "examples": [{"type": "SAMPLE"}], "example": {"type": "ONE"}},
+    "default": {"type": "STRING"}, "enum": {"type": "ARRAY", "items": {"type": ["STRING", "NULL"]}},
+    "type": {"type": "INTEGER"}, "nested": {"type": "OBJECT", "properties": {"const": {"type": "BOOLEAN"}},
+                                            "additionalProperties": {"type": "NUMBER"}}},
+    "$defs": {"examples": {"type": "STRING"}}, "required": ["tier"]}}
+TOOL_CASES = [
+    ("openai chat completions", WEATHER),
+    ("openai function object", WEATHER["function"]),
+    ("openai responses", {"type": "function", **WEATHER["function"]}),
+    ("anthropic input_schema", {"name": "get_weather", "description": "Current weather for a city.",
+                                "input_schema": PARAMETERS}),
+    ("gemini parametersJsonSchema", {"name": "get_weather", "description": "Current weather for a city.",
+                                     "parametersJsonSchema": PARAMETERS}),
+    ("gemini capital types", {"name": "get_weather", "description": "Current weather for a city.", "parameters": {
+        "type": "OBJECT", "properties": {"city": {"type": "STRING", "description": "City name."},
+                                         "unit": {"type": "STRING", "enum": ["celsius", "fahrenheit"],
+                                                  "default": "celsius"}}, "required": ["city"]}}),
+    ("capital types are lowered only in schemas", CAPITALS),
+    ("dependency names and extension metadata are data", {"name": "f", "parameters": {
+        "type": "OBJECT", "properties": {"type": {"type": "STRING"}},
+        "dependentRequired": {"type": ["PREMIUM"]},
+        "dependencies": {"type": ["PREMIUM"], "schema": {"type": "OBJECT", "properties": {"x": {"type": "INTEGER"}}}},
+        "x-extension": {"type": "PREMIUM", "nested": {"type": "SAMPLE"}}}}),
+    ("known single schema keywords keep type normalization", {"name": "f", "parameters": {
+        "type": "OBJECT", "not": {"type": "STRING"}, "if": {"type": "OBJECT"}, "then": {"type": "OBJECT"},
+        "else": {"type": "OBJECT"}, "propertyNames": {"type": "STRING"},
+        "contains": {"type": "INTEGER"}, "additionalItems": {"type": "NUMBER"},
+        "unevaluatedProperties": {"type": "STRING"}, "unevaluatedItems": {"type": "INTEGER"},
+        "contentSchema": {"type": "OBJECT"}}}),
+    ("no parameters", {"name": "ping", "description": "Ping."}),
+    ("no description", {"name": "ping", "parameters": {"type": "object", "properties": {}}}),
+]
+BAD_TOOLS = [
+    ("$ref to a missing definition", {"name": "f", "description": "", "parameters": {
+        "type": "object", "properties": {"a": {"$ref": "#/$defs/missing"}}}}),
+    ("$ref to another document", {"name": "f", "description": "", "parameters": {
+        "type": "object", "properties": {"a": {"$ref": "https://example.com/a.json"}}}}),
+    ("$ref to itself", {"name": "f", "description": "", "parameters": {
+        "type": "object", "properties": {"a": {"$ref": "#/properties/a"}}}}),
+    ("$ref to scalar", {"name": "f", "description": "", "parameters": {
+        "type": "object", "properties": {"a": {"$ref": "#/type"}}}}),
+    ("invalid parameter schema", {"name": "f", "description": "", "parameters": {
+        "type": "object", "properties": {"a": {"type": "nonsense"}}}}),
+    ("parameters of another type", {"name": "f", "description": "", "parameters": {"type": "array"}}),
+    ("empty name", {"name": "", "description": "", "parameters": {"type": "object"}}),
+]
+BAD_TOOLS.extend((name, {"name": "f", "parameters": parameters}) for name, parameters in BAD_REF_TARGETS)
+
+
+def tools_file() -> dict:
+    cases = [{"name": name, "input": tool, "expected": dmcall.schema_of(deepcopy(tool))["function"]}
+             for name, tool in TOOL_CASES]
+    for name, tool in BAD_TOOLS:
+        try:
+            dmcall.schema_of(deepcopy(tool))
+        except ValueError:
+            continue
+        raise AssertionError(name)
+    return {"note": "A tool definition in the OpenAI, Anthropic or Gemini format becomes {name, description, "
+                    "parameters}. Gemini's capital type names (OBJECT, STRING) are lower-cased wherever a schema "
+                    "is expected and nowhere else: the values of enum, const, default, example and examples are "
+                    "data, and the keys of properties, patternProperties, $defs, definitions and dependentSchemas "
+                    "are names. configuration_errors must be refused when the tool is defined or when a client is "
+                    "built with it, before any request.",
+            "cases": cases, "configuration_errors": [{"name": name, "input": tool} for name, tool in BAD_TOOLS]}
 
 
 # feedback.json ---------------------------------------------------------------------------------
@@ -319,6 +447,12 @@ def providers_file() -> dict:
         ("openai bad json", "openai", chat([("get_weather", "{not json")])),
         ("openai empty arguments", "openai", chat([("get_weather", "")])),
         ("openai array arguments", "openai", chat([("get_weather", "[1]")])),
+        # Servers that bend Chat Completions: the arguments as an object or null, a number, the older function_call.
+        ("openai object arguments", "openai", chat([("get_weather", {"city": "Seoul", "days": 2})])),
+        ("openai null arguments", "openai", chat([("get_weather", None)])),
+        ("openai number arguments", "openai", chat([("get_weather", 3)])),
+        ("openai legacy function_call", "openai", chat(
+            function_call={"name": "get_weather", "arguments": '{"city": "Seoul"}'}, finish="function_call")),
         ("anthropic call", "anthropic", anthropic_ok),
         ("anthropic max tokens", "anthropic", {**anthropic_ok, "stop_reason": "max_tokens", "content": []}),
         ("anthropic refusal", "anthropic", {**anthropic_ok, "stop_reason": "refusal", "content": []}),
@@ -328,14 +462,37 @@ def providers_file() -> dict:
         ("gemini max tokens", "gemini", {"candidates": [{"finishReason": "MAX_TOKENS", "content": {"parts": []}}]}),
         ("gemini safety", "gemini", {"candidates": [{"finishReason": "SAFETY"}]}),
         ("gemini malformed", "gemini", {"candidates": [{"finishReason": "MALFORMED_FUNCTION_CALL"}]}),
+        *[(f"gemini malformed native call {index}", "gemini", {"candidates": [{"finishReason": "STOP",
+            "content": {"parts": [{"functionCall": value}]}}]}) for index, value in enumerate([None, "bad", [], 3])],
+        ("gemini numeric stop", "gemini", {"candidates": [{"finishReason": 3, "content": {"parts": []}}]}),
         ("gemini blocked prompt", "gemini", {"promptFeedback": {"blockReason": "SAFETY"}}),
+        # Only STOP (or no reason, with content) is a finished answer; any other reason is unreadable.
+        ("gemini other", "gemini", {"candidates": [{"finishReason": "OTHER"}]}),
+        ("gemini malformed response with text", "gemini", {"candidates": [{
+            "finishReason": "MALFORMED_RESPONSE", "content": {"parts": [{"text": "partial"}]}}]}),
+        ("gemini too many tool calls", "gemini", {"candidates": [{"finishReason": "TOO_MANY_TOOL_CALLS"}]}),
+        ("gemini reason added later", "gemini", {"candidates": [{"finishReason": "A_REASON_ADDED_LATER", "content": {
+            "parts": [{"functionCall": {"name": "get_weather", "args": {"city": "Seoul"}}}]}}]}),
+        ("gemini unspecified reason without content", "gemini",
+         {"candidates": [{"finishReason": "FINISH_REASON_UNSPECIFIED"}]}),
+        ("gemini empty candidate", "gemini", {"candidates": [{}]}),
+        ("gemini stop without content", "gemini", {"candidates": [{"finishReason": "STOP"}]}),
+        ("gemini stop with text", "gemini", {"candidates": [{"finishReason": "STOP", "content": {
+            "parts": [{"text": "No function applies."}]}}]}),
+        ("gemini call without a finish reason", "gemini", {"candidates": [{"content": {
+            "parts": [{"functionCall": {"name": "get_weather", "args": {"city": "Seoul"}}}]}}]}),
     ]
     classes = {"openai": dmcall.OpenAI, "anthropic": dmcall.Anthropic, "gemini": dmcall.Gemini}
     decodes = [{"name": name, "provider": kind, "response": body, "expected": decoded(classes[kind], body)}
                for name, kind, body in decode_cases]
     return {"example": example, "history": HISTORY, "requests": requests, "decode": decodes,
             "filtered_prompt": {"status": 400, "response": {"error": {"code": "content_filter", "message": "filtered"}},
-                                "expected_incomplete": "prompt_filter"}}
+                                "expected_incomplete": "prompt_filter"},
+            "redirect": {"status": 307, "location": "https://elsewhere.example/v1/chat/completions",
+                         "rule": "A redirect is never followed. Exactly one request is sent, to the configured "
+                                 "host, and the 3xx answer is a provider error (decision models: the same). "
+                                 "Following it would re-send the body and key headers such as x-api-key, api-key "
+                                 "and x-goog-api-key to the new host."}}
 
 
 # loop_edges.json: more scenarios, recorded from the Python reference ---------------------------------
@@ -351,6 +508,7 @@ def main() -> None:
     write("schema_check.json", schema_check_file())
     write("feedback.json", feedback_file())
     write("normalize_calls.json", normalize_file())
+    write("tools.json", tools_file())
     write("providers.json", providers_file())
     write("loop_edges.json", loop_edges_file())
     from tests_helpers import add_responses_to_paper_parity  # noqa: E402

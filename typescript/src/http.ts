@@ -13,6 +13,8 @@ export interface RequestInitLike {
   headers: Record<string, string>;
   body?: string;
   signal?: AbortSignal;
+  /** Redirects never forward provider credentials to another endpoint. */
+  redirect: "manual";
 }
 
 /** A `fetch` implementation. The global `fetch` (Node 18+) is the default; pass your own to test or proxy. */
@@ -51,7 +53,7 @@ function timeoutSignal(ms: number): AbortSignal | undefined {
 /** One request, body read included. Any failure to get a response throws (a transport error). */
 export async function send(fetchImpl: FetchLike, url: string, method: string, headers: Record<string, string>,
   body: string | undefined, timeoutMs: number): Promise<HttpResponse> {
-  const init: RequestInitLike = { method, headers };
+  const init: RequestInitLike = { method, headers, redirect: "manual" };
   if (body !== undefined) init.body = body;
   const signal = timeoutSignal(timeoutMs);
   if (signal) init.signal = signal;

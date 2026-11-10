@@ -22,6 +22,7 @@ export const INCOMPLETE: Readonly<Record<string, string>> = Object.freeze({
   refusal: "The response was a refusal and contains no proposal.",
   prompt_filter: "The provider's content filter rejected the request; no response was generated.",
   malformed_call: "The model produced a malformed function call.",
+  abnormal_stop: "The response stopped abnormally before a complete proposal.",
 });
 
 /** A sanitized provider failure. It never contains keys or response bodies. */
@@ -56,7 +57,7 @@ export interface Proposal {
   calls: Call[] | null;
   content: string | null;
   parseErrors: string[];
-  /** Why the output is unreadable (`length`, `content_filter`, `refusal`, `prompt_filter`, `malformed_call`). */
+  /** Why the output is unreadable (`length`, `content_filter`, `refusal`, `prompt_filter`, `malformed_call`, `abnormal_stop`). */
   incomplete: string | null;
   provider?: string;
   requestedModel?: string;
@@ -115,8 +116,7 @@ function countOf(value: Json | undefined): number | undefined {
 /** Malformed arguments stay a rejected, repairable call, never a no-call. */
 function decodeArguments(value: Json | undefined, encoded: boolean): [Json, string | null] {
   let args: Json | undefined = value;
-  if (encoded) {
-    if (typeof args !== "string") throw new ProviderError("Function arguments were not an encoded JSON string.");
+  if (encoded && typeof args === "string") {
     try {
       args = /^[\t\n\v\f\r\x1c-\x1f \x85\xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]*$/.test(args)
         ? new Map() : parse(args);
@@ -500,6 +500,11 @@ export class OpenAICompatible extends Provider {
       if (!(fn instanceof Map)) throw new ProviderError("The response contained an invalid function-call object.");
       appendCall(calls, errors, fn.get("name"), fn.has("arguments") ? fn.get("arguments") : "{}", true);
     }
+    const legacy = message.get("function_call");
+    if (native.length === 0 && legacy !== undefined && legacy !== null) {
+      if (!(legacy instanceof Map)) throw new ProviderError("The response contained an invalid function-call object.");
+      appendCall(calls, errors, legacy.get("name"), legacy.has("arguments") ? legacy.get("arguments") : "{}", true);
+    }
     const content = message.get("content");
     if (typeof content === "string" && content) text.push(content);
     else if (content !== undefined && content !== null && typeof content !== "string") {
@@ -809,6 +814,10 @@ export class Gemini extends Provider {
     if (among(reason, FILTERED)) return incomplete("content_filter");
     if (among(reason, ["MALFORMED_FUNCTION_CALL", "UNEXPECTED_TOOL_CALL"])) return incomplete("malformed_call");
     const contentValue = candidate.get("content");
+    if (reason !== undefined && reason !== null && !among(reason, ["STOP", "FINISH_REASON_UNSPECIFIED"])) {
+      return incomplete("abnormal_stop");
+    }
+    if (reason !== "STOP" && !(contentValue instanceof Map)) return incomplete("abnormal_stop");
     const content: Json = truthy(contentValue) ? contentValue! : new Map();
     if (!(content instanceof Map)) throw new ProtocolError();
     const partsValue = content.get("parts");
@@ -820,6 +829,7 @@ export class Gemini extends Provider {
       if (!(part instanceof Map)) throw new ProviderError("A Gemini content part was malformed.");
       const call = part.get("functionCall");
       const value = part.get("text");
+      if (part.has("functionCall") && !(call instanceof Map)) return incomplete("malformed_call");
       if (call instanceof Map) appendCall(calls, errors, call.get("name"), call.get("args"), false);
       else if (typeof value === "string" && value && !truthy(part.get("thought"))) text.push(value);
     }

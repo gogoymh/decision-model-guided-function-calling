@@ -332,6 +332,71 @@ function resolvePointer(root: Json, reference: string): Json {
   return node;
 }
 
+/** A reference that cannot be followed inside the tool parameters, or recurses without consuming input. */
+export class ReferenceError extends SchemaError {}
+
+function checkReferences(root: Json, dialect: Dialect): void {
+  const state = new Map<JsonObject, boolean>();
+  const schemaNodes = new Set<JsonObject>();
+  const fail = (): never => { throw new ReferenceError("An available function's JSON Schema has a $ref that cannot be resolved"); };
+  const follow = (node: Json): void => {
+    if (!(node instanceof Map)) return;
+    if (state.get(node) === false) return;
+    if (state.get(node)) fail();
+    state.set(node, true);
+    const reference = node.get("$ref");
+    if (typeof reference === "string") {
+      const target = (() => {
+        try { return resolvePointer(root, reference); } catch { return fail(); }
+      })();
+      if (typeof target !== "boolean" && (!(target instanceof Map) || !schemaNodes.has(target))) fail();
+      if (typeof target === "boolean") {
+        try { checkMetaSchema(target, dialect); } catch { fail(); }
+      }
+      follow(target);
+      if (dialect.refOverrides) { state.set(node, false); return; }
+    }
+    for (const key of ["allOf", "anyOf"]) {
+      const branches = node.get(key);
+      if (Array.isArray(branches)) branches.forEach(follow);
+    }
+    state.set(node, false);
+  };
+  const visit = (node: Json): void => {
+    if (Array.isArray(node)) { node.forEach(visit); return; }
+    if (!(node instanceof Map)) return;
+    schemaNodes.add(node);
+    for (const [key, value] of node) {
+      if (NESTED_MAPS.has(key) && value instanceof Map) [...value.values()].forEach(visit);
+      else if (["items", "prefixItems", "additionalProperties", "allOf", "anyOf"].includes(key)) visit(value);
+    }
+  };
+  try {
+    visit(root);
+    for (const node of schemaNodes) follow(node);
+  } catch (error) {
+    if (error instanceof RangeError) fail();
+    throw error;
+  }
+}
+
+const COMPILED = new Map<string, { schema: Json; dialect: Dialect }>();
+
+/** Validate and prepare a type-only schema once per schema text, with a bounded cache. */
+export function compiledSchema(input: Json): { schema: Json; dialect: Dialect } {
+  const key = stringify(input);
+  const cached = COMPILED.get(key);
+  if (cached) { COMPILED.delete(key); COMPILED.set(key, cached); return cached; }
+  const dialect = dialectOf(input);
+  checkMetaSchema(input, dialect);
+  const schema = typeSchema(input);
+  checkReferences(schema, dialect);
+  const result = { schema, dialect };
+  if (COMPILED.size >= 1024) COMPILED.delete(COMPILED.keys().next().value!);
+  COMPILED.set(key, result);
+  return result;
+}
+
 type Segment = string | number;
 
 /**

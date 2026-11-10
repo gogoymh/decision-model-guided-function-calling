@@ -192,6 +192,9 @@ The defaults are the paper's settings.
 | `executeUnverified(false)` | `run` executes accepted calls only | |
 
 The options also accept the spec's names as strings, for example `checks("function")`.
+`checks` selects the judgments used for acceptance and repair feedback. Both questions are still
+sent for a readable function call, including in the single-check variants, so both incur usage.
+An applicable no-call check sends only the function question.
 
 ## Running the tests
 

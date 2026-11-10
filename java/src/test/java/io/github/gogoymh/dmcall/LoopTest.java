@@ -154,7 +154,7 @@ class LoopTest {
     void initialNoCallIsReturnedWithoutVerification() {
         ScriptedModel model = new ScriptedModel(List.of());
         ScriptedJev decision = new ScriptedJev("Seoul", 0.95, 0.97);
-        Result result = agent(model, decision).build().run("Tell me a joke.");
+        Result result = agent(model, decision).function("get_weather", arguments -> null).build().run("Tell me a joke.");
         assertTrue(result.noCall());
         assertNull(result.accepted());
         assertTrue(result.initialNoCallPreserved());
@@ -260,7 +260,9 @@ class LoopTest {
 
     @Test
     void perCallOverridesAndMissingHandlers() {
-        DMCall loop = agent(new ScriptedModel(busan(), seoul()), new ScriptedJev()).build();
+        ScriptedModel model = new ScriptedModel(busan(), seoul());
+        ScriptedJev decision = new ScriptedJev();
+        DMCall loop = agent(model, decision).build();
         Result result = loop.call("Weather in Seoul?", CallOptions.create().maxRepairs(0));
         assertEquals(0, result.repairs());
         assertEquals(Boolean.FALSE, result.accepted());
@@ -268,10 +270,31 @@ class LoopTest {
         NoSuchElementException missing = assertThrows(NoSuchElementException.class,
                 () -> loop.run("Weather in Seoul?", CallOptions.create().tools(weather())));
         assertTrue(missing.getMessage().contains("No handler"));
+        assertEquals(1, model.histories.size());
+        assertEquals(1, decision.requests.size());
         IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
                 () -> loop.call("x", CallOptions.create().function("nope", arguments -> null)));
         assertTrue(error.getMessage().contains("not one of the tools"));
         assertThrows(IllegalArgumentException.class, () -> loop.call("x", CallOptions.create().maxRepairs(-1)));
+    }
+
+    @Test
+    void overriddenToolDefinitionsKeepHandlersAndExplicitHandlersTakePrecedence() {
+        ScriptedModel model = new ScriptedModel(seoul(), seoul());
+        DMCall loop = agent(model, new ScriptedJev()).function("get_weather", arguments -> "registered").build();
+        assertEquals("registered", loop.run("Weather in Seoul?", CallOptions.create().tools(weather())).output());
+        assertEquals("replacement", loop.run("Weather in Seoul?", CallOptions.create().tools(weather())
+                .function("get_weather", arguments -> "replacement")).output());
+    }
+
+    @Test
+    void missingHandlerFailsBeforeGeneratingEvenForAnInitialNoCall() {
+        ScriptedModel model = new ScriptedModel(List.of());
+        ScriptedJev decision = new ScriptedJev();
+        DMCall loop = agent(model, decision).build();
+        assertThrows(NoSuchElementException.class, () -> loop.run("Tell me a joke."));
+        assertTrue(model.histories.isEmpty());
+        assertTrue(decision.requests.isEmpty());
     }
 
     @Test

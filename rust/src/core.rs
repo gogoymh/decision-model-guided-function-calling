@@ -505,7 +505,7 @@ where
 /// Per-request overrides of a [`DMCall`]'s settings.
 #[derive(Clone, Default)]
 pub struct CallOptions {
-    /// Use these tools instead of the client's (the client's handlers are then not used).
+    /// Use these tools instead of the client's; retain handlers of the same names unless replaced.
     pub tools: Option<Vec<Tool>>,
     /// Extra handlers by tool name.
     pub handlers: Vec<(String, Handler)>,
@@ -805,8 +805,25 @@ impl DMCall {
                 handlers.extend(options.handlers.iter().cloned());
                 toolset(&self.tools, &handlers)?
             }
-            Some(tools) => toolset(tools, &options.handlers)?,
+            Some(tools) => {
+                let (schemas, mut registry) = toolset(tools, &options.handlers)?;
+                let known = toolset(&self.tools, &self.handlers)?.1;
+                for tool in tools {
+                    if let Some(handler) = known.get(tool.name()) {
+                        registry.entry(tool.name().to_string()).or_insert_with(|| handler.clone());
+                    }
+                }
+                (schemas, registry)
+            }
         };
+        if execute {
+            for schema in &schemas {
+                let name = schema["function"]["name"].as_str().unwrap_or_default();
+                if !registry.contains_key(name) {
+                    return Err(Error::MissingHandler(name.to_string()));
+                }
+            }
+        }
         let messages = text_messages(messages.message_values()?)?;
         let message_values: Vec<Value> = messages.iter().map(Message::to_value).collect();
         let started = Instant::now();

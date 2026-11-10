@@ -179,7 +179,7 @@ The decision models receive only the conversation, the function schemas and the 
 
 ### Feedback and JSON values
 
-`dmcall.Label(p)` returns the verbal band of a probability. `dmcall.Represent(feedback, representation)` gives the generator's copy of a feedback record, and `dmcall.SingleCheck` removes the other question's verdict for the one-question variants.
+`dmcall.Label(p)` returns the verbal band of a probability. `dmcall.Represent(feedback, representation)` gives the generator's copy of a feedback record, and `dmcall.SingleCheck` removes the other question's verdict for variants that use one verdict.
 
 The history message is JSON text inside a string, and it must equal what Python's `json.dumps(value, ensure_ascii=False)` writes. Go maps lose key order and `encoding/json` loses the difference between `4.0` and `4`, so DM-Call has its own JSON value: `dmcall.ParseJSON` returns `nil`, `bool`, `string`, `int64` (or `*big.Int`), `float64`, `[]any` or `*dmcall.Object`, an object that keeps its key order. `dmcall.JSONText` writes Python's text, and `dmcall.Equal` compares values the way Python compares parsed JSON. `*Object` implements `json.Marshaler` and `json.Unmarshaler`, and `obj.Decode(&v)` fills a struct.
 
@@ -191,7 +191,7 @@ The history message is JSON text inside a string, and it must equal what Python'
 | `WithThreshold(t)` | 0.5 | pass mark of both questions, for the default Jev |
 | `WithJevAPIKey(key)` | `TYPESAFE_API_KEY` | key of the default Jev |
 | `WithMaxRepairs(n)` | 3 | repairs after the first candidate |
-| `WithChecks(c)` | `ChecksBoth` | `ChecksFunction` or `ChecksArguments` asks one question only |
+| `WithChecks(c)` | `ChecksBoth` | `ChecksFunction` or `ChecksArguments` selects the verdict used for acceptance and repair feedback; both questions are sent for a readable call |
 | `WithHistory(h)` | `HistoryCumulative` | `HistoryLatest` shows only the latest rejected candidate |
 | `WithFeedback(f)` | `FeedbackHybrid` | `FeedbackNumeric` or `FeedbackText` |
 | `WithOnExhaustion(r)` | `ExhaustionFirst` | `ExhaustionLast` returns the last repair when nothing is accepted |
@@ -199,13 +199,15 @@ The history message is JSON text inside a string, and it must equal what Python'
 | `WithExecuteUnverified(b)` | false | `Run` also executes the final candidate when none was accepted |
 | `WithTools(tools...)`, `WithHandlers(m)` | none | the available tools and their handlers |
 
+Both questions are sent for a readable call even when only one verdict decides acceptance and appears in repair feedback. A no-call receives only the function question when verification applies; a preserved initial no-call and an unreadable candidate receive neither.
+
 The defaults are the paper's settings. `WithTools`, `WithHandlers`, `WithMaxRepairs`, `WithOnExhaustion` and `WithExecuteUnverified` can also be passed to a single `Call` or `Run`.
 
 | In the paper | Options |
 |---|---|
 | DM-Call | defaults |
-| DM-Call-Function: function question only | `WithChecks(dmcall.ChecksFunction)` |
-| DM-Call-Argument: argument question only | `WithChecks(dmcall.ChecksArguments)` |
+| DM-Call-Function: use the function verdict | `WithChecks(dmcall.ChecksFunction)` |
+| DM-Call-Argument: use the argument verdict | `WithChecks(dmcall.ChecksArguments)` |
 | DM-Call-Latest: only the latest rejection as feedback | `WithHistory(dmcall.HistoryLatest)` |
 | Numeric feedback | `WithFeedback(dmcall.FeedbackNumeric)` |
 | Text feedback | `WithFeedback(dmcall.FeedbackText)` |

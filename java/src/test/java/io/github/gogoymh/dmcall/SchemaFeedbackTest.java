@@ -154,8 +154,10 @@ class SchemaFeedbackTest {
         JsonNode tools = json("[{\"type\": \"function\", \"function\": {\"name\": \"r\", \"description\": \"\","
                 + " \"parameters\": {\"type\": \"object\", \"properties\": {\"a\": {\"$ref\": \"#/definitions/s\"},"
                 + " \"b\": {\"$ref\": \"#/$defs/missing\"}}, \"definitions\": {\"s\": {\"type\": \"string\"}}}}}]");
-        assertEquals("1 is not of type 'string'", check(Map.of("a", 1), tools, "r").errors().get(0).message());
+        assertThrows(IllegalArgumentException.class, () -> check(Map.of("a", 1), tools, "r"));
         assertThrows(IllegalArgumentException.class, () -> check(Map.of("b", 1), tools, "r"));
+        ((ObjectNode) tools.get(0).get("function").get("parameters").get("properties")).remove("b");
+        assertEquals("1 is not of type 'string'", check(Map.of("a", 1), tools, "r").errors().get(0).message());
     }
 
     @Test

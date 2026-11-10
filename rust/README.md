@@ -86,7 +86,9 @@ let verdict = agent.verify(&messages, &calls)?;   // check calls from any source
 `messages` can be a `&str` (one user message), a `Vec<Message>` or JSON messages
 (`serde_json::Value`, an array of `{"role", "content"}` objects). `call_with` and `run_with`
 take `CallOptions` to override the tools, handlers, repair limit, exhaustion rule or
-`execute_unverified` for one request. Without a decision model, `.threshold(...)` and
+`execute_unverified` for one request. Replacement tools retain registered handlers of the same
+name unless the request supplies another. `run` refuses a tool without a handler before sending
+any request. Without a decision model, `.threshold(...)` and
 `.jev_api_key(...)` configure the default Jev; with one, configure the model itself.
 
 The builder methods take enums. Each also parses from the Python option text, for example
@@ -132,7 +134,9 @@ errors and the feedback record.
 `Tool::new(json)` accepts an OpenAI (Chat Completions or Responses), Anthropic (`input_schema`)
 or Gemini (`parameters` with upper-case types, or `parametersJsonSchema`) definition, and
 `Tool::function(name, description, parameters)` builds one directly. The parameters must be a
-valid JSON Schema object. `with_handler` attaches a closure that receives the arguments object
+valid JSON Schema object; references must resolve within the parameters, and invalid references
+are refused when the tool is defined. `with_handler` attaches a closure that receives the
+arguments object
 and returns `Result<Value, BoxError>`.
 
 ## Generators
@@ -210,6 +214,11 @@ It never receives a reference answer.
 | `preserve_initial_no_call` | `true`: a readable initial no call is returned without verification | `false` |
 | `execute_unverified` | `false`: `run` runs only an accepted call | `true` |
 
+Both questions are sent for every readable candidate with a call. `checks` selects which
+judgments determine acceptance and appear in repair feedback; it does not reduce requests or
+verification cost. A no call receives only the function question, and a preserved initial
+no call receives neither.
+
 The representation changes only what the generator reads. Acceptance always uses the numeric
 probabilities, and `trace` keeps them.
 
@@ -228,6 +237,8 @@ let jev = Jev::builder().api_key("test").transport(transport).build()?;
 
 In async code, call the client from `tokio::task::spawn_blocking`. The clients are `Send` and
 `Sync`, so one client can serve many threads.
+
+The default HTTP transport never follows redirects.
 
 Keys never appear in errors or `Debug` output. `ProviderError` and `DecisionModelError` keep
 only a message, the status code, a sanitized request ID and the number of attempts.
@@ -257,8 +268,9 @@ cargo test
 cargo clippy --all-targets -- -D warnings
 ```
 
-The tests never use the network. `tests/conformance.rs` replays every file in
+Provider tests use mock transports; the redirect regression uses only loopback sockets.
+`tests/conformance.rs` replays every file in
 `../spec/conformance` (`json_text`, `schema_check`, `feedback`, `normalize_calls`, `providers`,
-`paper_parity` and `loop_edges`) and checks `../spec/prompts.json`. The other test files port
+`tools`, `paper_parity` and `loop_edges`) and checks `../spec/prompts.json`. The other test files port
 the Python unit tests. `cargo test --no-default-features` checks the build without the HTTP
 client and without `big-integers`.

@@ -35,6 +35,7 @@ public abstract class Provider implements Generator {
         reasons.put("refusal", "The response was a refusal and contains no proposal.");
         reasons.put("prompt_filter", "The provider's content filter rejected the request; no response was generated.");
         reasons.put("malformed_call", "The model produced a malformed function call.");
+        reasons.put("abnormal_stop", "The response stopped abnormally before a complete proposal.");
         return Collections.unmodifiableMap(reasons);
     }
 
@@ -343,7 +344,12 @@ public abstract class Provider implements Generator {
     }
 
     // Decoding helpers ---------------------------------------------------------------------
-    /** Appends one call. Malformed arguments stay a rejected, repairable call, never a no call. */
+    /**
+     * Appends one call. Malformed arguments stay a rejected, repairable call, never a no call.
+     *
+     * <p>Chat Completions sends the arguments as JSON text ({@code encoded}). Some compatible servers
+     * send the object itself, or null for no arguments; both are read like the other protocols.
+     */
     protected static void appendCall(List<Call> calls, List<String> errors, JsonNode name, JsonNode arguments,
                                      boolean encoded) {
         String text = Py.text(name);
@@ -352,10 +358,7 @@ public abstract class Provider implements Generator {
         }
         JsonNode value = arguments;
         String error = null;
-        if (encoded) {
-            if (value == null || !value.isTextual()) {
-                throw new ProviderException("Function arguments were not an encoded JSON string.");
-            }
+        if (encoded && value != null && value.isTextual()) {
             String raw = value.textValue();
             if (Py.strip(raw).isEmpty()) {
                 value = Json.object();

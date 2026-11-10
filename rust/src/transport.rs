@@ -183,7 +183,7 @@ pub struct UreqTransport {
 impl UreqTransport {
     /// A client; `use_env_proxy` follows `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY`.
     pub fn new(use_env_proxy: bool) -> Self {
-        let mut config = ureq::Agent::config_builder().http_status_as_error(false);
+        let mut config = ureq::Agent::config_builder().http_status_as_error(false).max_redirects(0);
         if !use_env_proxy {
             config = config.proxy(None);
         }

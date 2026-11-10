@@ -16,6 +16,9 @@ type Handler func(ctx context.Context, args *Object) (any, error)
 
 // TypedHandler adapts a function that takes its arguments as a struct (decoded with encoding/json).
 func TypedHandler[In any, Out any](fn func(ctx context.Context, args In) (Out, error)) Handler {
+	if fn == nil {
+		return nil
+	}
 	return func(ctx context.Context, args *Object) (any, error) {
 		var in In
 		if args != nil {
@@ -142,11 +145,41 @@ func lowerTypes(v any) any {
 				out.Set(key, value)
 				continue
 			}
-			out.Set(key, lowerTypes(value))
+			switch key {
+			case "properties", "patternProperties", "$defs", "definitions", "dependentSchemas":
+				if members, ok := value.(*Object); ok {
+					normalized := NewObject()
+					for _, name := range members.keys {
+						normalized.Set(name, lowerTypes(members.values[name]))
+					}
+					out.Set(key, normalized)
+					continue
+				}
+			case "dependencies":
+				if members, ok := value.(*Object); ok {
+					normalized := NewObject()
+					for _, name := range members.keys {
+						item := members.Value(name)
+						switch item.(type) {
+						case *Object, bool:
+							normalized.Set(name, lowerTypes(item))
+						default:
+							normalized.Set(name, Clone(item))
+						}
+					}
+					out.Set(key, normalized)
+					continue
+				}
+			case "items", "prefixItems", "allOf", "anyOf", "oneOf", "not", "if", "then", "else", "contains",
+				"propertyNames", "additionalProperties", "additionalItems", "unevaluatedProperties", "unevaluatedItems", "contentSchema":
+				out.Set(key, lowerTypes(value))
+				continue
+			}
+			out.Set(key, Clone(value)) // all other keywords and extension metadata hold caller data
 		}
 		return out
 	}
-	return v
+	return Clone(v)
 }
 
 // isUpper is Python's str.isupper: at least one cased character and no lower-case one.
@@ -214,7 +247,7 @@ func checkedTool(tool Tool) (Tool, error) {
 	if !finite(schema) {
 		return Tool{}, fmt.Errorf("dmcall: tool %s: parameters are not a valid JSON Schema (ValueError)", pyStr(tool.Name))
 	}
-	if err := checkMetaSchema(schema); err != nil {
+	if _, err := compileSchema(schema); err != nil {
 		return Tool{}, fmt.Errorf("dmcall: tool %s: parameters are not a valid JSON Schema (SchemaError)", pyStr(tool.Name))
 	}
 	return Tool{Name: tool.Name, Description: tool.Description, Parameters: schema, Handler: tool.Handler}, nil

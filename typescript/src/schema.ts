@@ -11,7 +11,7 @@
 
 import { type Json, type JsonObject, clone, compareCodePoints, fromPlain, isFiniteJson, stringify, toPlain } from "./json.js";
 import {
-  type Dialect, type ValidationIssue, SchemaError, checkMetaSchema, dialectOf, pathKey, typeSchema, validationErrors,
+  type Dialect, type ValidationIssue, ReferenceError, SchemaError, compiledSchema, pathKey, validationErrors,
 } from "./jsonschema.js";
 
 /** One schema check error: which question it bears on, where, and Python jsonschema's message. */
@@ -97,14 +97,15 @@ export function checkSchemaJson(tools: Json, calls: Json): SchemaCheck {
     const name = definition.get("name") as string;
     const schema = definition.get("parameters")!;
     if (!(schema instanceof Map)) throw new Error("Function parameters must be a JSON Schema object");
-    const dialect = dialectOf(schema);
+    let compiled: { schema: Json; dialect: Dialect };
     try {
-      checkMetaSchema(schema, dialect);
+      compiled = compiledSchema(schema);
     } catch (error) {
+      if (error instanceof ReferenceError) throw new Error("An available function's JSON Schema has a $ref that cannot be resolved");
       if (error instanceof SchemaError) throw new Error("An available function has an invalid JSON Schema");
       throw error;
     }
-    validators.set(name, { schema: typeSchema(schema), dialect });
+    validators.set(name, compiled);
     schemas.set(name, schema);
   }
 

@@ -20,12 +20,13 @@ use crate::pyjson::{self, Num};
 use crate::transport::{default_sleep, default_transport, HttpRequest, HttpResponse, Method, SharedTransport, Sleep};
 
 /// Why an output holds no complete proposal. Such a proposal is rejected and repaired.
-pub const INCOMPLETE: [(&str, &str); 5] = [
+pub const INCOMPLETE: [(&str, &str); 6] = [
     ("length", "The response reached the output token limit before a complete proposal."),
     ("content_filter", "The provider's content filter stopped the response before a complete proposal."),
     ("refusal", "The response was a refusal and contains no proposal."),
     ("prompt_filter", "The provider's content filter rejected the request; no response was generated."),
     ("malformed_call", "The model produced a malformed function call."),
+    ("abnormal_stop", "The response stopped abnormally before a complete proposal."),
 ];
 
 fn incomplete_message(reason: &str) -> &'static str {
@@ -45,8 +46,8 @@ pub struct Proposal {
     pub content: Option<String>,
     /// Why some or all of the output could not be read.
     pub parse_errors: Vec<String>,
-    /// `length`, `content_filter`, `refusal`, `prompt_filter` or `malformed_call` for an
-    /// unreadable output.
+    /// `length`, `content_filter`, `refusal`, `prompt_filter`, `malformed_call` or
+    /// `abnormal_stop` for an unreadable output.
     pub incomplete: Option<String>,
     /// The provider's short name (`openai`, `anthropic`, ...).
     pub provider: String,
@@ -347,10 +348,7 @@ fn complete(calls: Vec<Call>, errors: Vec<String>, text: Vec<String>) -> Decoded
 fn arguments(value: Option<&Value>, encoded: bool) -> std::result::Result<(Value, Option<&'static str>), Fail> {
     let parsed;
     let mut value = value;
-    if encoded {
-        let Some(Value::String(text)) = value else {
-            return Err(Fail::Provider("Function arguments were not an encoded JSON string.".into()));
-        };
+    if let (true, Some(Value::String(text))) = (encoded, value) {
         parsed = if text.trim().is_empty() {
             json!({})
         } else {
@@ -986,6 +984,21 @@ fn decode_chat(data: &Map<String, Value>) -> std::result::Result<Decoded, Fail> 
         let raw = function.get("arguments").unwrap_or(&default);
         append_call(&mut calls, &mut errors, function.get("name"), Some(raw), true)?;
     }
+    if native.is_empty() {
+        if let Some(legacy) = message.get("function_call").filter(|value| !value.is_null()) {
+            let Some(function) = legacy.as_object() else {
+                return Err(Fail::Provider("The response contained an invalid function-call object.".into()));
+            };
+            let default = json!("{}");
+            append_call(
+                &mut calls,
+                &mut errors,
+                function.get("name"),
+                Some(function.get("arguments").unwrap_or(&default)),
+                true,
+            )?;
+        }
+    }
     match message.get("content") {
         Some(Value::String(content)) if !content.is_empty() => text.push(content.clone()),
         None | Some(Value::Null) | Some(Value::String(_)) => {}
@@ -1048,11 +1061,20 @@ fn decode_gemini(data: &Map<String, Value>) -> std::result::Result<Decoded, Fail
     let Some(Value::Array(candidates)) = candidates else { return Err(Fail::Protocol) };
     let Some(Value::Object(candidate)) = candidates.first() else { return Err(Fail::Protocol) };
     let reason = hashable(candidate.get("finishReason"))?.and_then(Value::as_str);
+    if candidate.get("finishReason").is_some_and(|value| !value.is_null() && !value.is_string()) {
+        return Ok(unreadable("abnormal_stop"));
+    }
     match reason {
         Some("MAX_TOKENS") => return Ok(unreadable("length")),
         Some(reason) if GEMINI_FILTERED.contains(&reason) => return Ok(unreadable("content_filter")),
         Some("MALFORMED_FUNCTION_CALL" | "UNEXPECTED_TOOL_CALL") => return Ok(unreadable("malformed_call")),
+        Some(reason) if reason != "STOP" && reason != "FINISH_REASON_UNSPECIFIED" => {
+            return Ok(unreadable("abnormal_stop"))
+        }
         _ => {}
+    }
+    if reason != Some("STOP") && !candidate.get("content").is_some_and(Value::is_object) {
+        return Ok(unreadable("abnormal_stop"));
     }
     let content = match candidate.get("content") {
         Some(value) if pyjson::truthy(value) => match value {
@@ -1075,6 +1097,9 @@ fn decode_gemini(data: &Map<String, Value>) -> std::result::Result<Decoded, Fail
         let Value::Object(part) = part else {
             return Err(Fail::Provider("A Gemini content part was malformed.".into()));
         };
+        if part.get("functionCall").is_some_and(|value| !value.is_object()) {
+            return Ok(unreadable("malformed_call"));
+        }
         if let Some(Value::Object(call)) = part.get("functionCall") {
             append_call(&mut calls, &mut errors, call.get("name"), call.get("args"), false)?;
         } else if let Some(Value::String(content)) = part.get("text") {

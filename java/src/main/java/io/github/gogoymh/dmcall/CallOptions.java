@@ -18,7 +18,7 @@ public final class CallOptions {
         return new CallOptions();
     }
 
-    /** Tools for this request instead of the client's (and their handlers). */
+    /** Tools for this request; same-name client handlers are kept unless replaced here. */
     public CallOptions tools(Object tools) {
         this.tools = tools;
         return this;

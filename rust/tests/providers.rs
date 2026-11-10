@@ -355,6 +355,32 @@ fn gemini_request_and_decoding() {
 }
 
 #[test]
+fn gemini_malformed_native_calls_and_invalid_finish_types_are_unreadable() {
+    for call in [Value::Null, json!("not-an-object"), json!([]), json!(true)] {
+        let model = Gemini::builder("m")
+            .api_key("KEY")
+            .transport(Mock::queue(vec![
+                json!({"candidates": [{"finishReason": "STOP", "content": {"parts": [{"functionCall": call}]}}]}),
+            ]))
+            .build()
+            .unwrap();
+        let result = generate(&model, &[]).unwrap();
+        assert!(result.calls.is_none());
+        assert_eq!(result.incomplete.as_deref(), Some("malformed_call"));
+    }
+    for reason in [json!(123), json!(true)] {
+        let model = Gemini::builder("m")
+            .api_key("KEY")
+            .transport(Mock::queue(vec![json!({"candidates": [{"finishReason": reason, "content": {"parts": []}}]})]))
+            .build()
+            .unwrap();
+        let result = generate(&model, &[]).unwrap();
+        assert!(result.calls.is_none());
+        assert_eq!(result.incomplete.as_deref(), Some("abnormal_stop"));
+    }
+}
+
+#[test]
 fn gemini_unreadable_outputs() {
     isolate_env();
     let cases = [

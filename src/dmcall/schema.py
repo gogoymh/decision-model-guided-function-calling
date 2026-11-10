@@ -11,14 +11,22 @@ keyword names outside a closed parameter list are rejected. An empty collection 
 from __future__ import annotations
 
 import copy
+import functools
 import json
 from typing import Any
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft3Validator, Draft4Validator, Draft6Validator, Draft7Validator, Draft202012Validator
 from jsonschema.exceptions import SchemaError
 from jsonschema.validators import validator_for
+from referencing import Registry
+from referencing.exceptions import Unresolvable
+from referencing.jsonschema import DRAFT202012, specification_with
 
 __all__ = ["check_schema", "function_definitions"]
+
+_UNRESOLVABLE = "An available function's JSON Schema has a $ref that cannot be resolved"
+# Up to draft 7, a schema with $ref ignores its other keywords.
+_REF_ONLY = (Draft3Validator, Draft4Validator, Draft6Validator, Draft7Validator)
 
 # Only the structural typing part of a schema is checked.
 _TYPE_KEYWORDS = frozenset({
@@ -85,6 +93,107 @@ def _type_schema(schema: Any) -> Any:
     return result
 
 
+class _ReferenceError(ValueError):
+    """A ``$ref`` that names nothing inside the parameters, or that only leads back to itself."""
+
+
+def _check_references(schema: dict, validator_type: Any) -> None:
+    """Fail on a ``$ref`` that cannot be followed. Nothing is fetched: a reference must stay inside the schema.
+
+    Object targets must be schema nodes, not metadata values or maps of named schemas.
+    A reference that leads back to its own schema without consuming any of the value
+    (``{"$ref": "#"}``, or a loop through ``allOf``) would never finish; recursion through
+    ``properties`` or ``items`` is fine and stays allowed.
+    """
+    dialect = schema.get("$schema")
+    specification = specification_with(dialect, default=DRAFT202012) if isinstance(dialect, str) else DRAFT202012
+    resolver = Registry().resolver_with_root(specification.create_resource(schema))
+    ref_only = issubclass(validator_type, _REF_ONLY)
+
+    def scoped_nodes(node, scope, *, root=False):
+        if isinstance(node, list):
+            for item in node:
+                yield from scoped_nodes(item, scope)
+        elif isinstance(node, dict):
+            local = scope if root else scope.in_subresource(specification.create_resource(node))
+            yield node, local
+            for key, value in node.items():
+                if key in {"properties", "patternProperties", "$defs", "definitions"} and isinstance(value, dict):
+                    for item in value.values():
+                        yield from scoped_nodes(item, local)
+                elif key in {"items", "prefixItems", "additionalProperties", "allOf", "anyOf"}:
+                    yield from scoped_nodes(value, local)
+
+    def same_value(node: dict, scope):
+        """The schemas applied to the same value as ``node``."""
+        reference = node.get("$ref")
+        if isinstance(reference, str):
+            try:
+                resolved = scope.lookup(reference)
+            except Unresolvable:
+                raise _ReferenceError(_UNRESOLVABLE) from None
+            if not isinstance(resolved.contents, (dict, bool)):
+                raise _ReferenceError(_UNRESOLVABLE)
+            try:
+                validator_type.check_schema(resolved.contents)
+            except SchemaError:
+                raise _ReferenceError(_UNRESOLVABLE) from None
+            if isinstance(resolved.contents, dict):
+                if id(resolved.contents) not in schema_nodes:
+                    raise _ReferenceError(_UNRESOLVABLE)
+                yield resolved.contents, resolved.resolver
+            if ref_only:
+                return
+        for key in ("allOf", "anyOf"):
+            for item in node.get(key) or []:
+                if isinstance(item, dict):
+                    yield item, scope.in_subresource(specification.create_resource(item))
+
+    state: dict[int, bool] = {}  # id of a schema: True while it is being followed, False when done
+
+    def follow(node: dict, scope) -> None:
+        if state.get(id(node)) is False:
+            return
+        if state.get(id(node)):
+            raise _ReferenceError(_UNRESOLVABLE)
+        state[id(node)] = True
+        for target, local in same_value(node, scope):
+            follow(target, local)
+        state[id(node)] = False
+
+    try:
+        # The root is already in the resolver's scope. Enter only its child resources below.
+        nodes = list(scoped_nodes(schema, resolver, root=True))
+        schema_nodes = {id(node) for node, _ in nodes}
+        for node, local in nodes:
+            follow(node, local)
+    except RecursionError:
+        raise _ReferenceError(_UNRESOLVABLE) from None
+
+
+def _compile(schema: dict) -> Any:
+    """The type-only validator of one parameters schema. Raises ``SchemaError`` or ``_ReferenceError``."""
+    validator_type = validator_for(schema, default=Draft202012Validator)
+    validator_type.check_schema(schema)
+    typed = _type_schema(schema)
+    _check_references(typed, validator_type)
+    return validator_type(typed)
+
+
+@functools.lru_cache(maxsize=1024)
+def _compiled(text: str) -> Any:
+    return _compile(json.loads(text))
+
+
+def _validator(schema: dict) -> Any:
+    """``_compile(schema)``, kept per schema text: tools are fixed, but every request and attempt checks them."""
+    try:
+        text = json.dumps(schema, allow_nan=False)
+    except (TypeError, ValueError):
+        return _compile(schema)
+    return _compiled(text)
+
+
 def _is_declared_default(issue: Any) -> bool:
     """A value equal to the parameter's own declared default is admissible."""
     if issue.validator != "type" or not isinstance(issue.schema, dict) or "default" not in issue.schema:
@@ -101,7 +210,8 @@ def check_schema(tools: Any, calls: Any) -> dict[str, Any]:
     Returns ``accepted`` (S(c)), ``function_pass`` and ``arguments_pass`` (which part failed),
     ``well_formed`` (the candidate is readable, so the decision model can judge it), ``errors``
     and the ``feedback`` record of the check. Invalid tool definitions raise ``ValueError``:
-    they are configuration errors, not a property of the candidate.
+    they are configuration errors, not a property of the candidate. That includes a ``$ref``
+    that does not resolve inside the tool's own parameters (nothing is fetched).
     """
     definitions = function_definitions(tools)
     validators: dict[str, Any] = {}
@@ -110,12 +220,10 @@ def check_schema(tools: Any, calls: Any) -> dict[str, Any]:
         schema = definition["parameters"]
         if not isinstance(schema, dict):
             raise ValueError("Function parameters must be a JSON Schema object")
-        validator_type = validator_for(schema, default=Draft202012Validator)
         try:
-            validator_type.check_schema(schema)
+            validators[definition["name"]] = _validator(schema)
         except SchemaError as exc:
             raise ValueError("An available function has an invalid JSON Schema") from exc
-        validators[definition["name"]] = validator_type(_type_schema(schema))
         schemas[definition["name"]] = schema
 
     errors: list[dict[str, str]] = []
@@ -152,7 +260,11 @@ def check_schema(tools: Any, calls: Any) -> dict[str, Any]:
                 errors.append(_error("arguments", path + ".arguments",
                                      "Cannot validate arguments for an unavailable function."))
                 continue
-            for issue in sorted(validators[name].iter_errors(arguments), key=lambda e: str(list(e.path))):
+            try:
+                issues = sorted(validators[name].iter_errors(arguments), key=lambda e: str(list(e.path)))
+            except (Unresolvable, RecursionError):
+                raise ValueError(_UNRESOLVABLE) from None
+            for issue in issues:
                 if _is_declared_default(issue):
                     continue
                 suffix = "".join(f"[{json.dumps(component)}]" for component in issue.path)

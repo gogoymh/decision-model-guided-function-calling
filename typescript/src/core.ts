@@ -379,7 +379,7 @@ export interface DMCallOptions extends AnyProviderOptions {
   threshold?: number;
   /** r: repairs after the first candidate (3). */
   maxRepairs?: number;
-  /** `"function"` (DM-Call-Function) or `"arguments"` (DM-Call-Argument): ask one question only. */
+  /** `"function"` or `"arguments"`: use only that question for acceptance and repair feedback; both are sent. */
   checks?: Checks;
   /** `"latest"` (DM-Call-Latest): show only the latest rejected candidate. */
   history?: History;
@@ -478,7 +478,8 @@ export class DMCall {
    * {@link call}, then execute the final call with its handler if it was accepted.
    *
    * With `executeUnverified: true` the final candidate also runs when none was accepted: the first
-   * one, or the last with `onExhaustion: "last"`.
+   * one, or the last with `onExhaustion: "last"`. Every tool must have a handler before any request is sent.
+   * Replacement definitions keep the client's handler of the same name unless another is supplied.
    */
   run(messages: Messages, options: RunOptions = {}): Promise<Result> {
     const unverified = options.executeUnverified === undefined ? this.executeUnverified : Boolean(options.executeUnverified);
@@ -487,7 +488,7 @@ export class DMCall {
 
   /** Check a proposed call (plain objects or SDK objects) with the schema check and both questions. */
   verify(messages: unknown, calls: unknown, tools?: unknown): Promise<Verdict> {
-    return verdictOf(this.decisionModel, messages, calls, tools === undefined ? this.tools : tools);
+    return verdictOf(this.decisionModel, messages, calls, tools === undefined || tools === null ? this.tools : tools);
   }
 
   toString(): string {
@@ -506,7 +507,9 @@ export class DMCall {
   }
 
   private async propose(messages: TextMessage[], schemas: JsonObject[], history: HistoryRecord[]): Promise<JsonProposal> {
-    if (this.model instanceof Provider) return this.model[GENERATE_JSON]({ messages, tools: schemas }, history);
+    if (this.model instanceof Provider && this.model.generate === Provider.prototype.generate) {
+      return this.model[GENERATE_JSON]({ messages, tools: schemas }, history);
+    }
     const plainHistory = history.map((record) => ({ ...record, calls: toPlain(record.calls as Json) }));
     const proposal = await this.model.generate({ messages, tools: toPlain(schemas) as unknown[] }, plainHistory);
     if (!isRecord(proposal)) throw new TypeError("generate() must return a proposal object with calls.");
@@ -523,9 +526,24 @@ export class DMCall {
     const limit = options.maxRepairs === undefined ? this.maxRepairs : repairLimit(options.maxRepairs);
     const rule = options.onExhaustion === undefined ? this.onExhaustion
       : choice("onExhaustion", options.onExhaustion, ON_EXHAUSTION);
-    const { schemas, registry } = options.tools === undefined
+    const { schemas, registry } = options.tools === undefined || options.tools === null
       ? toolset(this.tools, { ...this.functions, ...(options.functions ?? {}) })
       : toolset(options.tools, options.functions);
+    if (options.tools !== undefined && options.tools !== null) {
+      const known = toolset(this.tools, this.functions).registry;
+      for (const schema of schemas) {
+        const name = (schema.get("function") as JsonObject).get("name") as string;
+        if (!registry.has(name) && known.has(name)) registry.set(name, known.get(name)!);
+      }
+    }
+    if (execute) {
+      for (const schema of schemas) {
+        const name = (schema.get("function") as JsonObject).get("name") as string;
+        if (!registry.has(name)) {
+          throw new Error(`No function for tool ${stringRepr(name)}; pass it with tool({ execute }) or in functions.`);
+        }
+      }
+    }
     const conversation = messagesOf(messages);
     const started = now();
     const history: HistoryRecord[] = [];

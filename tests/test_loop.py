@@ -1,6 +1,7 @@
 """The DM-Call loop: acceptance, cumulative repair, the paper's variants, fallback and execution."""
 
 import asyncio
+import functools
 
 import pytest
 
@@ -91,7 +92,7 @@ def test_unreadable_candidate_is_repaired_and_never_run():
 
 
 def test_initial_no_call_is_returned_without_verification():
-    loop, model, decision = agent([], decision=ScriptedJev(no_call=0.97))
+    loop, model, decision = agent([], decision=ScriptedJev(no_call=0.97), functions={"get_weather": print})
     result = loop.run("Tell me a joke.")
     assert result.no_call and result.accepted is None and result.initial_no_call_preserved
     assert not result.executed and result.text == "No tool fits." and decision.requests == []
@@ -159,6 +160,52 @@ def test_per_call_overrides_and_missing_functions():
         loop.run("Weather in Seoul?", tools=[WEATHER])
     with pytest.raises(ValueError, match="not one of the tools"):
         loop.call("x", functions={"nope": print})
+
+
+def test_run_checks_the_functions_before_any_request():
+    loop, model, decision = agent(seoul())
+    with pytest.raises(LookupError, match="No Python function for tool 'get_weather'"):
+        loop.run("Weather in Seoul?")  # the tool is a schema without a function
+    assert model.histories == [] and decision.requests == []
+
+    async def get_weather(city: str):
+        return city
+
+    model, decision = ScriptedModel(seoul(), seoul()), ScriptedJev()
+    remote = dmcall.DMCall(model, decision_model=decision.jev, tools=[get_weather])
+    with pytest.raises(TypeError, match="async function"):
+        remote.run("Weather in Seoul?")
+    assert model.histories == [] and decision.requests == []
+    assert remote.call("Weather in Seoul?").accepted  # call() runs nothing, so an async function may describe a tool
+
+
+def test_request_tools_keep_the_client_functions():
+    ran = []
+    loop, _, _ = agent(seoul(), seoul(), functions={"get_weather": lambda city, unit="celsius": ran.append(city)})
+    assert loop.run("Weather in Seoul?", tools=[WEATHER]).executed and ran == ["Seoul"]
+    result = loop.run("Weather in Seoul?", tools=[WEATHER], functions={"get_weather": lambda city: city.upper()})
+    assert result.output == "SEOUL" and ran == ["Seoul"]  # a function given with the request wins
+
+
+@pytest.mark.parametrize("kind", ["callable", "partial-callable", "async-generator"])
+def test_async_callable_objects_are_refused_before_any_request(kind):
+    class RemoteWeather:
+        async def __call__(self, city):
+            return city
+
+    handler = RemoteWeather()
+    if kind == "partial-callable":
+        handler = functools.partial(handler)
+    elif kind == "async-generator":
+        async def streamed(city):
+            yield city
+        handler = streamed
+    loop, model, decision = agent(seoul(), functions={"get_weather": handler})
+    with pytest.raises(TypeError, match="async function"):
+        loop.run("Weather in Seoul?")
+    assert model.histories == [] and decision.requests == []
+    with pytest.raises(TypeError, match="Async tools"):
+        dmcall.invoke(handler, {"city": "Seoul"})
 
 
 def test_async_wrappers():

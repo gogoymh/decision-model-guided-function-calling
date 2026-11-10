@@ -58,7 +58,7 @@ result.output;    // { city: "Seoul", temp: 12, unit: "celsius" }
 result.repairs;   // repairs it took (0 to 3)
 ```
 
-`run()` executes the final call only if it was accepted. `call()` does everything except execute, so you decide:
+`run()` executes the final call only if it was accepted. It requires a handler for every available tool before sending any request. `call()` does everything except execute, so you decide:
 
 ```ts
 const result = await agent.call("Book a table for two at 7pm");
@@ -99,13 +99,13 @@ new DMCall(new OpenAICompatible("gemma-4-31b-it", { baseUrl: "http://localhost:8
 | Meta Model API (Muse) | `meta:<model>` | `MODEL_API_KEY` | `Meta` |
 | Any OpenAI-compatible server | | optional | `OpenAICompatible` |
 
-Every provider takes `apiKey`, `baseUrl`, `maxOutputTokens` (4,096 by default), `temperature`, `systemPrompt`, `timeoutMs`, `maxRetries`, `headers`, `fetch` and `sleep`. OpenAI-style providers also take `reasoningEffort`, `parallelToolCalls` (false by default), `maxTokensField` and `path`. Azure takes `endpoint` (in place of `baseUrl`) and `apiVersion`, and Gemini takes `thinkingBudget`. `Meta` sends neither `reasoning_effort` nor `parallel_tool_calls` unless you set them, because the Meta Model API rejects `reasoning_effort: "none"` for Muse models. An option a provider does not know throws a `TypeError`, so a misspelled option fails early. A response that is cut off, filtered or refused is an unreadable candidate (`calls: null`): it is rejected and repaired, never read as "no call". `SYSTEM_PROMPT` is the generator prompt used in the paper.
+Every provider takes `apiKey`, `baseUrl`, `maxOutputTokens` (4,096 by default), `temperature`, `systemPrompt`, `timeoutMs`, `maxRetries`, `headers`, `fetch` and `sleep`. OpenAI-style providers also take `reasoningEffort`, `parallelToolCalls` (false by default), `maxTokensField` and `path`. Azure takes `endpoint` (in place of `baseUrl`) and `apiVersion`, and Gemini takes `thinkingBudget`. `Meta` sends neither `reasoning_effort` nor `parallel_tool_calls` unless you set them, because the Meta Model API rejects `reasoning_effort: "none"` for Muse models. An option a provider does not know throws a `TypeError`, so a misspelled option fails early. A response that is cut off, filtered or refused is an unreadable candidate (`calls: null`): it is rejected and repaired, never read as "no call". Gemini responses with an abnormal finish reason are also unreadable. HTTP requests do not follow redirects; configure the final API endpoint directly. `SYSTEM_PROMPT` is the generator prompt used in the paper.
 
 Any object with `generate(example, history)` that returns `{ calls, content, parseErrors, incomplete }` can stand in for a provider.
 
 ## Decision models
 
-The decision model answers the two questions. Pass a configured one as `decisionModel`.
+The decision model answers the two questions. `checks: "function"` or `checks: "arguments"` uses only the selected answer for acceptance and repair feedback; a readable call still sends both questions and incurs both costs. A no-call sends only the function question when verification applies; a preserved initial no-call and an unreadable candidate send neither. Pass a configured model as `decisionModel`.
 
 ```ts
 import { DMCall, Jev, PPLXDecider } from "dmcall";
@@ -178,7 +178,7 @@ new DMCall("openai:gpt-5-nano", {
   decisionModel: undefined,       // Jev by default
   threshold: 0.5,                 // pass mark of both questions (for the default Jev)
   maxRepairs: 3,                  // r: repairs after the first candidate
-  checks: "both",                 // "function" or "arguments": ask one question only
+  checks: "both",                 // "function" or "arguments": require only that semantic judgment
   history: "cumulative",          // "latest": show only the latest rejected candidate
   feedback: "hybrid",             // "numeric" or "text"
   onExhaustion: "first",          // if nothing is accepted: return c_0 ("last": the last repair)
@@ -192,14 +192,14 @@ The defaults are the paper's settings. The paper's variants map to options as fo
 | In the paper | Options |
 |---|---|
 | DM-Call | defaults |
-| DM-Call-Function: function question only | `checks: "function"` |
-| DM-Call-Argument: argument question only | `checks: "arguments"` |
+| DM-Call-Function: function acceptance and feedback | `checks: "function"` |
+| DM-Call-Argument: argument acceptance and feedback | `checks: "arguments"` |
 | DM-Call-Latest: only the latest rejection as feedback | `history: "latest"` |
 | *Numeric* feedback, Φ(p) = p | `feedback: "numeric"` |
 | *Text* feedback, Φ(p) = ℓ(p) | `feedback: "text"` |
 | *Hybrid* feedback, Φ(p) = (p, ℓ(p)) | `feedback: "hybrid"` |
 
-`call()` and `run()` also take `tools`, `functions`, `maxRepairs` and `onExhaustion` per request, and `run()` takes `executeUnverified`. A `fetch` option on `DMCall` is passed to the provider it builds from a spec string and to the default Jev.
+`call()` and `run()` also take `tools`, `functions`, `maxRepairs` and `onExhaustion` per request, and `run()` takes `executeUnverified`. Omitted or `null` tools use the client's definitions; pass `[]` to request no tools. Replacement definitions keep the client's handler under the same name unless the replacement tool or `functions` supplies another. A `fetch` option on `DMCall` is passed to the provider it builds from a spec string and to the default Jev.
 
 ### The result
 

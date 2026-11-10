@@ -217,7 +217,8 @@ func (c *Client) Call(ctx context.Context, messages []Message, opts ...CallOptio
 // Run is Call, then it executes the final call with its tool's Handler if the call was accepted.
 // With WithExecuteUnverified(true) the final candidate also runs when none was accepted: the first
 // one, or the last with ExhaustionLast. An unreadable candidate or a no call never runs. If a handler
-// fails, Run returns the result with the outputs gathered so far and the error.
+// fails, Run returns the result with the outputs gathered so far and the error. Every tool must have
+// a Handler before any request is sent; per-call tools keep registered handlers of the same name.
 func (c *Client) Run(ctx context.Context, messages []Message, opts ...CallOption) (*Result, error) {
 	config, err := callOptions(opts)
 	if err != nil {
@@ -503,9 +504,27 @@ func (c *Client) solve(ctx context.Context, messages []Message, config *callConf
 		schemas, registry, err = toolset(c.tools, handlers)
 	} else {
 		schemas, registry, err = toolset(*config.tools, config.handlers)
+		if err == nil {
+			_, known, knownErr := toolset(c.tools, c.handlers)
+			if knownErr != nil {
+				return nil, knownErr
+			}
+			for _, tool := range schemas {
+				if registry[tool.Name] == nil && known[tool.Name] != nil {
+					registry[tool.Name] = known[tool.Name]
+				}
+			}
+		}
 	}
 	if err != nil {
 		return nil, err
+	}
+	if execute {
+		for _, tool := range schemas {
+			if registry[tool.Name] == nil {
+				return nil, fmt.Errorf("dmcall: no handler for tool %s; pass WithHandlers or use Call", pyStr(tool.Name))
+			}
+		}
 	}
 	turns, err := generatorMessages(messages)
 	if err != nil {

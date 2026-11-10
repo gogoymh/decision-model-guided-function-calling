@@ -80,7 +80,7 @@ final class Tools {
             problem = "ValueError";
         } else {
             try {
-                MetaSchema.check(parameters);
+                SchemaCheck.validator(parameters);
             } catch (MetaSchema.InvalidSchema e) {
                 problem = "SchemaError";
             }
@@ -92,7 +92,13 @@ final class Tools {
         return definition;
     }
 
-    /** Gemini's OpenAPI-style schemas spell types in capitals (OBJECT, STRING); JSON Schema does not. */
+    private static final Set<String> NAMED_SCHEMAS = Set.of("properties", "patternProperties", "$defs",
+            "definitions", "dependentSchemas");
+    private static final Set<String> SCHEMA_CHILDREN = Set.of("items", "prefixItems", "additionalProperties",
+            "additionalItems", "allOf", "anyOf", "oneOf", "not", "if", "then", "else", "contains",
+            "propertyNames", "unevaluatedProperties", "unevaluatedItems", "contentSchema");
+
+    /** Normalize schema types while preserving data values and names of properties and definitions. */
     static JsonNode lowerTypes(JsonNode schema) {
         if (schema.isArray()) {
             ArrayNode result = Json.array();
@@ -118,8 +124,19 @@ final class Tools {
                             ? TextNode.valueOf(item.textValue().toLowerCase(Locale.ROOT)) : item.deepCopy());
                 }
                 result.set(key, types);
-            } else {
+            } else if (NAMED_SCHEMAS.contains(key) && value.isObject()) {
+                ObjectNode mapped = Json.object();
+                value.fields().forEachRemaining(item -> mapped.set(item.getKey(), lowerTypes(item.getValue())));
+                result.set(key, mapped);
+            } else if (key.equals("dependencies") && value.isObject()) {
+                ObjectNode mapped = Json.object();
+                value.fields().forEachRemaining(item -> mapped.set(item.getKey(), item.getValue().isArray()
+                        ? item.getValue().deepCopy() : lowerTypes(item.getValue())));
+                result.set(key, mapped);
+            } else if (SCHEMA_CHILDREN.contains(key)) {
                 result.set(key, lowerTypes(value));
+            } else {
+                result.set(key, value.deepCopy());
             }
         }
         return result;

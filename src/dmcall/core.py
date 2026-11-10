@@ -21,7 +21,7 @@ from .decision import Jev
 from .feedback import FEEDBACK, represent_history, single_check
 from .providers import provider as make_provider
 from .schema import check_schema
-from .tools import _plain, invoke, normalize_calls, toolset
+from .tools import _is_async, _plain, invoke, normalize_calls, toolset
 
 __all__ = ["CHECKS", "DMCall", "HISTORIES", "ON_EXHAUSTION", "Result", "Verdict", "verify"]
 
@@ -108,6 +108,21 @@ def _add(total: dict, counts: Any) -> None:
     for key, value in (counts or {}).items():
         if isinstance(value, int) and not isinstance(value, bool):
             total[key] = total.get(key, 0) + value
+
+
+def _runnable(schemas: list[dict], registry: dict) -> None:
+    """``run()`` executes the accepted call, so every tool needs a synchronous Python function.
+
+    Checked before the first request, so a missing or async function costs nothing.
+    """
+    for schema in schemas:
+        name = schema["function"]["name"]
+        if name not in registry:
+            raise LookupError(f"No Python function for tool {name!r}; pass it in tools= or functions=, "
+                              "or use call() and run the function yourself.")
+        if _is_async(registry[name]):
+            raise TypeError(f"Tool {name!r} is an async function, which run() cannot execute yet; pass a "
+                            "synchronous function, or use call() and await the function yourself.")
 
 
 def _readable_no_call(proposal: dict) -> bool:
@@ -306,7 +321,10 @@ class DMCall:
     # Public API ---------------------------------------------------------------------------
     def call(self, messages, tools=None, *, functions: dict[str, Callable] | None = None,
              max_repairs: int | None = None, on_exhaustion: str | None = None) -> Result:
-        """Propose, verify and repair a call. Nothing is executed."""
+        """Propose, verify and repair a call. Nothing is executed.
+
+        ``tools`` replaces the client's tools for this request (``None`` keeps them).
+        """
         return self._solve(messages, tools, functions, max_repairs, on_exhaustion, execute=False, unverified=False)
 
     def run(self, messages, tools=None, *, functions: dict[str, Callable] | None = None,
@@ -316,6 +334,11 @@ class DMCall:
 
         With ``execute_unverified=True`` the final candidate also runs when none was accepted:
         the first one, or the last with ``on_exhaustion="last"``.
+
+        Every tool needs a synchronous Python function; a missing one raises ``LookupError``
+        and an async one ``TypeError`` before any request is sent. Tools passed here replace
+        the client's tools for this request, and a tool keeps the function the client already
+        has under the same name unless ``tools`` or ``functions`` gives another.
         """
         unverified = self.execute_unverified if execute_unverified is None else bool(execute_unverified)
         return self._solve(messages, tools, functions, max_repairs, on_exhaustion, execute=True, unverified=unverified)
@@ -365,8 +388,17 @@ class DMCall:
     def _solve(self, messages, tools, functions, max_repairs, on_exhaustion, *, execute, unverified) -> Result:
         limit = self.max_repairs if max_repairs is None else _repairs(max_repairs)
         rule = self.on_exhaustion if on_exhaustion is None else _choice("on_exhaustion", on_exhaustion, ON_EXHAUSTION)
-        schemas, registry = (toolset(self.tools, {**self.functions, **(functions or {})}) if tools is None
-                             else toolset(tools, functions))
+        if tools is None:
+            schemas, registry = toolset(self.tools, {**self.functions, **(functions or {})})
+        else:
+            schemas, registry = toolset(tools, functions)
+            known = toolset(self.tools, self.functions)[1]
+            for schema in schemas:  # the client's function still serves a tool of the same name
+                name = schema["function"]["name"]
+                if name not in registry and name in known:
+                    registry[name] = known[name]
+        if execute:
+            _runnable(schemas, registry)
         example = {"messages": _messages(messages), "tools": schemas}
         started = time.perf_counter()
         history: list[dict] = []

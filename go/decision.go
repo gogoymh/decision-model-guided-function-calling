@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -165,7 +166,7 @@ type SystemOne struct {
 	feedbackSource string
 	baseURL        string
 	model          string
-	apiKey         string
+	apiKey         *string // pointer keeps a dereferenced value's debug formatting from revealing the key
 
 	functionThreshold  float64
 	argumentsThreshold float64
@@ -267,7 +268,15 @@ func NewPPLXDecider(baseURL string, opts ...DecisionOption) (*SystemOne, error) 
 	}
 	if config.client == nil {
 		// A local server is reached directly, never through an environment proxy.
-		transport := http.DefaultTransport.(*http.Transport).Clone()
+		// Instrumentation may replace DefaultTransport with a RoundTripper wrapper.
+		// A fresh transport still guarantees that environment proxies are bypassed.
+		transport := &http.Transport{DialContext: (&net.Dialer{Timeout: 30 * time.Second,
+			KeepAlive: 30 * time.Second}).DialContext, ForceAttemptHTTP2: true,
+			MaxIdleConns: 100, IdleConnTimeout: 90 * time.Second,
+			TLSHandshakeTimeout: 10 * time.Second, ExpectContinueTimeout: time.Second}
+		if defaults, ok := http.DefaultTransport.(*http.Transport); ok {
+			transport = defaults.Clone()
+		}
 		transport.Proxy = nil
 		config.client = newHTTPClient(transport)
 	}
@@ -403,7 +412,7 @@ func newSystemOne(name, kind, source, baseURL, model string, config *decisionCon
 		if strings.TrimSpace(key) == "" || strings.ContainsAny(key, "\r\n") {
 			return nil, errors.New("dmcall: API keys must be nonempty single-line strings")
 		}
-		s.apiKey = key
+		s.apiKey = &key
 	}
 	if strings.TrimSpace(model) == "" {
 		return nil, fmt.Errorf("dmcall: %s needs a model name", name)
@@ -454,12 +463,17 @@ func (s *SystemOne) String() string {
 		pyStr(s.model), pyStr(s.baseURL), pyFloat(s.functionThreshold), pyFloat(s.argumentsThreshold))
 }
 
+// GoString keeps API keys and internals out of fmt's %#v format.
+func (s *SystemOne) GoString() string { return s.String() }
+
 // HTTP ------------------------------------------------------------------------------------------------
+
+func (s *SystemOne) secret() string { return deref(s.apiKey) }
 
 func (s *SystemOne) headers() http.Header {
 	header := http.Header{}
-	if s.apiKey != "" {
-		header.Set("Authorization", "Bearer "+s.apiKey)
+	if s.secret() != "" {
+		header.Set("Authorization", "Bearer "+s.secret())
 	}
 	header.Set("Content-Type", "application/json")
 	return header
@@ -551,7 +565,7 @@ func (s *SystemOne) wait(ctx context.Context, delay time.Duration) (time.Duratio
 func (s *SystemOne) httpError(reply *httpReply, attempts int) *DecisionModelError {
 	e := &DecisionModelError{Message: fmt.Sprintf("%s HTTP %d; no judgment recorded.", s.name, reply.status),
 		Code: "http_error", StatusCode: reply.status, Attempts: attempts,
-		RequestID: requestID(reply.header, []string{"x-request-id", "request-id", "apim-request-id"}, s.apiKey)}
+		RequestID: requestID(reply.header, []string{"x-request-id", "request-id", "apim-request-id"}, s.secret())}
 	if s.pplx && reply.status == 422 {
 		if body, err := ParseJSON(reply.body); err == nil {
 			if detail, ok := body.(*Object); ok {

@@ -1,5 +1,5 @@
 {
- "note": "check_schema(tools, calls). Error messages follow Python jsonschema's wording; errors are sorted by str(list(path)) of the jsonschema error, then by the order jsonschema reports them.",
+ "note": "check_schema(tools, calls). Error messages follow Python jsonschema's wording; errors are sorted by str(list(path)) of the jsonschema error, then by the order jsonschema reports them. configuration_errors must be refused when the tools are checked, with no call in hand: a $ref must resolve inside the tool's own parameters (nothing is fetched) and must not lead back to its own schema without consuming part of the value. An object target must occupy an actual structural schema position, not a metadata value or a map of named schemas; boolean targets must be valid schemas for the selected draft.",
  "cases": [
   {
    "name": "valid call",
@@ -2299,9 +2299,374 @@
      "schema_errors": []
     }
    }
+  },
+  {
+   "name": "reference to false schema",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "a": {
+         "$ref": "#/$defs/deny"
+        }
+       },
+       "$defs": {
+        "deny": false
+       }
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "f",
+     "arguments": {
+      "a": 1
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": true,
+    "errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"a\"]",
+      "message": "False schema does not allow 1"
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"a\"]",
+       "message": "False schema does not allow 1"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "recursive schema",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "tree",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "root": {
+         "$ref": "#/$defs/node"
+        }
+       },
+       "$defs": {
+        "node": {
+         "type": "object",
+         "properties": {
+          "value": {
+           "type": "integer"
+          },
+          "children": {
+           "type": "array",
+           "items": {
+            "$ref": "#/$defs/node"
+           }
+          }
+         },
+         "required": [
+          "value"
+         ]
+        }
+       }
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "tree",
+     "arguments": {
+      "root": {
+       "value": 1,
+       "children": [
+        {
+         "value": 2,
+         "children": []
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": true,
+    "accepted": true,
+    "well_formed": true,
+    "errors": [],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": true,
+     "schema_errors": []
+    }
+   }
+  },
+  {
+   "name": "recursive schema, nested error",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "tree",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "root": {
+         "$ref": "#/$defs/node"
+        }
+       },
+       "$defs": {
+        "node": {
+         "type": "object",
+         "properties": {
+          "value": {
+           "type": "integer"
+          },
+          "children": {
+           "type": "array",
+           "items": {
+            "$ref": "#/$defs/node"
+           }
+          }
+         },
+         "required": [
+          "value"
+         ]
+        }
+       }
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "tree",
+     "arguments": {
+      "root": {
+       "value": 1,
+       "children": [
+        {
+         "value": 2,
+         "children": [
+          {
+           "value": "three"
+          },
+          {}
+         ]
+        }
+       ]
+      }
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": false,
+    "accepted": false,
+    "well_formed": true,
+    "errors": [
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"root\"][\"children\"][0][\"children\"][0][\"value\"]",
+      "message": "'three' is not of type 'integer'"
+     },
+     {
+      "check": "arguments",
+      "path": "calls[0].arguments[\"root\"][\"children\"][0][\"children\"][1]",
+      "message": "'value' is a required property"
+     }
+    ],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": false,
+     "schema_errors": [
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"root\"][\"children\"][0][\"children\"][0][\"value\"]",
+       "message": "'three' is not of type 'integer'"
+      },
+      {
+       "check": "arguments",
+       "path": "calls[0].arguments[\"root\"][\"children\"][0][\"children\"][1]",
+       "message": "'value' is a required property"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "name": "reference-like data and a property named $ref",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "g",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "a": {
+         "type": "object",
+         "default": {
+          "$ref": "#/nope"
+         }
+        },
+        "$ref": {
+         "type": "string"
+        }
+       }
+      }
+     }
+    }
+   ],
+   "calls": [
+    {
+     "name": "g",
+     "arguments": {
+      "a": {},
+      "$ref": "x"
+     }
+    }
+   ],
+   "expected": {
+    "function_pass": true,
+    "arguments_pass": true,
+    "accepted": true,
+    "well_formed": true,
+    "errors": [],
+    "feedback": {
+     "source": "deterministic_schema_validation",
+     "function_pass": true,
+     "arguments_pass": true,
+     "schema_errors": []
+    }
+   }
   }
  ],
  "configuration_errors": [
+  {
+   "name": "$ref to invalid default data",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "a": {
+         "$ref": "#/default"
+        }
+       },
+       "default": {
+        "type": "PREMIUM"
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "$ref to a property mapping",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "type": {
+         "type": "string"
+        },
+        "a": {
+         "$ref": "#/properties"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "$ref to schema-shaped default data",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "a": {
+         "$ref": "#/default"
+        }
+       },
+       "default": {
+        "type": "integer",
+        "minimum": 2
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "$ref to data with a nested reference",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "a": {
+         "$ref": "#/default"
+        }
+       },
+       "default": {
+        "type": "object",
+        "properties": {
+         "child": {
+          "$ref": "#/missing"
+         }
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
   {
    "name": "invalid parameter schema",
    "tools": [
@@ -2388,6 +2753,115 @@
      "function": {
       "name": "f",
       "parameters": []
+     }
+    }
+   ]
+  },
+  {
+   "name": "$ref to a missing definition",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "a": {
+         "$ref": "#/$defs/missing"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "$ref to another document",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "a": {
+         "$ref": "https://example.com/a.json"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "$ref to itself",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "a": {
+         "$ref": "#/properties/a"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "$ref to scalar",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "a": {
+         "$ref": "#/type"
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "$ref loop through allOf",
+   "tools": [
+    {
+     "type": "function",
+     "function": {
+      "name": "f",
+      "description": "",
+      "parameters": {
+       "type": "object",
+       "properties": {
+        "a": {
+         "$ref": "#/$defs/x"
+        }
+       },
+       "$defs": {
+        "x": {
+         "allOf": [
+          {
+           "$ref": "#/$defs/x"
+          }
+         ]
+        }
+       }
+      }
      }
     }
    ]

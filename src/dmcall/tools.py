@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import collections.abc
 import enum
+import functools
 import inspect
 import json
 import re
@@ -19,9 +20,9 @@ import typing
 from copy import deepcopy
 from typing import Any, Callable
 
-from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
-from jsonschema.validators import validator_for
+
+from .schema import _ReferenceError, _validator
 
 __all__ = ["invoke", "normalize_calls", "schema_of", "tool", "toolset"]
 
@@ -183,6 +184,49 @@ def _schema(annotation, where: str) -> tuple[dict, str | None]:
                     "pass parameters= to dmcall.tool with a JSON Schema.")
 
 
+def _annotations(function) -> dict:
+    """The annotations as written. On Python 3.14+ an undefined name stays a ForwardRef instead of raising."""
+    try:
+        import annotationlib
+    except ImportError:
+        return dict(getattr(function, "__annotations__", None) or {})
+    return annotationlib.get_annotations(function, format=annotationlib.Format.FORWARDREF)
+
+
+def _hints(function) -> dict:
+    """Type hints by parameter name. An annotation that cannot be resolved leaves only its own parameter untyped."""
+    try:
+        return typing.get_type_hints(function, include_extras=True)
+    except Exception:
+        pass
+    try:
+        annotations = _annotations(function)
+    except Exception:
+        return {}
+    owner = function
+    while hasattr(owner, "__wrapped__"):
+        owner = owner.__wrapped__
+    namespace = getattr(owner, "__globals__", None)
+    hints = {}
+    for name, annotation in annotations.items():
+        def probe():
+            pass
+        probe.__annotations__ = {name: annotation}
+        try:
+            hints.update(typing.get_type_hints(probe, globalns=namespace, include_extras=True))
+        except Exception:
+            continue
+    return hints
+
+
+def _signature(function):
+    try:
+        return inspect.signature(function)
+    except NameError:  # Python 3.14+ resolves annotations when they are read
+        import annotationlib
+        return inspect.signature(function, annotation_format=annotationlib.Format.FORWARDREF)
+
+
 def _json_value(value):
     if isinstance(value, enum.Enum):
         value = value.value
@@ -201,13 +245,10 @@ def _infer(function: Callable, name: str | None = None) -> dict:
         raise ValueError("Name this tool: dmcall.tool(function, name=...).")
     description, notes = _parse_doc(inspect.getdoc(function) or "")
     try:
-        signature = inspect.signature(function)
+        signature = _signature(function)
     except (TypeError, ValueError):
         raise TypeError(f"{name}: cannot read its signature; pass parameters= to dmcall.tool.") from None
-    try:
-        hints = typing.get_type_hints(function, include_extras=True)
-    except Exception:  # an unresolvable forward reference leaves the parameter untyped
-        hints = {}
+    hints = _hints(function)
     properties, required, open_keywords = {}, [], False
     for parameter in signature.parameters.values():
         if parameter.kind is parameter.VAR_KEYWORD:
@@ -218,7 +259,7 @@ def _infer(function: Callable, name: str | None = None) -> dict:
         if parameter.kind is parameter.POSITIONAL_ONLY:
             raise TypeError(f"{name}: positional-only parameter {parameter.name!r} cannot be passed by name.")
         annotation = hints.get(parameter.name, parameter.annotation)
-        if isinstance(annotation, str):
+        if isinstance(annotation, (str, typing.ForwardRef)):  # unresolved: this parameter stays untyped
             annotation = inspect.Parameter.empty
         has_default = parameter.default is not parameter.empty
         if has_default and parameter.default is None:
@@ -253,14 +294,29 @@ def _checked(definition: dict) -> dict:
         raise ValueError(f"Tool {name!r}: parameters must be a JSON Schema object with type 'object'.")
     try:
         json.dumps(parameters, allow_nan=False)
-        validator_for(parameters, default=Draft202012Validator).check_schema(parameters)
+        _validator(parameters)
+    except _ReferenceError:
+        raise ValueError(f"Tool {name!r}: a $ref in its parameters cannot be resolved inside them.") from None
     except (TypeError, ValueError, SchemaError) as exc:
         raise ValueError(f"Tool {name!r}: parameters are not a valid JSON Schema ({type(exc).__name__}).") from None
     return definition
 
 
+_NAMED_SCHEMAS = frozenset({"properties", "patternProperties", "$defs", "definitions", "dependentSchemas"})
+_SCHEMA_CHILDREN = frozenset({
+    "items", "prefixItems", "additionalProperties", "additionalItems", "allOf", "anyOf", "oneOf",
+    "not", "if", "then", "else", "contains", "propertyNames", "unevaluatedProperties", "unevaluatedItems",
+    "contentSchema",
+})
+
+
 def _lower_types(schema):
-    """Gemini's OpenAPI-style schemas spell types in capitals (OBJECT, STRING); JSON Schema does not."""
+    """Gemini's OpenAPI-style schemas spell types in capitals (OBJECT, STRING); JSON Schema does not.
+
+    Only schemas are rewritten. The values of ``enum``, ``const``, ``default``, ``example`` and
+    ``examples`` are the caller's data and stay as written, and the keys of ``properties`` (and
+    of the other maps of named schemas) are names, not keywords.
+    """
     if isinstance(schema, list):
         return [_lower_types(item) for item in schema]
     if not isinstance(schema, dict):
@@ -271,8 +327,15 @@ def _lower_types(schema):
             result[key] = value.lower()
         elif key == "type" and isinstance(value, list):
             result[key] = [item.lower() if isinstance(item, str) and item.isupper() else item for item in value]
-        else:
+        elif key in _NAMED_SCHEMAS and isinstance(value, dict):
+            result[key] = {name: _lower_types(item) for name, item in value.items()}
+        elif key == "dependencies" and isinstance(value, dict):
+            result[key] = {name: deepcopy(item) if isinstance(item, list) else _lower_types(item)
+                           for name, item in value.items()}
+        elif key in _SCHEMA_CHILDREN:
             result[key] = _lower_types(value)
+        else:
+            result[key] = deepcopy(value)
     return result
 
 
@@ -415,14 +478,18 @@ def _enum_type(annotation):
     return annotation if isinstance(annotation, type) and issubclass(annotation, enum.Enum) else None
 
 
+def _is_async(function: Callable) -> bool:
+    while isinstance(function, functools.partial):
+        function = function.func
+    return any(inspect.iscoroutinefunction(target) or inspect.isasyncgenfunction(target)
+               for target in (function, getattr(function, "__call__", None)))
+
+
 def invoke(function: Callable, arguments: dict) -> Any:
     """Call a tool's Python function with keyword arguments; Enum parameters receive Enum members."""
-    if inspect.iscoroutinefunction(function):
+    if _is_async(function):
         raise TypeError("Async tools are not supported yet; pass a synchronous function.")
-    try:
-        hints = typing.get_type_hints(function)
-    except Exception:
-        hints = {}
+    hints = _hints(function)
     values = dict(arguments)
     for name, value in values.items():
         target = _enum_type(hints.get(name))

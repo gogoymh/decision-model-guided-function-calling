@@ -9,7 +9,7 @@
  */
 
 import { type Json, type JsonObject, clone, fromPlain, isFiniteJson, parse, stringRepr, toPlain, truthy } from "./json.js";
-import { SchemaError, checkMetaSchema, dialectOf } from "./jsonschema.js";
+import { SchemaError, ReferenceError, compiledSchema } from "./jsonschema.js";
 
 /** The code behind a tool. It receives the call's arguments as one object and may be async. */
 export type ToolHandler = (args: Record<string, unknown>) => unknown;
@@ -73,8 +73,11 @@ function checked(definition: JsonObject): JsonObject {
     throw new Error(`Tool ${stringRepr(name)}: parameters are not a valid JSON Schema (ValueError).`);
   }
   try {
-    checkMetaSchema(parameters, dialectOf(parameters));
+    compiledSchema(parameters);
   } catch (error) {
+    if (error instanceof ReferenceError) {
+      throw new Error(`Tool ${stringRepr(name)}: a $ref in its parameters cannot be resolved inside them.`);
+    }
     if (error instanceof SchemaError) {
       throw new Error(`Tool ${stringRepr(name)}: parameters are not a valid JSON Schema (SchemaError).`);
     }
@@ -88,6 +91,10 @@ function isUpper(text: string): boolean {
   return text.toUpperCase() === text && text.toLowerCase() !== text;
 }
 
+const NAMED_SCHEMAS = new Set(["properties", "patternProperties", "$defs", "definitions", "dependentSchemas", "dependencies"]);
+const CHILD_SCHEMAS = new Set(["items", "prefixItems", "additionalItems", "additionalProperties", "unevaluatedItems",
+  "unevaluatedProperties", "contains", "propertyNames", "allOf", "anyOf", "oneOf", "not", "if", "then", "else", "contentSchema"]);
+
 function lowerTypes(schema: Json): Json {
   if (Array.isArray(schema)) return schema.map(lowerTypes);
   if (!(schema instanceof Map)) return schema;
@@ -96,7 +103,10 @@ function lowerTypes(schema: Json): Json {
     if (key === "type" && typeof value === "string" && isUpper(value)) result.set(key, value.toLowerCase());
     else if (key === "type" && Array.isArray(value)) {
       result.set(key, value.map((item) => (typeof item === "string" && isUpper(item) ? item.toLowerCase() : item)));
-    } else result.set(key, lowerTypes(value));
+    } else if (NAMED_SCHEMAS.has(key) && value instanceof Map) {
+      result.set(key, new Map([...value].map(([name, item]) => [name, lowerTypes(item)])));
+    } else if (CHILD_SCHEMAS.has(key)) result.set(key, lowerTypes(value));
+    else result.set(key, value);
   }
   return result;
 }

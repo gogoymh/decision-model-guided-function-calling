@@ -25,6 +25,24 @@ import java.util.Set;
  * passes. Error messages follow Python jsonschema's wording.
  */
 public final class SchemaCheck {
+    // Schema text keys also detect mutations by callers. Validators own a copy of their schema.
+    private static final Map<String, TypeSchemaValidator> VALIDATORS = new LinkedHashMap<>(16, 0.75f, true);
+
+    static synchronized TypeSchemaValidator validator(JsonNode schema) {
+        String key = Json.compact(schema);
+        TypeSchemaValidator cached = VALIDATORS.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        MetaSchema.check(schema);
+        TypeSchemaValidator compiled = new TypeSchemaValidator(TypeSchemaValidator.typeSchema(schema));
+        VALIDATORS.put(key, compiled);
+        if (VALIDATORS.size() > 1024) {
+            VALIDATORS.remove(VALIDATORS.keySet().iterator().next());
+        }
+        return compiled;
+    }
+
     private SchemaCheck() {
     }
 
@@ -92,12 +110,11 @@ public final class SchemaCheck {
                 throw new IllegalArgumentException("Function parameters must be a JSON Schema object");
             }
             try {
-                MetaSchema.check(schema);
+                validators.put(definition.get("name").textValue(), validator(schema));
             } catch (MetaSchema.InvalidSchema e) {
                 throw new IllegalArgumentException("An available function has an invalid JSON Schema", e);
             }
             String name = definition.get("name").textValue();
-            validators.put(name, new TypeSchemaValidator(TypeSchemaValidator.typeSchema(schema)));
             schemas.put(name, schema);
         }
 

@@ -108,6 +108,23 @@ class ConformanceTest {
                         () -> SchemaCheck.check(c.get("tools"), Json.array()))));
     }
 
+    // tools.json ----------------------------------------------------------------------------
+    @TestFactory
+    Stream<DynamicTest> toolDefinitions() {
+        return each(conformance("tools.json").get("cases")).map(c -> dynamicTest(c.get("name").textValue(), () -> {
+            JsonNode before = c.get("input").deepCopy();
+            assertSameText(c.get("expected"), Tool.of(c.get("input")).definition().get("function"), "definition");
+            assertSameText(before, c.get("input"), "input after normalization");
+        }));
+    }
+
+    @TestFactory
+    Stream<DynamicTest> toolConfigurationErrors() {
+        return each(conformance("tools.json").get("configuration_errors")).map(c -> dynamicTest(
+                c.get("name").textValue(), () -> assertThrows(IllegalArgumentException.class,
+                        () -> Tool.of(c.get("input")))));
+    }
+
     // feedback.json -------------------------------------------------------------------------
     @TestFactory
     Stream<DynamicTest> feedback() {
@@ -413,7 +430,7 @@ class ConformanceTest {
         }
         files.sort(String::compareTo);
         assertEquals(List.of("feedback.json", "json_text.json", "loop_edges.json", "normalize_calls.json",
-                "paper_parity.json", "providers.json", "schema_check.json"), files);
+                "paper_parity.json", "providers.json", "schema_check.json", "tools.json"), files);
         // Every case list is replayed in full; only guard against a file that lost its cases.
         assertTrue(conformance("paper_parity.json").get("scenarios").size() > 0);
         assertTrue(conformance("loop_edges.json").get("scenarios").size() > 0);

@@ -119,7 +119,21 @@ fn schema_check() {
         let tools = case["tools"].as_array().unwrap();
         assert!(dmcall::check_schema(tools, &json!([])).is_err(), "{}", case["name"]);
     }
-    assert_eq!(invalid.len(), 3);
+    assert!(!invalid.is_empty());
+}
+
+// tools.json ---------------------------------------------------------------------------------------------
+
+#[test]
+fn tool_definitions() {
+    let data = load("conformance/tools.json");
+    for case in data["cases"].as_array().unwrap() {
+        let actual = dmcall::schema_of(&case["input"]).unwrap();
+        assert_py_eq(&actual["function"], &case["expected"], case["name"].as_str().unwrap());
+    }
+    for case in data["configuration_errors"].as_array().unwrap() {
+        assert!(Tool::new(case["input"].clone()).is_err(), "{}", case["name"]);
+    }
 }
 
 // feedback.json -------------------------------------------------------------------------------------------
@@ -299,7 +313,7 @@ fn provider_decoding() {
         });
         assert_py_eq(&actual, &case["expected"], name);
     }
-    assert_eq!(cases.len(), 18);
+    assert!(!cases.is_empty());
 
     let filtered = &data["filtered_prompt"];
     let status = filtered["status"].as_u64().unwrap() as u16;

@@ -12,8 +12,14 @@
 //! words and order, as Python's `jsonschema` package on the keywords `type`, `properties`,
 //! `required`, `items`, `prefixItems`, `additionalProperties`, `patternProperties`, `anyOf`,
 //! `allOf`, `oneOf`, `$ref` (to `#...` JSON pointers), `$defs` and `definitions`.
+//!
+//! A tool's parameters are checked and reduced to their types once and kept by their JSON
+//! text, so every later request and attempt reuses the result. A `$ref` must resolve inside
+//! the parameters. Nothing is fetched, and a reference that only leads back to its own
+//! schema is refused, when the tool is defined and by every check, even of an empty call list.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use regex::Regex;
 use serde::Serialize;
@@ -83,12 +89,12 @@ impl SchemaCheck {
     }
 }
 
-/// The observable part of each tool: name, description and parameters.
-///
-/// Any other field of a tool definition stays out of what the decision model sees.
-pub fn function_definitions(tools: &[Value]) -> Result<Vec<Value>> {
-    let mut definitions = Vec::with_capacity(tools.len());
-    let mut names: Vec<&str> = Vec::new();
+/// The parameters of a tool that declares none.
+static NO_PARAMETERS: LazyLock<Value> = LazyLock::new(|| json!({"type": "object", "properties": {}}));
+
+/// Each tool's name and definition object, in order. Names must be nonempty and unique.
+fn named_definitions(tools: &[Value]) -> Result<Vec<(&str, &Map<String, Value>)>> {
+    let mut definitions: Vec<(&str, &Map<String, Value>)> = Vec::with_capacity(tools.len());
     for tool in tools {
         let Value::Object(map) = tool else {
             return Err(Error::invalid("Every tool must be a function definition object"));
@@ -97,19 +103,30 @@ pub fn function_definitions(tools: &[Value]) -> Result<Vec<Value>> {
             return Err(Error::invalid("Every tool.function must be an object"));
         };
         let name = match definition.get("name") {
-            Some(Value::String(name)) if !name.is_empty() && !names.contains(&name.as_str()) => name,
+            Some(Value::String(name)) if !name.is_empty() && !definitions.iter().any(|(known, _)| known == name) => {
+                name
+            }
             _ => return Err(Error::invalid("Available function names must be nonempty and unique")),
         };
-        names.push(name);
-        definitions.push(pyjson::object(vec![
-            ("name", Value::String(name.clone())),
-            ("description", definition.get("description").cloned().unwrap_or_else(|| Value::String(String::new()))),
-            (
-                "parameters",
-                definition.get("parameters").cloned().unwrap_or_else(|| json!({"type": "object", "properties": {}})),
-            ),
-        ]));
+        definitions.push((name, definition));
     }
+    Ok(definitions)
+}
+
+/// The observable part of each tool: name, description and parameters.
+///
+/// Any other field of a tool definition stays out of what the decision model sees.
+pub fn function_definitions(tools: &[Value]) -> Result<Vec<Value>> {
+    let definitions = named_definitions(tools)?
+        .into_iter()
+        .map(|(name, definition)| {
+            pyjson::object(vec![
+                ("name", Value::String(name.to_string())),
+                ("description", definition.get("description").cloned().unwrap_or_else(|| Value::String(String::new()))),
+                ("parameters", definition.get("parameters").unwrap_or(&NO_PARAMETERS).clone()),
+            ])
+        })
+        .collect();
     Ok(definitions)
 }
 
@@ -348,14 +365,12 @@ struct Issue<'a> {
 struct Validator<'a> {
     root: &'a Value,
     draft: Draft,
-    regexes: HashMap<String, Regex>,
+    regexes: &'a HashMap<String, Regex>,
 }
 
 impl<'a> Validator<'a> {
-    fn new(root: &'a Value, draft: Draft) -> Result<Self> {
-        let mut regexes = HashMap::new();
-        collect_patterns(root, &mut regexes)?;
-        Ok(Validator { root, draft, regexes })
+    fn new(root: &'a Value, draft: Draft, regexes: &'a HashMap<String, Regex>) -> Self {
+        Validator { root, draft, regexes }
     }
 
     fn matches(&self, pattern: &str, text: &str) -> bool {
@@ -581,8 +596,7 @@ impl<'a> Validator<'a> {
     /// A `$ref` within the same document: `#`, a JSON pointer `#/...`, optionally after the
     /// root's own `$id`.
     fn resolve(&self, reference: &str) -> Result<&'a Value> {
-        let unresolvable =
-            || Error::invalid(format!("An available function's JSON Schema has an unresolvable $ref: {reference}"));
+        let unresolvable = || Error::invalid(UNRESOLVABLE);
         let (base, fragment) = reference.split_once('#').unwrap_or((reference, ""));
         if !base.is_empty() {
             let own = self.root.get("$id").and_then(Value::as_str).map(|id| id.trim_end_matches('#'));
@@ -604,6 +618,9 @@ impl<'a> Validator<'a> {
                 _ => None,
             }
             .ok_or_else(unresolvable)?;
+        }
+        if !target.is_object() && !target.is_boolean() {
+            return Err(unresolvable());
         }
         Ok(target)
     }
@@ -633,18 +650,25 @@ fn collect_patterns(schema: &Value, regexes: &mut HashMap<String, Regex>) -> Res
     match schema {
         Value::Object(map) => {
             for (key, value) in map {
-                if key == "patternProperties" {
-                    if let Value::Object(patterns) = value {
-                        for pattern in patterns.keys() {
-                            if !regexes.contains_key(pattern) {
-                                let regex = Regex::new(pattern)
-                                    .map_err(|_| Error::invalid("An available function has an invalid JSON Schema"))?;
-                                regexes.insert(pattern.clone(), regex);
+                match key.as_str() {
+                    "properties" | "$defs" | "definitions" | "patternProperties" => {
+                        if let Value::Object(named) = value {
+                            for (name, child) in named {
+                                if key == "patternProperties" && !regexes.contains_key(name) {
+                                    let regex = Regex::new(name).map_err(|_| {
+                                        Error::invalid("An available function has an invalid JSON Schema")
+                                    })?;
+                                    regexes.insert(name.clone(), regex);
+                                }
+                                collect_patterns(child, regexes)?;
                             }
                         }
                     }
+                    "items" | "prefixItems" | "additionalProperties" | "anyOf" | "allOf" => {
+                        collect_patterns(value, regexes)?
+                    }
+                    _ => {}
                 }
-                collect_patterns(value, regexes)?;
             }
         }
         Value::Array(items) => {
@@ -680,22 +704,132 @@ fn declared_default(issue: &Issue) -> bool {
     }
 }
 
+const UNRESOLVABLE: &str = "An available function's JSON Schema has a $ref that cannot be resolved";
+
 struct Prepared {
     original: Map<String, Value>,
     typed: Value,
     draft: Draft,
+    regexes: HashMap<String, Regex>,
 }
 
-/// Validate one tool's `parameters` as a JSON Schema; `Err` is a configuration error.
-pub(crate) fn check_parameters(parameters: &Value) -> Result<Draft> {
+static PREPARED: LazyLock<Mutex<HashMap<String, Arc<Prepared>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Check every schema reference, even if no current candidate reaches it. A cycle that
+/// reapplies schemas to the same value cannot terminate; nested properties/items can recurse.
+fn check_references(validator: &Validator<'_>) -> Result<()> {
+    fn follow(
+        node: &Value,
+        validator: &Validator<'_>,
+        schemas: &HashSet<usize>,
+        state: &mut HashMap<usize, bool>,
+        depth: usize,
+    ) -> Result<()> {
+        if depth > 512 {
+            return Err(Error::invalid(UNRESOLVABLE));
+        }
+        let Some(map) = node.as_object() else { return Ok(()) };
+        let key = node as *const Value as usize;
+        match state.get(&key) {
+            Some(true) => return Err(Error::invalid(UNRESOLVABLE)),
+            Some(false) => return Ok(()),
+            None => {}
+        }
+        state.insert(key, true);
+        if let Some(reference) = map.get("$ref").and_then(Value::as_str) {
+            let target = validator.resolve(reference)?;
+            if target.is_object() && !schemas.contains(&(target as *const Value as usize)) {
+                return Err(Error::invalid(UNRESOLVABLE));
+            }
+            if target.is_boolean() && !valid_schema(target, validator.draft) {
+                return Err(Error::invalid(UNRESOLVABLE));
+            }
+            follow(target, validator, schemas, state, depth + 1)?;
+            if validator.draft <= Draft::D7 {
+                state.insert(key, false);
+                return Ok(());
+            }
+        }
+        for keyword in ["allOf", "anyOf"] {
+            if let Some(items) = map.get(keyword).and_then(Value::as_array) {
+                for item in items {
+                    follow(item, validator, schemas, state, depth + 1)?;
+                }
+            }
+        }
+        state.insert(key, false);
+        Ok(())
+    }
+    fn visit<'a>(node: &'a Value, schemas: &mut Vec<&'a Value>, depth: usize) -> Result<()> {
+        if depth > 512 {
+            return Err(Error::invalid(UNRESOLVABLE));
+        }
+        match node {
+            Value::Array(items) => {
+                for item in items {
+                    visit(item, schemas, depth + 1)?;
+                }
+            }
+            Value::Object(map) => {
+                schemas.push(node);
+                for (key, value) in map {
+                    match key.as_str() {
+                        "properties" | "patternProperties" | "$defs" | "definitions" => {
+                            if let Some(named) = value.as_object() {
+                                for child in named.values() {
+                                    visit(child, schemas, depth + 1)?;
+                                }
+                            }
+                        }
+                        "items" | "prefixItems" | "additionalProperties" | "allOf" | "anyOf" => {
+                            visit(value, schemas, depth + 1)?
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+    let mut schemas = Vec::new();
+    visit(validator.root, &mut schemas, 0)?;
+    let known = schemas.iter().map(|node| *node as *const Value as usize).collect();
+    let mut state = HashMap::new();
+    for node in schemas {
+        follow(node, validator, &known, &mut state, 0)?;
+    }
+    Ok(())
+}
+
+fn prepare(parameters: &Value) -> Result<Arc<Prepared>> {
     let Value::Object(map) = parameters else {
         return Err(Error::invalid("Function parameters must be a JSON Schema object"));
     };
+    let text = serde_json::to_string(parameters).map_err(|_| Error::invalid("Invalid JSON Schema"))?;
+    if let Some(prepared) = PREPARED.lock().unwrap().get(&text) {
+        return Ok(prepared.clone());
+    }
     let draft = draft_of(map)?;
     if !valid_schema(parameters, draft) {
         return Err(Error::invalid("An available function has an invalid JSON Schema"));
     }
-    Ok(draft)
+    let typed = type_schema(parameters);
+    let mut regexes = HashMap::new();
+    collect_patterns(&typed, &mut regexes)?;
+    check_references(&Validator::new(&typed, draft, &regexes))?;
+    let prepared = Arc::new(Prepared { original: map.clone(), typed, draft, regexes });
+    let mut cache = PREPARED.lock().unwrap();
+    if cache.len() >= 1024 {
+        cache.clear();
+    }
+    cache.insert(text, prepared.clone());
+    Ok(prepared)
+}
+
+/// Validate and compile one tool's parameters once; errors are configuration errors.
+pub(crate) fn check_parameters(parameters: &Value) -> Result<Draft> {
+    Ok(prepare(parameters)?.draft)
 }
 
 /// Run S(c) on proposed `calls` (`[{"name", "arguments"}]`, or `null` for an unreadable
@@ -704,16 +838,13 @@ pub(crate) fn check_parameters(parameters: &Value) -> Result<Draft> {
 /// Invalid tool definitions are an error: they are configuration errors, not a property of
 /// the candidate.
 pub fn check_schema(tools: &[Value], calls: &Value) -> Result<SchemaCheck> {
-    let definitions = function_definitions(tools)?;
-    let mut prepared: Vec<(String, Prepared)> = Vec::with_capacity(definitions.len());
-    for definition in &definitions {
-        let parameters = &definition["parameters"];
-        let draft = check_parameters(parameters)?;
-        let name = definition["name"].as_str().unwrap_or_default().to_string();
-        let original = parameters.as_object().cloned().unwrap_or_default();
-        prepared.push((name, Prepared { original, typed: type_schema(parameters), draft }));
+    let definitions = named_definitions(tools)?;
+    let mut prepared: Vec<(&str, Arc<Prepared>)> = Vec::with_capacity(definitions.len());
+    for (name, definition) in definitions {
+        let parameters = definition.get("parameters").unwrap_or(&NO_PARAMETERS);
+        prepared.push((name, prepare(parameters)?));
     }
-    let find = |name: &str| prepared.iter().find(|(known, _)| known == name).map(|(_, p)| p);
+    let find = |name: &str| prepared.iter().find(|(known, _)| *known == name).map(|(_, p)| p);
 
     let mut errors: Vec<SchemaError> = Vec::new();
     let mut well_formed = calls.is_array();
@@ -772,7 +903,7 @@ pub fn check_schema(tools: &[Value], calls: &Value) -> Result<SchemaCheck> {
                     ));
                     continue;
                 };
-                let validator = Validator::new(&tool.typed, tool.draft)?;
+                let validator = Validator::new(&tool.typed, tool.draft, &tool.regexes);
                 let mut issues = Vec::new();
                 validator.validate(arguments, &tool.typed, &mut Vec::new(), &mut issues, 0, false)?;
                 let mut keyed: Vec<(String, Issue)> =
@@ -838,6 +969,32 @@ pub fn check_schema(tools: &[Value], calls: &Value) -> Result<SchemaCheck> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn references_must_target_a_schema_not_a_data_value() {
+        for schema in [
+            json!({"$schema": "http://json-schema.org/draft-04/schema#", "type": "object", "properties": {"x": {"$ref": "#/default"}}, "default": true}),
+            json!({"type": "object", "properties": {"x": {"$ref": "#/type"}}}),
+            json!({"type": "object", "properties": {"x": {"$ref": "#/default"}}, "default": {"type": "PREMIUM"}}),
+            json!({"type": "object", "properties": {"x": {"$ref": "#/default"}}, "default": {"type": "string"}}),
+            json!({"type": "object", "properties": {"x": {"$ref": "#/properties"}, "type": {"type": "integer"}}}),
+            json!({"type": "object", "properties": {"x": {"$ref": "#/default"}}, "default": {"type": "object", "properties": {"child": {"$ref": "#/missing"}}}}),
+        ] {
+            assert!(check_parameters(&schema).is_err());
+            assert!(crate::Tool::function("f", "", schema.clone()).is_err());
+            assert!(check_schema(&[json!({"name": "f", "parameters": schema})], &json!([])).is_err());
+        }
+    }
+
+    #[test]
+    fn compiled_parameters_are_reused_without_inspecting_default_data() {
+        let schema = json!({"type": "object", "properties": {
+            "payload": {"type": "object", "default": {"patternProperties": {"[": {}}}}
+        }});
+        let first = prepare(&schema).unwrap();
+        let second = prepare(&schema).unwrap();
+        assert!(Arc::ptr_eq(&first, &second));
+    }
 
     fn weather() -> Value {
         json!({"type": "function", "function": {"name": "get_weather", "description": "Current weather for a city.",
