@@ -18,10 +18,17 @@ func TestDebugFormattingHidesKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, value := range []any{provider, decision, *provider, reflect.ValueOf(decision).Elem().Interface()} {
-		for _, format := range []string{"%v", "%+v", "%#v"} {
+	client, err := New(provider, WithDecisionModel(decision))
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := []any{provider, decision, client, *provider, *client, reflect.ValueOf(decision).Elem().Interface(),
+		[]any{provider, decision, client}, map[string]any{"provider": *provider, "client": *client}}
+	for _, value := range values {
+		// %s and %q on a struct value fall back to printing its fields unless the type formats itself.
+		for _, format := range []string{"%v", "%+v", "%#v", "%s", "%q"} {
 			if got := fmt.Sprintf(format, value); strings.Contains(got, secret) {
-				t.Fatalf("%s formatting disclosed a credential", format)
+				t.Fatalf("%s formatting of %T disclosed a credential", format, value)
 			}
 		}
 	}

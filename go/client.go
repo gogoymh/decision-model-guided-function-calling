@@ -185,8 +185,12 @@ func (c *Client) PreserveInitialNoCall() bool { return c.preserveInitialNoCall }
 // ExecuteUnverified reports whether Run executes a final candidate that was not accepted.
 func (c *Client) ExecuteUnverified() bool { return c.executeUnverified }
 
-// String describes the client's settings.
-func (c *Client) String() string {
+// GoString uses the same sanitized description for fmt's %#v format.
+func (c Client) GoString() string { return c.String() }
+
+// String describes the client's settings. It has a value receiver so that a dereferenced
+// Client is formatted through it too: fmt would otherwise print the fields, keys included.
+func (c Client) String() string {
 	return fmt.Sprintf("DMCall(model=%v, decision_model=%v, checks=%s, history=%s, feedback=%s, max_repairs=%d, "+
 		"on_exhaustion=%s, preserve_initial_no_call=%s)", c.generator, c.decisionModel, pyStr(c.checks),
 		pyStr(c.history), pyStr(c.feedback), c.maxRepairs, pyStr(c.onExhaustion), pyRepr(c.preserveInitialNoCall))
