@@ -1312,45 +1312,45 @@ macro_rules! provider_type {
     (@chat $name:ident, false) => {};
 }
 
-provider_type!(
+provider_type! {
     /// OpenAI Chat Completions. Key: `OPENAI_API_KEY` (base URL: `OPENAI_BASE_URL`, optional).
     OpenAI, OpenAI, chat = true
-);
-provider_type!(
+}
+provider_type! {
     /// Any Chat Completions endpoint with function tools: vLLM, Ollama, LM Studio, Together, Groq, ...
     /// It needs a base URL and no key.
     OpenAICompatible, OpenAICompatible, chat = true
-);
-provider_type!(
+}
+provider_type! {
     /// xAI Grok, OpenAI-compatible. Key: `XAI_API_KEY`.
     XAI, XAI, chat = true
-);
-provider_type!(
+}
+provider_type! {
     /// OpenRouter, one OpenAI-compatible endpoint for many models. Key: `OPENROUTER_API_KEY`.
     OpenRouter, OpenRouter, chat = true
-);
-provider_type!(
+}
+provider_type! {
     /// The Meta Model API (Muse models such as `muse-spark-1.3`), OpenAI-compatible. Key: `MODEL_API_KEY`.
     ///
     /// Muse models are reasoning models: Meta rejects `reasoning_effort: "none"` for them, and
     /// `tool_choice` other than `"auto"`. This provider therefore sends neither `reasoning_effort`
     /// nor `parallel_tool_calls` unless you set them.
     Meta, Meta, chat = true
-);
-provider_type!(
+}
+provider_type! {
     /// An Azure OpenAI deployment, directly or behind an API Management gateway.
     /// Key: `AZURE_OPENAI_API_KEY`, endpoint: `AZURE_OPENAI_ENDPOINT`, version: `AZURE_OPENAI_API_VERSION`.
     /// The model name is the deployment name.
     AzureOpenAI, AzureOpenAI, chat = true
-);
-provider_type!(
+}
+provider_type! {
     /// Anthropic Messages. Key: `ANTHROPIC_API_KEY` (base URL: `ANTHROPIC_BASE_URL`, optional).
     Anthropic, Anthropic, chat = false
-);
-provider_type!(
+}
+provider_type! {
     /// Google Gemini (`generateContent` with function declarations). Key: `GEMINI_API_KEY` or `GOOGLE_API_KEY`.
     Gemini, Gemini, chat = false
-);
+}
 
 /// The provider names `provider_from_spec` accepts and the kind each builds.
 pub const PROVIDERS: [(&str, ProviderKind); 10] = [
