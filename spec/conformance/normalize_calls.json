@@ -1,0 +1,196 @@
+{
+ "cases": [
+  {
+   "input": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": "Seoul"
+     }
+    }
+   ],
+   "expected": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": "Seoul"
+     }
+    }
+   ]
+  },
+  {
+   "input": [
+    {
+     "id": "c1",
+     "type": "function",
+     "function": {
+      "name": "get_weather",
+      "arguments": "{\"city\": \"Seoul\"}"
+     }
+    }
+   ],
+   "expected": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": "Seoul"
+     }
+    }
+   ]
+  },
+  {
+   "input": [
+    {
+     "type": "function_call",
+     "call_id": "c1",
+     "name": "get_weather",
+     "arguments": "{\"city\": \"Seoul\"}"
+    }
+   ],
+   "expected": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": "Seoul"
+     }
+    }
+   ]
+  },
+  {
+   "input": [
+    {
+     "type": "tool_use",
+     "id": "t1",
+     "name": "get_weather",
+     "input": {
+      "city": "Seoul"
+     }
+    }
+   ],
+   "expected": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": "Seoul"
+     }
+    }
+   ]
+  },
+  {
+   "input": [
+    {
+     "functionCall": {
+      "name": "get_weather",
+      "args": {
+       "city": "Seoul"
+      }
+     }
+    }
+   ],
+   "expected": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": "Seoul"
+     }
+    }
+   ]
+  },
+  {
+   "input": [
+    {
+     "function_call": {
+      "name": "get_weather",
+      "args": {
+       "city": "Seoul"
+      },
+      "id": null
+     }
+    }
+   ],
+   "expected": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": "Seoul"
+     }
+    }
+   ]
+  },
+  {
+   "input": [
+    {
+     "name": "ping",
+     "arguments": ""
+    }
+   ],
+   "expected": [
+    {
+     "name": "ping",
+     "arguments": {}
+    }
+   ]
+  },
+  {
+   "input": [
+    {
+     "name": "ping"
+    }
+   ],
+   "expected": [
+    {
+     "name": "ping",
+     "arguments": {}
+    }
+   ]
+  },
+  {
+   "input": [
+    {
+     "name": "ping",
+     "arguments": null
+    }
+   ],
+   "expected": [
+    {
+     "name": "ping",
+     "arguments": {}
+    }
+   ]
+  },
+  {
+   "input": [
+    {
+     "name": "get_weather",
+     "arguments": "{oops"
+    }
+   ],
+   "expected": [
+    {
+     "name": "get_weather",
+     "arguments": null
+    }
+   ]
+  },
+  {
+   "input": null,
+   "expected": []
+  },
+  {
+   "input": {
+    "name": "get_weather",
+    "arguments": {
+     "city": "Seoul"
+    }
+   },
+   "expected": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": "Seoul"
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,24 @@
+[package]
+name = "dmcall"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.85"
+description = "DM-Call: Decision-Model-Guided Function Calling with Cumulative Verification Feedback"
+license = "MIT"
+repository = "https://github.com/gogoymh/decision-model-guided-function-calling"
+readme = "README.md"
+keywords = ["llm", "function-calling", "tool-use", "verification", "agents"]
+categories = ["api-bindings"]
+
+[features]
+default = ["ureq", "big-integers"]
+# The blocking HTTP transport (ureq with rustls). Without it, pass your own HttpTransport.
+ureq = ["dep:ureq"]
+# Keep integers beyond 64 bits exactly as written (serde_json's arbitrary_precision).
+big-integers = ["serde_json/arbitrary_precision"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+regex = "1"
+ureq = { version = "3", optional = true, default-features = false, features = ["rustls"] }
