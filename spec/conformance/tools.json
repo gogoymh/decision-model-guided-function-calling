@@ -1,0 +1,812 @@
+{
+ "note": "A tool definition in the OpenAI, Anthropic or Gemini format becomes {name, description, parameters}. Gemini's capital type names (OBJECT, STRING) are lower-cased wherever a schema is expected and nowhere else: the values of enum, const, default, example and examples are data, and the keys of properties, patternProperties, $defs, definitions and dependentSchemas are names. configuration_errors must be refused when the tool is defined or when a client is built with it, before any request.",
+ "cases": [
+  {
+   "name": "openai chat completions",
+   "input": {
+    "type": "function",
+    "function": {
+     "name": "get_weather",
+     "description": "Current weather for a city.",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "city": {
+        "type": "string",
+        "description": "City name."
+       },
+       "unit": {
+        "type": "string",
+        "enum": [
+         "celsius",
+         "fahrenheit"
+        ],
+        "default": "celsius"
+       }
+      },
+      "required": [
+       "city"
+      ]
+     }
+    }
+   },
+   "expected": {
+    "name": "get_weather",
+    "description": "Current weather for a city.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string",
+       "description": "City name."
+      },
+      "unit": {
+       "type": "string",
+       "enum": [
+        "celsius",
+        "fahrenheit"
+       ],
+       "default": "celsius"
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   }
+  },
+  {
+   "name": "openai function object",
+   "input": {
+    "name": "get_weather",
+    "description": "Current weather for a city.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string",
+       "description": "City name."
+      },
+      "unit": {
+       "type": "string",
+       "enum": [
+        "celsius",
+        "fahrenheit"
+       ],
+       "default": "celsius"
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   },
+   "expected": {
+    "name": "get_weather",
+    "description": "Current weather for a city.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string",
+       "description": "City name."
+      },
+      "unit": {
+       "type": "string",
+       "enum": [
+        "celsius",
+        "fahrenheit"
+       ],
+       "default": "celsius"
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   }
+  },
+  {
+   "name": "openai responses",
+   "input": {
+    "type": "function",
+    "name": "get_weather",
+    "description": "Current weather for a city.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string",
+       "description": "City name."
+      },
+      "unit": {
+       "type": "string",
+       "enum": [
+        "celsius",
+        "fahrenheit"
+       ],
+       "default": "celsius"
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   },
+   "expected": {
+    "name": "get_weather",
+    "description": "Current weather for a city.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string",
+       "description": "City name."
+      },
+      "unit": {
+       "type": "string",
+       "enum": [
+        "celsius",
+        "fahrenheit"
+       ],
+       "default": "celsius"
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   }
+  },
+  {
+   "name": "anthropic input_schema",
+   "input": {
+    "name": "get_weather",
+    "description": "Current weather for a city.",
+    "input_schema": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string",
+       "description": "City name."
+      },
+      "unit": {
+       "type": "string",
+       "enum": [
+        "celsius",
+        "fahrenheit"
+       ],
+       "default": "celsius"
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   },
+   "expected": {
+    "name": "get_weather",
+    "description": "Current weather for a city.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string",
+       "description": "City name."
+      },
+      "unit": {
+       "type": "string",
+       "enum": [
+        "celsius",
+        "fahrenheit"
+       ],
+       "default": "celsius"
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   }
+  },
+  {
+   "name": "gemini parametersJsonSchema",
+   "input": {
+    "name": "get_weather",
+    "description": "Current weather for a city.",
+    "parametersJsonSchema": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string",
+       "description": "City name."
+      },
+      "unit": {
+       "type": "string",
+       "enum": [
+        "celsius",
+        "fahrenheit"
+       ],
+       "default": "celsius"
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   },
+   "expected": {
+    "name": "get_weather",
+    "description": "Current weather for a city.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string",
+       "description": "City name."
+      },
+      "unit": {
+       "type": "string",
+       "enum": [
+        "celsius",
+        "fahrenheit"
+       ],
+       "default": "celsius"
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   }
+  },
+  {
+   "name": "gemini capital types",
+   "input": {
+    "name": "get_weather",
+    "description": "Current weather for a city.",
+    "parameters": {
+     "type": "OBJECT",
+     "properties": {
+      "city": {
+       "type": "STRING",
+       "description": "City name."
+      },
+      "unit": {
+       "type": "STRING",
+       "enum": [
+        "celsius",
+        "fahrenheit"
+       ],
+       "default": "celsius"
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   },
+   "expected": {
+    "name": "get_weather",
+    "description": "Current weather for a city.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string",
+       "description": "City name."
+      },
+      "unit": {
+       "type": "string",
+       "enum": [
+        "celsius",
+        "fahrenheit"
+       ],
+       "default": "celsius"
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   }
+  },
+  {
+   "name": "capital types are lowered only in schemas",
+   "input": {
+    "name": "plan",
+    "description": "Pick a plan.",
+    "parameters": {
+     "type": "OBJECT",
+     "properties": {
+      "tier": {
+       "type": "OBJECT",
+       "enum": [
+        {
+         "type": "PREMIUM"
+        },
+        {
+         "type": "BASIC"
+        }
+       ],
+       "default": {
+        "type": "PREMIUM"
+       }
+      },
+      "kind": {
+       "const": {
+        "type": "FIXED"
+       },
+       "examples": [
+        {
+         "type": "SAMPLE"
+        }
+       ],
+       "example": {
+        "type": "ONE"
+       }
+      },
+      "default": {
+       "type": "STRING"
+      },
+      "enum": {
+       "type": "ARRAY",
+       "items": {
+        "type": [
+         "STRING",
+         "NULL"
+        ]
+       }
+      },
+      "type": {
+       "type": "INTEGER"
+      },
+      "nested": {
+       "type": "OBJECT",
+       "properties": {
+        "const": {
+         "type": "BOOLEAN"
+        }
+       },
+       "additionalProperties": {
+        "type": "NUMBER"
+       }
+      }
+     },
+     "$defs": {
+      "examples": {
+       "type": "STRING"
+      }
+     },
+     "required": [
+      "tier"
+     ]
+    }
+   },
+   "expected": {
+    "name": "plan",
+    "description": "Pick a plan.",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "tier": {
+       "type": "object",
+       "enum": [
+        {
+         "type": "PREMIUM"
+        },
+        {
+         "type": "BASIC"
+        }
+       ],
+       "default": {
+        "type": "PREMIUM"
+       }
+      },
+      "kind": {
+       "const": {
+        "type": "FIXED"
+       },
+       "examples": [
+        {
+         "type": "SAMPLE"
+        }
+       ],
+       "example": {
+        "type": "ONE"
+       }
+      },
+      "default": {
+       "type": "string"
+      },
+      "enum": {
+       "type": "array",
+       "items": {
+        "type": [
+         "string",
+         "null"
+        ]
+       }
+      },
+      "type": {
+       "type": "integer"
+      },
+      "nested": {
+       "type": "object",
+       "properties": {
+        "const": {
+         "type": "boolean"
+        }
+       },
+       "additionalProperties": {
+        "type": "number"
+       }
+      }
+     },
+     "$defs": {
+      "examples": {
+       "type": "string"
+      }
+     },
+     "required": [
+      "tier"
+     ]
+    }
+   }
+  },
+  {
+   "name": "dependency names and extension metadata are data",
+   "input": {
+    "name": "f",
+    "parameters": {
+     "type": "OBJECT",
+     "properties": {
+      "type": {
+       "type": "STRING"
+      }
+     },
+     "dependentRequired": {
+      "type": [
+       "PREMIUM"
+      ]
+     },
+     "dependencies": {
+      "type": [
+       "PREMIUM"
+      ],
+      "schema": {
+       "type": "OBJECT",
+       "properties": {
+        "x": {
+         "type": "INTEGER"
+        }
+       }
+      }
+     },
+     "x-extension": {
+      "type": "PREMIUM",
+      "nested": {
+       "type": "SAMPLE"
+      }
+     }
+    }
+   },
+   "expected": {
+    "name": "f",
+    "description": "",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string"
+      }
+     },
+     "dependentRequired": {
+      "type": [
+       "PREMIUM"
+      ]
+     },
+     "dependencies": {
+      "type": [
+       "PREMIUM"
+      ],
+      "schema": {
+       "type": "object",
+       "properties": {
+        "x": {
+         "type": "integer"
+        }
+       }
+      }
+     },
+     "x-extension": {
+      "type": "PREMIUM",
+      "nested": {
+       "type": "SAMPLE"
+      }
+     }
+    }
+   }
+  },
+  {
+   "name": "known single schema keywords keep type normalization",
+   "input": {
+    "name": "f",
+    "parameters": {
+     "type": "OBJECT",
+     "not": {
+      "type": "STRING"
+     },
+     "if": {
+      "type": "OBJECT"
+     },
+     "then": {
+      "type": "OBJECT"
+     },
+     "else": {
+      "type": "OBJECT"
+     },
+     "propertyNames": {
+      "type": "STRING"
+     },
+     "contains": {
+      "type": "INTEGER"
+     },
+     "additionalItems": {
+      "type": "NUMBER"
+     },
+     "unevaluatedProperties": {
+      "type": "STRING"
+     },
+     "unevaluatedItems": {
+      "type": "INTEGER"
+     },
+     "contentSchema": {
+      "type": "OBJECT"
+     }
+    }
+   },
+   "expected": {
+    "name": "f",
+    "description": "",
+    "parameters": {
+     "type": "object",
+     "not": {
+      "type": "string"
+     },
+     "if": {
+      "type": "object"
+     },
+     "then": {
+      "type": "object"
+     },
+     "else": {
+      "type": "object"
+     },
+     "propertyNames": {
+      "type": "string"
+     },
+     "contains": {
+      "type": "integer"
+     },
+     "additionalItems": {
+      "type": "number"
+     },
+     "unevaluatedProperties": {
+      "type": "string"
+     },
+     "unevaluatedItems": {
+      "type": "integer"
+     },
+     "contentSchema": {
+      "type": "object"
+     }
+    }
+   }
+  },
+  {
+   "name": "no parameters",
+   "input": {
+    "name": "ping",
+    "description": "Ping."
+   },
+   "expected": {
+    "name": "ping",
+    "description": "Ping.",
+    "parameters": {
+     "type": "object",
+     "properties": {}
+    }
+   }
+  },
+  {
+   "name": "no description",
+   "input": {
+    "name": "ping",
+    "parameters": {
+     "type": "object",
+     "properties": {}
+    }
+   },
+   "expected": {
+    "name": "ping",
+    "description": "",
+    "parameters": {
+     "type": "object",
+     "properties": {}
+    }
+   }
+  }
+ ],
+ "configuration_errors": [
+  {
+   "name": "$ref to a missing definition",
+   "input": {
+    "name": "f",
+    "description": "",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "a": {
+       "$ref": "#/$defs/missing"
+      }
+     }
+    }
+   }
+  },
+  {
+   "name": "$ref to another document",
+   "input": {
+    "name": "f",
+    "description": "",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "a": {
+       "$ref": "https://example.com/a.json"
+      }
+     }
+    }
+   }
+  },
+  {
+   "name": "$ref to itself",
+   "input": {
+    "name": "f",
+    "description": "",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "a": {
+       "$ref": "#/properties/a"
+      }
+     }
+    }
+   }
+  },
+  {
+   "name": "$ref to scalar",
+   "input": {
+    "name": "f",
+    "description": "",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "a": {
+       "$ref": "#/type"
+      }
+     }
+    }
+   }
+  },
+  {
+   "name": "invalid parameter schema",
+   "input": {
+    "name": "f",
+    "description": "",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "a": {
+       "type": "nonsense"
+      }
+     }
+    }
+   }
+  },
+  {
+   "name": "parameters of another type",
+   "input": {
+    "name": "f",
+    "description": "",
+    "parameters": {
+     "type": "array"
+    }
+   }
+  },
+  {
+   "name": "empty name",
+   "input": {
+    "name": "",
+    "description": "",
+    "parameters": {
+     "type": "object"
+    }
+   }
+  },
+  {
+   "name": "$ref to invalid default data",
+   "input": {
+    "name": "f",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "a": {
+       "$ref": "#/default"
+      }
+     },
+     "default": {
+      "type": "PREMIUM"
+     }
+    }
+   }
+  },
+  {
+   "name": "$ref to a property mapping",
+   "input": {
+    "name": "f",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "type": {
+       "type": "string"
+      },
+      "a": {
+       "$ref": "#/properties"
+      }
+     }
+    }
+   }
+  },
+  {
+   "name": "$ref to schema-shaped default data",
+   "input": {
+    "name": "f",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "a": {
+       "$ref": "#/default"
+      }
+     },
+     "default": {
+      "type": "integer",
+      "minimum": 2
+     }
+    }
+   }
+  },
+  {
+   "name": "$ref to data with a nested reference",
+   "input": {
+    "name": "f",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "a": {
+       "$ref": "#/default"
+      }
+     },
+     "default": {
+      "type": "object",
+      "properties": {
+       "child": {
+        "$ref": "#/missing"
+       }
+      }
+     }
+    }
+   }
+  }
+ ]
+}
